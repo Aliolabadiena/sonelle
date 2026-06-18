@@ -75,6 +75,19 @@ Ok "lane start script parses"       ($le.Count -eq 0)
 Ok "lane per-model in start script" ((Get-Content (Join-Path $codePath '.sonelle\lanes\a.start.ps1') -Raw) -match '--model haiku')
 Ok "lane permission-mode in start script" ((Get-Content (Join-Path $codePath '.sonelle\lanes\a.start.ps1') -Raw) -match '--permission-mode')
 
+Write-Host "== 5c. app (multi-terminal shell) =="
+$appPath = Join-Path $engine 'bin\sonelle_app.ps1'
+Ok "sonelle_app.ps1 exists"      (Test-Path $appPath)
+$srcApp = if (Test-Path $appPath) { Get-Content $appPath -Raw } else { '' }
+Ok "app embeds via SetParent"    ($srcApp -match 'SetParent')
+Ok "app hosts the sonelle terminal" ($srcApp -match "bin\\\\sonelle\.ps1|'bin\\\\sonelle\.ps1'|sonelle\.ps1")
+Ok "app has New-Terminal"        ($srcApp -match 'function New-Terminal')
+Ok "app has a -SelfTest mode"    ($srcApp -match '\[switch\]\$SelfTest')
+Ok "app themed clay accent"      ($srcApp -match '204,\s*120,\s*92')
+$appOut = & $ps -NoProfile -Sta -ExecutionPolicy Bypass -File $appPath -SelfTest 2>&1
+Ok "app -SelfTest exit 0"        ($LASTEXITCODE -eq 0)
+Ok "app -SelfTest builds the UI" (($appOut -join "`n") -match 'SELFTEST (OK|SKIP)')
+
 Write-Host "== 6. check_pointers DETECTS a broken pointer (negative test) =="
 Remove-Item $codePath -Recurse -Force
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $tmp | Out-Null
@@ -96,6 +109,12 @@ Ok "dispatcher points to self-dev" ((Get-Content (Join-Path $engine 'CLAUDE.md')
 Ok "DevSelf seeds + guards engine"  (($srcTerm -match 'IGNORE its dispatcher') -and ($srcTerm -match 'hub-state'))
 Ok "self shortcode from folder name" ($srcTerm -match 'selfShort\s*=\s*\(Split-Path')
 Ok "self-name routes to engine dev"  ($srcTerm -match '\$short -eq \$script:selfShort')
+Ok "terminal has an :app handler"    ($srcTerm -match "'?:app'?")
+Ok "terminal has AppLaunch function" ($srcTerm -match 'function AppLaunch')
+Ok "AppLaunch opens the app -Sta"    (($srcTerm -match 'sonelle_app\.ps1') -and ($srcTerm -match "'-Sta'"))
+$srcLnk = Get-Content (Join-Path $engine 'bin\make_launcher.ps1') -Raw
+Ok "make_launcher default opens the app" ($srcLnk -match 'sonelle_app\.ps1')
+Ok "make_launcher has a -Terminal switch" ($srcLnk -match '\[switch\]\$Terminal')
 # invariant #4: the engine root must stay clean of hub state (no project TODO/ledger/memory)
 $rootTodo = @(Get-ChildItem $engine -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue).Count
 $rootLedg = @(Get-ChildItem $engine -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue).Count

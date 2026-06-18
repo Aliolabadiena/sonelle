@@ -53,6 +53,11 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   from the engine FOLDER name, lowercased (`$script:selfShort` in `bin\sonelle.ps1`), and special-cased in
   `Route` BEFORE the registry lookup - so it never pollutes `PROJECTS.md`, and renaming the engine folder
   updates it automatically.
+- **The app (`bin\sonelle_app.ps1`):** a WinForms window that embeds real `sonelle.ps1` consoles as
+  tabs via Win32 `SetParent`. It needs STA (it re-launches itself with `-Sta`). Keep it headlessly
+  testable: `-SelfTest` must build the UI + interop and exit 0 WITHOUT showing a window or spawning a
+  terminal - selftest section 5c relies on that. UI text stays ASCII; build any glyph at runtime via
+  `[char]` (the close mark is `[char]0x00D7`).
 - **Docs:** keep `README.md` + `docs\ARCHITECTURE.md` honest (mechanism vs discipline), and add a
   `CHANGELOG.md` entry.
 

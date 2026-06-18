@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.12 — 2026-06-18 (the sonelle app: many terminals, one window)
+- New `bin\sonelle_app.ps1`: a single Claude-styled window that hosts MANY sonelle terminals as
+  tabs. Each tab embeds a REAL console running `bin\sonelle.ps1` (reparented into the window via
+  Win32 `SetParent`), so every tab is the exact same terminal you get from `sonelle.ps1` - just
+  several at once. `[ + new ]` opens a tab; click a tab to switch; the tab's `[x]` closes it
+  (kills that terminal's process tree). Self-contained WinForms host - NO Windows Terminal needed.
+- Consoles attach ASYNCHRONOUSLY: a `Forms.Timer` polls each spawned terminal for its window handle
+  and then reparents it. No blocking, no `DoEvents` re-entrancy - which is what stops the window from
+  crashing when you close a tab or click during attach. Every event handler is wrapped (try/catch +
+  runtime `$ErrorActionPreference='Continue'`) so a stray error can never tear the window down. The
+  app tracks ONLY the PIDs it spawns and kills exactly those on close (never other terminals).
+- Polish: dark native title bar (DWM immersive dark mode), a clay accent line under the tab strip,
+  per-tab hover + a clay underline on the active tab, hover states on `+ new` and the close mark.
+- New terminal command `:app` launches it (via `Start-Process powershell -Sta`); `:help` lists it.
+- `bin\make_launcher.ps1` now makes the primary `sonelle` shortcut open the APP by default (icon,
+  launched under `-Sta`); use `-Terminal` for a single bare console shortcut.
+- selftest section 5c builds the UI + Win32 interop headlessly (`sonelle_app.ps1 -SelfTest`, which
+  shows no window and spawns no terminal) and asserts the embed path, theme, and `:app`/launcher wiring.
+- Engineering note: built on WinForms (not WPF) - every control has a native HWND, so hosting a
+  real console is robust; WPF would need a fragile `WindowsFormsHost` bridge for the same result.
+
 ## v1.11 — 2026-06-18 (config: memoryDir; cleaner validate)
 - `check_pointers` + `doctor` are now config-aware: they read `hub` AND a new `memoryDir` from
   `sonelle.config.json` (params still override) via a shared `Get-SonelleConfig` in `tools\_registry.ps1`.

@@ -21,9 +21,10 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
 6. Work:  type `myproj: do the thing`
 7. Attach an image:  `myproj: what's in @C:\pics\food.jpg?`  (or `:attach <path>` to stage one)
 8. Verify the engine:  `powershell -File tools\selftest.ps1`
-9. Pin to taskbar:  `powershell -File bin\make_launcher.ps1`, then right-click the Desktop `sonelle` shortcut -> Pin to taskbar.
+9. Pin to taskbar:  `powershell -File bin\make_launcher.ps1` (the `sonelle` shortcut opens the app by default; `-Terminal` for a single console), then right-click the Desktop `sonelle` shortcut -> Pin to taskbar.
 10. Multi-instance:  `:team myproj bugs=opus,docs=haiku` opens parallel lanes (per-task models); `:status myproj` shows them. The orchestrator (your terminal session) always runs your max model (`opus`/`xhigh`).
-11. Improve sonelle itself:  type `:dev` (or address the engine by its own name: `sonelle: <prompt>`) - opens a dev session in the engine, seeded with `docs\DEVELOPING.md`; keep `selftest` green before committing.
+11. The app (many terminals, one window):  type `:app` (or `powershell -Sta -File bin\sonelle_app.ps1`) to open a branded window that hosts multiple sonelle terminals as tabs - `+ new` adds one, the tab's `x` closes it. `bin\make_launcher.ps1` makes the `sonelle` shortcut open this app by default (use `-Terminal` for a single console). No Windows Terminal needed.
+12. Improve sonelle itself:  type `:dev` (or address the engine by its own name: `sonelle: <prompt>`) - opens a dev session in the engine, seeded with `docs\DEVELOPING.md`; keep `selftest` green before committing.
 
 ## The three capabilities (honest about what's mechanism vs discipline)
 - **Scaffold** (real mechanism) — new projects in one command, consistently structured (`tools\new_project.ps1`).
@@ -43,6 +44,7 @@ The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max
 | Path | What |
 |---|---|
 | `bin\sonelle.ps1` | the terminal (Claude-styled launcher; routes to `claude`) |
+| `bin\sonelle_app.ps1` | the app: one window hosting many sonelle terminals as tabs (`:app`) |
 | `CLAUDE.md` | the dispatcher — how a session orients + routes |
 | `PROJECTS.md` | the registry (single source of truth; starts empty) |
 | `tools\new_project.ps1` | scaffold a new project (full skeleton + registry row) |

@@ -49,6 +49,25 @@ ownership (critical when the project has no git merge safety). Windows Terminal 
 installed, else separate PowerShell windows. `:team` / `:status` in the terminal wrap it. Hard cap 5;
 >3 warns about rate limits (N lanes ~= Nx subscription usage).
 
+## The app (multi-terminal shell)
+`bin\sonelle_app.ps1` is a single Claude-styled WINDOW that hosts many sonelle terminals as tabs -
+the GUI counterpart to a lone `sonelle.ps1` console. It is self-contained: NO Windows Terminal
+dependency. Each tab embeds a REAL console: the app `Start-Process`es `powershell -File bin\sonelle.ps1`
+(minimized), polls for its `MainWindowHandle`, then Win32-`SetParent`s that window into a WinForms panel
+after stripping the caption/border style bits (`Sonelle.Win::Embed`); on resize it `MoveWindow`s the
+active console to fill (`::Fit`). So every tab IS the ordinary terminal - same grammar, same routing,
+same `claude` hand-off - just several at once in one frame. `+ new` opens a tab; `[x]` closes one and
+`taskkill /T /F`s that terminal's process tree. Launch it with `:app` (from a terminal); `make_launcher.ps1`
+makes the primary `sonelle` shortcut open the app by default (`-Terminal` for a single console).
+Robustness: consoles attach ASYNCHRONOUSLY via a `Forms.Timer` (poll for `MainWindowHandle`, then embed) -
+no blocking and no `DoEvents` re-entrancy, so closing/clicking during attach can never touch a disposed
+control; every handler is try/catch-wrapped, runtime `$ErrorActionPreference` is `Continue`, and the app
+kills only the PIDs it spawned. Built on WinForms rather than WPF on purpose: every WinForms control has a
+native HWND, so hosting an external console is robust; WPF would need a fragile `WindowsFormsHost` bridge
+for the identical result. The lanes feature (above) is for parallel `claude` sessions on ONE project;
+the app is for running several INDEPENDENT terminals (any projects, or `:dev`) side by side.
+selftest builds the whole UI + interop headlessly via `sonelle_app.ps1 -SelfTest` (no window, no spawn).
+
 ## Billing
 The terminal hands prompts to `claude` (Claude Code), which runs on your Claude Pro/Max
 subscription — no API key for personal use. (Shipping this as a product to *other* users

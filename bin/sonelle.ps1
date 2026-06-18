@@ -68,6 +68,7 @@ function ShowHelp {
   Write-Host ("    {0}:heal [short]{1}        run the doctor (health/heal detector)" -f $cream, $R)
   Write-Host ("    {0}:team <proj> <lanes>{1} launch up to 5 parallel lanes (e.g. :team myproj bugs,docs)" -f $cream, $R)
   Write-Host ("    {0}:status <proj>{1}       show each lane's status" -f $cream, $R)
+  Write-Host ("    {0}:app{1}                 open the sonelle app: many terminals as tabs in one window" -f $cream, $R)
   Write-Host ("    {0}:dev [prompt]{1}        improve the engine itself (or  {0}{2}: <prompt>{1})" -f $cream, $R, $script:selfShort)
   Write-Host ("    {0}:attach <path>{1}       stage an image for the next prompt (or inline {0}@<path>{1})" -f $cream, $R)
   Write-Host ("    {0}:clear{1}               clear staged images" -f $cream, $R)
@@ -111,6 +112,12 @@ function Team($rest) {
 function StatusLanes($pj) {
   if (-not $pj) { Write-Host ("  {0}usage: :status <project>{1}" -f $dim, $R); return }
   & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'bin\sonelle_team.ps1') $pj -Status -Hub $hub | Out-Host
+}
+function AppLaunch {
+  $app = Join-Path $root 'bin\sonelle_app.ps1'
+  if (-not (Test-Path $app)) { Write-Host ("  {0}[!] app not found: {1}{2}" -f $clay, $app, $R); return }
+  Write-Host ("  {0}-> opening the {1}sonelle app{0} (many terminals, one window)...{2}" -f $dim, $clay, $R)
+  Start-Process $psExe -ArgumentList @('-NoProfile', '-Sta', '-ExecutionPolicy', 'Bypass', '-File', $app) | Out-Null
 }
 function DevSelf($prompt, $images) {
   $claude = Get-Command claude -ErrorAction SilentlyContinue
@@ -188,6 +195,7 @@ while ($true) {
   elseif ($t -match '^:heal\s*(.*)$') { Heal ($Matches[1].Trim()); continue }
   elseif ($t -match '^:team\s+(.+)$') { Team $Matches[1]; continue }
   elseif ($t -match '^:status\s*(.*)$') { StatusLanes ($Matches[1].Trim()); continue }
+  elseif ($t -eq ':app') { AppLaunch; continue }
   elseif ($t -match '^:dev\b\s*(.*)$') { DevSelf ($Matches[1].Trim()) $script:staged; continue }
   elseif ($t -match '^:attach\s+(.+)$') {
     $ip = $Matches[1].Trim().Trim('"')
