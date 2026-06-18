@@ -67,14 +67,14 @@ Write-Utf8 $memFile    (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'pro
 
 # memory index line (clean append)
 $idxLine = "- [$Name ($Short)](project_$Short.md) - new project ($date); state {{U}}_TODO.txt + ledger".Replace('{{U}}', $shortUpper)
-$exIdx = [System.IO.File]::ReadAllText($memIndex).TrimEnd(("`r`n").ToCharArray())
-Write-Utf8 $memIndex ($exIdx + "`r`n" + $idxLine + "`r`n")
+$exIdx = ([System.IO.File]::ReadAllText($memIndex) -replace "`r`n", "`n").TrimEnd("`n")
+Write-Utf8 $memIndex ($exIdx + "`n" + $idxLine + "`n")
 Write-Host "[+] memory\MEMORY.md index line added"
 
 # registry row (clean append, attaches under the table)
 $row = "| $Short | $Name | $Path | yes | {{U}}_TODO.txt + _{{S}}_run_STATUS.md + memory/project_{{S}}.md | (fill in) |".Replace('{{U}}', $shortUpper).Replace('{{S}}', $Short)
-$exReg = [System.IO.File]::ReadAllText($projects).TrimEnd(("`r`n").ToCharArray())
-Write-Utf8 $projects ($exReg + "`r`n" + $row + "`r`n")
+$exReg = ([System.IO.File]::ReadAllText($projects) -replace "`r`n", "`n").TrimEnd("`n")
+Write-Utf8 $projects ($exReg + "`n" + $row + "`n")
 Write-Host "[+] PROJECTS.md registry row added"
 
 Write-Host ""

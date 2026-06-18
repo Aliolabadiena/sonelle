@@ -15,12 +15,14 @@ param(
   [Parameter(Mandatory = $true)][string]$Body,
   [ValidateSet('gotcha','feedback','project','reference')][string]$Type = 'gotcha',
   [string]$Why = '',
-  [string]$How = ''
+  [string]$How = '',
+  [string]$Hub = ''
 )
 $ErrorActionPreference = 'Stop'
-$hub    = Split-Path $PSScriptRoot -Parent
+$engine = Split-Path $PSScriptRoot -Parent
+$hub    = if ($Hub) { $Hub } else { $engine }
 $memDir = Join-Path $hub 'memory'
-$tpl    = Join-Path $hub 'templates\lesson.template.md'
+$tpl    = Join-Path $engine 'templates\lesson.template.md'
 if (-not (Test-Path $memDir)) { New-Item -ItemType Directory -Path $memDir -Force | Out-Null }
 $memIndex = Join-Path $memDir 'MEMORY.md'
 if (-not (Test-Path $memIndex)) { [System.IO.File]::WriteAllText($memIndex, "# Memory index", (New-Object System.Text.UTF8Encoding($false))) }

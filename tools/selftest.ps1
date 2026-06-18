@@ -53,6 +53,18 @@ Write-Host "== 5. duplicate guard =="
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') st "Dup" $codePath -Hub $tmp | Out-Null
 Ok "duplicate rejected (exit 1)"   ($LASTEXITCODE -eq 1)
 
+Write-Host "== 6. check_pointers DETECTS a broken pointer (negative test) =="
+Remove-Item $codePath -Recurse -Force
+& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $tmp | Out-Null
+Ok "check_pointers exit 1 on a missing code path" ($LASTEXITCODE -eq 1)
+
+Write-Host "== 7. .gitignore ignores the private paths =="
+if (Get-Command git -ErrorAction SilentlyContinue) {
+  foreach ($f in @('luna.config.json', 'memory/x.md', 'FOO_TODO.txt')) {
+    Ok "gitignored: $f" ([bool](git -C $engine check-ignore $f))
+  }
+} else { Write-Host "  [skip] git not on PATH" -ForegroundColor DarkGray }
+
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 
 Write-Host ""

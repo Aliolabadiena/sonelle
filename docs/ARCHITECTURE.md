@@ -21,10 +21,21 @@ you ── "myproj: do X" ──> luna.ps1 (terminal)
 - Per project: `<SHORT>_TODO.txt` (tasks), `_<short>_run_STATUS.md` (ledger),
   `memory/project_<short>.md` (summary), `<code path>\CLAUDE.md` (project rules).
 
-## The three superpowers
-- **Scaffold** (`tools\new_project.ps1`) — one command, consistent skeleton + registry row.
-- **Heal** (`tools\doctor.ps1` + `docs\HEAL.md`) — detect problems, Claude fixes in a loop.
-- **Self-improve** (`tools\log_lesson.ps1` + `docs\SELF_IMPROVE.md`) — lessons -> memory -> recall.
+## The three capabilities
+- **Scaffold** (`tools\new_project.ps1`) — real mechanism: one command, consistent skeleton + registry row.
+- **Heal** (`tools\doctor.ps1` + `docs\HEAL.md`) — doctor DETECTS; the fix loop is Claude-driven (manual).
+  A project's checks live in `<code path>\luna.check.ps1`; absent it, "heal" = "code path exists".
+- **Self-improve** (`tools\log_lesson.ps1` + `docs\SELF_IMPROVE.md`) — capture tool; the recall/reflect
+  loop is a discipline, not engine-enforced.
+
+## CLAUDE.md load behavior (important)
+Claude Code auto-loads `CLAUDE.md` from the working directory up to the project/git root - NOT from an
+arbitrary engine path. The terminal `Push-Location`s into the PROJECT's code dir before calling `claude`,
+so the working session loads the PROJECT's `CLAUDE.md` (the per-project pointer that carries the
+read-state-first + end-of-task ritual), not this engine's dispatcher. That is intended: the terminal
+already did the routing. The engine root `CLAUDE.md` is the dispatcher for a human who opens `claude`
+directly inside the luna folder. If `-Hub` points at a workspace that has its OWN `CLAUDE.md`, that file
+governs its sessions - luna's routing only reads `PROJECTS.md` and does not merge hub-level dispatchers.
 
 ## Billing
 The terminal hands prompts to `claude` (Claude Code), which runs on your Claude Pro/Max

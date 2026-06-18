@@ -1,9 +1,16 @@
-# luna engine — keep the repo clean and personal-data-free.
-# Anything you create/run locally (your hub config, brain, per-project state) stays local.
+# luna engine - keep the repo clean and personal-data-free.
+# Anything you create/run locally (hub config, brain, per-project state) stays local.
+# NOTE: git treats "pattern  # comment" as a literal filename, so every comment is on its
+# OWN line below. Do NOT put trailing comments on pattern lines.
 
-luna.config.json      # your local hub path — machine-specific, never commit
-memory/               # any brain created in this workspace stays local
-*_TODO.txt            # per-project state files (created locally by new_project)
+# your local hub path - machine-specific
+luna.config.json
+
+# any brain/memory created in a workspace
+memory/
+
+# per-project state files (created by new_project)
+*_TODO.txt
 _*_run_STATUS.md
 state/
 

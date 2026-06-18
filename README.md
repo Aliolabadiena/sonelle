@@ -7,7 +7,9 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
 > luna and never live in this repo. This repo contains **no personal information**.
 
 ## Quick start
-1. Clone this repo (any machine).
+1. Clone this repo. **Prereqs:** Windows + PowerShell 5.1+, the `claude` CLI installed and on
+   PATH (logged into your Claude subscription), `git`, and a VT-capable terminal (e.g. Windows
+   Terminal). macOS/Linux are not supported yet (PowerShell-only).
 2. *(optional)* copy `luna.config.example.json` -> `luna.config.json` and set `hub` to
    your workspace path (where `CLAUDE.md` + `PROJECTS.md` + `memory/` live). Default `.`
    = this folder. `luna.config.json` is gitignored, so your local paths never enter the repo.
@@ -18,12 +20,14 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
 7. Attach an image:  `myproj: what's in @C:\pics\food.jpg?`  (or `:attach <path>` to stage one)
 8. Verify the engine:  `powershell -File tools\selftest.ps1`
 
-## The three superpowers
-- **Scaffold** — new projects in one command, consistently structured (`tools\new_project.ps1`).
-- **Heal** — detect & fix project errors: `tools\doctor.ps1` finds problems, Claude diagnoses
-  and fixes in a loop until green (see `docs\HEAL.md`).
-- **Self-improve** — after every task, lessons/gotchas/feedback are written to `memory/`;
-  the next session recalls them before starting (see `docs\SELF_IMPROVE.md`).
+## The three capabilities (honest about what's mechanism vs discipline)
+- **Scaffold** (real mechanism) — new projects in one command, consistently structured (`tools\new_project.ps1`).
+- **Heal** (detector + guided fix) — `tools\doctor.ps1` DETECTS problems (broken pointers, a failing
+  per-project `luna.check.ps1`); the diagnose->fix->verify loop is Claude-driven, not automatic
+  (see `docs\HEAL.md`). With no `luna.check.ps1`, a project's health check is just "code path exists".
+- **Self-improve** (capture tool + discipline) — `tools\log_lesson.ps1` writes lessons to `memory/`;
+  recall-before / reflect-after is a ritual a session follows, **not enforced by the engine** yet
+  (see `docs\SELF_IMPROVE.md`).
 
 ## Runs on your Claude subscription
 The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max plan —

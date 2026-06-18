@@ -25,11 +25,22 @@ if (Test-Path $cfg) {
   } catch {}
 }
 $psExe = (Get-Process -Id $PID).Path
+. (Join-Path $root 'tools\_registry.ps1')
 
-# --- palette (Claude: clay accent, cream text) via ANSI 24-bit ---
-$E = [char]27
-$clay = "$E[38;2;204;120;92m"; $cream = "$E[38;2;235;232;222m"; $dim = "$E[38;2;140;140;140m"
-$bold = "$E[1m"; $R = "$E[0m"
+# --- color support: enable VT on legacy consoles; fall back to plain text ---
+$useColor = -not $env:NO_COLOR
+if ($useColor) {
+  try {
+    $vt = Add-Type -Name LunaVT -Namespace Win32 -PassThru -ErrorAction Stop -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int h); [DllImport("kernel32.dll")] public static extern bool GetConsoleMode(IntPtr h, out int m); [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, int m);'
+    $h = $vt::GetStdHandle(-11); $m = 0
+    if ($vt::GetConsoleMode($h, [ref]$m)) { [void]$vt::SetConsoleMode($h, ($m -bor 4)) }   # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+  } catch {}
+}
+# --- palette (Claude: clay accent, cream text) via ANSI 24-bit; empty when no color ---
+if ($useColor) {
+  $E = [char]27
+  $clay = "$E[38;2;204;120;92m"; $cream = "$E[38;2;235;232;222m"; $dim = "$E[38;2;140;140;140m"; $bold = "$E[1m"; $R = "$E[0m"
+} else { $clay = ''; $cream = ''; $dim = ''; $bold = ''; $R = '' }
 $bar = ([string][char]0x2500) * 50
 $arrow = [string][char]0x25B8
 $script:staged = @()   # image paths staged via :attach, consumed by the next routed prompt
@@ -56,17 +67,14 @@ function ShowHelp {
 function ShowProjects {
   $pf = Join-Path $hub 'PROJECTS.md'
   if (-not (Test-Path $pf)) { Write-Host ("  {0}no PROJECTS.md at hub: {1}{2}" -f $dim, $hub, $R); return }
-  $rows = [regex]::Matches((Get-Content $pf -Raw), '(?m)^\|\s*([a-z0-9_]+)\s*\|\s*([^|]*)\|')
-  $found = $false
-  foreach ($m in $rows) { if ($m.Groups[1].Value -eq 'Shortcode') { continue }
-    $found = $true; Write-Host ("    {0}{1}{2}  {3}{4}{2}" -f $clay, $m.Groups[1].Value, $R, $dim, $m.Groups[2].Value.Trim()) }
-  if (-not $found) { Write-Host ("  {0}registry empty - type :new to create your first project.{1}" -f $dim, $R) }
+  $projs = Get-LunaProjects $pf
+  if ($projs.Count -eq 0) { Write-Host ("  {0}registry empty - type :new to create your first project.{1}" -f $dim, $R); return }
+  foreach ($p in $projs) { Write-Host ("    {0}{1}{2}  {3}{4}{2}" -f $clay, $p.Short, $R, $dim, $p.Name) }
 }
 function ResolveCode($short) {
   $pf = Join-Path $hub 'PROJECTS.md'
-  if (-not (Test-Path $pf)) { return $null }
-  $m = [regex]::Match((Get-Content $pf -Raw), ('(?m)^\|\s*' + [regex]::Escape($short) + '\s*\|\s*[^|]*\|\s*([^|]*)\|'))
-  if ($m.Success) { return $m.Groups[1].Value.Trim() }
+  $p = (Get-LunaProjects $pf) | Where-Object { $_.Short -eq $short } | Select-Object -First 1
+  if ($p) { return $p.CodePath }
   return $null
 }
 function NewProject {
@@ -102,6 +110,7 @@ function Route($short, $prompt, $images) {
     Write-Host ("  {0}+ {1} image(s) attached{2}" -f $dim, $images.Count, $R)
   }
   Write-Host ("  {0}-> {1}{2}{3}  {4}{5}{3}" -f $dim, $clay, $short, $R, $dim, $code)
+  Write-Host ("  {0}prompt: {1}{2}" -f $dim, ($finalPrompt -replace "`n", " / "), $R)   # echo final prompt so silent mutations are visible
   if ($code -notmatch '^[-(]' -and (Test-Path $code)) { Push-Location $code } else { Push-Location $root }
   try { & claude $finalPrompt } finally { Pop-Location }
   $script:staged = @()   # staged images consumed
@@ -132,15 +141,16 @@ while ($true) {
   elseif ($t -eq ':clear') { $script:staged = @(); Write-Host ("  {0}staged images cleared{1}" -f $dim, $R); continue }
   else {
     $bodyText = $t
-    if ($bodyText -match '^[^,:]+,\s*(.+)$') { $bodyText = $Matches[1] }   # strip leading "address,"
-    # collect inline @<path> images, then strip them from the prompt text
+    # strip a leading "address," ONLY when what follows is a real "<short>: ..." (don't mangle prose with commas)
+    if ($bodyText -match '^[A-Za-z0-9 _-]+,\s*([a-z0-9_]+\s*:.+)$') { $bodyText = $Matches[1] }
+    # pull out inline @<path> images, removing ONLY tokens that are real files (leave emails/@handles/decorators alone)
     $imgs = @() + $script:staged
     foreach ($mm in [regex]::Matches($bodyText, '@"([^"]+)"|@(\S+)')) {
       $p = if ($mm.Groups[1].Value) { $mm.Groups[1].Value } else { $mm.Groups[2].Value }
-      if (Test-Path $p) { $imgs += (Resolve-Path $p).Path } else { Write-Host ("  {0}[!] image not found: {1}{2}" -f $clay, $p, $R) }
+      if (Test-Path $p) { $imgs += (Resolve-Path $p).Path; $bodyText = $bodyText.Replace($mm.Value, '') }
     }
-    $bodyText = ([regex]::Replace($bodyText, '@"[^"]+"|@\S+', '')).Trim()
-    if ($bodyText -match '^([a-z0-9_]+)\s*:\s*(.+)$') { Route $Matches[1] $Matches[2] $imgs }
+    $bodyText = $bodyText.Trim()
+    if ($bodyText -match '^([a-z0-9_]+)\s*:\s*(.+)$') { Route $Matches[1].ToLower() $Matches[2] $imgs }
     else { Write-Host ("  {0}? use  {1}<short>: <prompt>{0}  (e.g.  myproj: fix the build){2}" -f $dim, $cream, $R) }
   }
 }

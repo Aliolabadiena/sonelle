@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 $engine = Split-Path $PSScriptRoot -Parent
 $hub    = if ($Hub) { $Hub } else { $engine }
 $memDir = Join-Path $hub 'memory'
+. (Join-Path $PSScriptRoot '_registry.ps1')
 
 $script:ok = 0; $script:miss = 0
 function Check($label, $path) {
@@ -30,21 +31,18 @@ Check 'templates dir'         (Join-Path $engine 'templates')
 
 Write-Host "[check] registered projects (code paths + memory refs from PROJECTS.md):"
 $pf = Join-Path $hub 'PROJECTS.md'
-$txt = Get-Content $pf -Raw
-$rows = [regex]::Matches($txt, '(?m)^\|\s*([a-z0-9_]+)\s*\|([^\r\n]*)$')
-if ($rows.Count -eq 0) { Write-Host "  (registry empty - nothing to check)" }
-foreach ($m in $rows) {
-  $short = $m.Groups[1].Value
-  if ($short -eq 'Shortcode') { continue }
-  $cells = $m.Groups[2].Value.Split('|')
-  if ($cells.Count -ge 2) {
-    $codePath = $cells[1].Trim()
-    if ($codePath -and $codePath -notmatch '^[-(]' ) { Check ("$short code path") $codePath }
+if (-not (Test-Path $pf)) {
+  Write-Host ("  [MISS] PROJECTS.md not found at hub -> {0}" -f $pf) -ForegroundColor Red; $script:miss++
+} else {
+  $projects = Get-LunaProjects $pf
+  if ($projects.Count -eq 0) { Write-Host "  (registry empty - nothing to check)" }
+  foreach ($p in $projects) {
+    if ($p.CodePath -and $p.CodePath -notmatch '^[-(]') { Check ("$($p.Short) code path") $p.CodePath }
   }
+  # memory files referenced anywhere in the registry
+  $refs = [regex]::Matches((Get-Content $pf -Raw), 'project_[a-z0-9_]+\.md') | ForEach-Object { $_.Value } | Sort-Object -Unique
+  foreach ($r in $refs) { Check ("memory\$r") (Join-Path $memDir $r) }
 }
-# memory files referenced anywhere in the registry
-$refs = [regex]::Matches($txt, 'project_[a-z0-9_]+\.md') | ForEach-Object { $_.Value } | Sort-Object -Unique
-foreach ($r in $refs) { Check ("memory\$r") (Join-Path $memDir $r) }
 
 Write-Host ""
 $col = 'Green'; if ($script:miss -gt 0) { $col = 'Red' }
