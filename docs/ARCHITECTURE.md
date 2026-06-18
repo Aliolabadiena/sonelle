@@ -36,9 +36,10 @@ read-state-first + end-of-task ritual), not this engine's dispatcher. That is in
 already did the routing. The engine root `CLAUDE.md` is the dispatcher for a human who opens `claude`
 directly inside the sonelle folder. If `-Hub` points at a workspace that has its OWN `CLAUDE.md`, that file
 governs its sessions - sonelle's routing only reads `PROJECTS.md` and does not merge hub-level dispatchers.
-For *developing the engine itself*, the terminal's `:dev` command opens a session in the engine root
-seeded with `docs\DEVELOPING.md` (the engine-dev invariants), which overrides the dispatcher framing of
-the root `CLAUDE.md` for that one session.
+For *developing the engine itself*, the terminal's `:dev` command (or the grammar with the engine's own
+name as the shortcode - `<engine-name>: <prompt>`, derived from the engine folder name and special-cased
+in `Route`, never the registry) opens a session in the engine root seeded with `docs\DEVELOPING.md` (the
+engine-dev invariants), which overrides the dispatcher framing of the root `CLAUDE.md` for that one session.
 
 ## Multi-instance (lanes)
 `bin\sonelle_team.ps1 <proj> -Lanes a,b,c` runs up to 5 parallel `claude` sessions on one project, each a

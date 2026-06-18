@@ -49,6 +49,7 @@ if ($useColor) {
 $bar = ([string][char]0x2500) * 50
 $arrow = [string][char]0x25B8
 $script:staged = @()   # image paths staged via :attach, consumed by the next routed prompt
+$script:selfShort = (Split-Path $root -Leaf).ToLower()   # the engine's own name -> routes to self-development (:dev)
 
 function Banner {
   Clear-Host
@@ -67,17 +68,19 @@ function ShowHelp {
   Write-Host ("    {0}:heal [short]{1}        run the doctor (health/heal detector)" -f $cream, $R)
   Write-Host ("    {0}:team <proj> <lanes>{1} launch up to 5 parallel lanes (e.g. :team myproj bugs,docs)" -f $cream, $R)
   Write-Host ("    {0}:status <proj>{1}       show each lane's status" -f $cream, $R)
-  Write-Host ("    {0}:dev [prompt]{1}        improve the engine itself (opens a dev session here)" -f $cream, $R)
+  Write-Host ("    {0}:dev [prompt]{1}        improve the engine itself (or  {0}{2}: <prompt>{1})" -f $cream, $R, $script:selfShort)
   Write-Host ("    {0}:attach <path>{1}       stage an image for the next prompt (or inline {0}@<path>{1})" -f $cream, $R)
   Write-Host ("    {0}:clear{1}               clear staged images" -f $cream, $R)
   Write-Host ("    {0}:help{1}  {0}:q{1}            this help / quit" -f $cream, $R)
 }
 function ShowProjects {
   $pf = Join-Path $hub 'PROJECTS.md'
-  if (-not (Test-Path $pf)) { Write-Host ("  {0}no PROJECTS.md at hub: {1}{2}" -f $dim, $hub, $R); return }
-  $projs = Get-SonelleProjects $pf
-  if ($projs.Count -eq 0) { Write-Host ("  {0}registry empty - type :new to create your first project.{1}" -f $dim, $R); return }
-  foreach ($p in $projs) { Write-Host ("    {0}{1}{2}  {3}{4}{2}" -f $clay, $p.Short, $R, $dim, $p.Name) }
+  if (Test-Path $pf) {
+    $projs = Get-SonelleProjects $pf
+    if ($projs.Count -eq 0) { Write-Host ("  {0}registry empty - type :new to create your first project.{1}" -f $dim, $R) }
+    else { foreach ($p in $projs) { Write-Host ("    {0}{1}{2}  {3}{4}{2}" -f $clay, $p.Short, $R, $dim, $p.Name) } }
+  } else { Write-Host ("  {0}no PROJECTS.md at hub: {1}{2}" -f $dim, $hub, $R) }
+  Write-Host ("    {0}{1}{2}  {3}(the engine itself - develop it; same as :dev){2}" -f $clay, $script:selfShort, $R, $dim)
 }
 function ResolveCode($short) {
   $pf = Join-Path $hub 'PROJECTS.md'
@@ -109,13 +112,17 @@ function StatusLanes($pj) {
   if (-not $pj) { Write-Host ("  {0}usage: :status <project>{1}" -f $dim, $R); return }
   & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'bin\sonelle_team.ps1') $pj -Status -Hub $hub | Out-Host
 }
-function DevSelf($prompt) {
+function DevSelf($prompt, $images) {
   $claude = Get-Command claude -ErrorAction SilentlyContinue
   if (-not $claude) {
     Write-Host ("  {0}[!] 'claude' not found on PATH - install Claude Code + log into your subscription first.{1}" -f $clay, $R)
     return
   }
   $ask = if ($prompt) { $prompt } else { 'Ask me what to improve, then propose a short plan before editing.' }
+  if ($images -and $images.Count -gt 0) {
+    $ask = $ask + "`n`nAttached image(s) - please read them:`n" + (($images | ForEach-Object { " - $_" }) -join "`n")
+    Write-Host ("  {0}+ {1} image(s) attached{2}" -f $dim, $images.Count, $R)
+  }
   $seed = "You are developing the sonelle ENGINE ITSELF (this repository = your current working directory). It is a PUBLIC repo with ZERO personal data.`n" +
           "Read docs\DEVELOPING.md and docs\ARCHITECTURE.md FIRST, and treat docs\DEVELOPING.md as your SOLE authority for THIS session. Claude Code auto-loads the root CLAUDE.md (the dispatcher template the engine ships) - IGNORE its dispatcher / project-routing / state-reading framing here; this session develops the engine, it does not route projects or manage a hub.`n" +
           "Honor every invariant in DEVELOPING.md: pure-ASCII PowerShell, no personal data in the repo, do NOT scaffold hub/project state (never run new_project or log_lesson at the engine root), and run tools\selftest.ps1 to ALL PASS before any commit (extend selftest for new features so the engine stays self-verifying). Everything is git-versioned, so changes are rewindable.`n`n" +
@@ -133,8 +140,10 @@ function DevSelf($prompt) {
   if ($junk.Count -gt 0 -or (Test-Path (Join-Path $root 'memory'))) {
     Write-Host ("  {0}[!] hub-state (TODO/ledger/memory) detected in the engine root - it must stay clean; move it to your hub or delete it.{1}" -f $clay, $R)
   }
+  $script:staged = @()   # staged images consumed
 }
 function Route($short, $prompt, $images) {
+  if ($short -eq $script:selfShort) { DevSelf $prompt $images; return }   # the engine's own name -> develop the engine
   $code = ResolveCode $short
   if (-not $code) {
     Write-Host ("  {0}'{1}' is not in the registry.{2}" -f $clay, $short, $R)
@@ -179,7 +188,7 @@ while ($true) {
   elseif ($t -match '^:heal\s*(.*)$') { Heal ($Matches[1].Trim()); continue }
   elseif ($t -match '^:team\s+(.+)$') { Team $Matches[1]; continue }
   elseif ($t -match '^:status\s*(.*)$') { StatusLanes ($Matches[1].Trim()); continue }
-  elseif ($t -match '^:dev\b\s*(.*)$') { DevSelf ($Matches[1].Trim()); continue }
+  elseif ($t -match '^:dev\b\s*(.*)$') { DevSelf ($Matches[1].Trim()) $script:staged; continue }
   elseif ($t -match '^:attach\s+(.+)$') {
     $ip = $Matches[1].Trim().Trim('"')
     if (Test-Path $ip) { $script:staged += (Resolve-Path $ip).Path; Write-Host ("  {0}staged ({1} total): {2}{3}" -f $dim, $script:staged.Count, $ip, $R) }

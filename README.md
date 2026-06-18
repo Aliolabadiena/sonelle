@@ -21,7 +21,7 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
 8. Verify the engine:  `powershell -File tools\selftest.ps1`
 9. Pin to taskbar:  `powershell -File bin\make_launcher.ps1`, then right-click the Desktop `sonelle` shortcut -> Pin to taskbar.
 10. Multi-instance:  `:team myproj bugs=opus,docs=haiku` opens parallel lanes (per-task models); `:status myproj` shows them. The orchestrator (your terminal session) always runs your max model (`opus`/`xhigh`).
-11. Improve sonelle itself:  type `:dev` (opens a dev session in the engine, seeded with `docs\DEVELOPING.md`; keep `selftest` green before committing).
+11. Improve sonelle itself:  type `:dev` (or address the engine by its own name: `sonelle: <prompt>`) - opens a dev session in the engine, seeded with `docs\DEVELOPING.md`; keep `selftest` green before committing.
 
 ## The three capabilities (honest about what's mechanism vs discipline)
 - **Scaffold** (real mechanism) — new projects in one command, consistently structured (`tools\new_project.ps1`).

@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.10 — 2026-06-18 (address the engine by its own name)
+- The engine's own shortcode now routes to self-development: `<engine-name>: <prompt>` (e.g.
+  `sonelle, sonelle: add a :foo command`) is the grammar form of `:dev`. The shortcode is derived from
+  the engine folder name (`$script:selfShort`), so it follows a rename. It does NOT touch the registry
+  (the engine is still not a project) - `Route` special-cases it to `DevSelf` (carrying staged/inline images).
+- `:projects` now lists the reserved self-dev shortcode; `:dev` also forwards staged images.
+- selftest section 8 asserts the self-shortcode is derived from the folder name and that `Route` routes it to dev.
+
 ## v1.9 — 2026-06-18 (self-development: improve the engine from the engine)
 - New terminal command `:dev [prompt]`: opens an orchestrator session (your max model) rooted in the
   engine, seeded so it develops the ENGINE itself - it reads `docs\DEVELOPING.md` + `docs\ARCHITECTURE.md`,

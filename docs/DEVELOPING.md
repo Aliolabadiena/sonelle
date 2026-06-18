@@ -8,8 +8,9 @@ or read it before you `cd` into the sonelle folder and run `claude`.
 > developing the engine, THIS file governs the session - not the dispatcher framing.
 
 ## Session framing (how `:dev` works)
-When you run `:dev`, sonelle launches a Claude session in the engine root, seeded with these
-instructions. Claude Code ALSO auto-loads the root `CLAUDE.md` (the dispatcher template the engine
+Trigger it with `:dev [prompt]` OR with the grammar using the engine's own name as the shortcode
+(`<engine-name>: <prompt>`, e.g. `sonelle, sonelle: add a :foo command`) - both land here. sonelle
+launches a Claude session in the engine root, seeded with these instructions. Claude Code ALSO auto-loads the root `CLAUDE.md` (the dispatcher template the engine
 ships) into context - but **this file is your sole authority for the session**. If anything in
 `CLAUDE.md` talks about routing a shortcode, scaffolding a project, reading hub state, or an
 end-of-task ritual, **disregard it**: you are improving the ENGINE, not running a project through it.
@@ -48,6 +49,10 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   touches hub state), wire it where it is used, and cover it in selftest.
 - **New template:** add it to `templates\`, have `new_project.ps1` write it, and assert it
   scaffolds in selftest.
+- **Self-develop routing:** the shortcode that makes `<engine-name>: <prompt>` reach `:dev` is derived
+  from the engine FOLDER name, lowercased (`$script:selfShort` in `bin\sonelle.ps1`), and special-cased in
+  `Route` BEFORE the registry lookup - so it never pollutes `PROJECTS.md`, and renaming the engine folder
+  updates it automatically.
 - **Docs:** keep `README.md` + `docs\ARCHITECTURE.md` honest (mechanism vs discipline), and add a
   `CHANGELOG.md` entry.
 
