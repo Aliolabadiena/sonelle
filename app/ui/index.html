@@ -13,7 +13,11 @@
          move uses pywebview's '.pywebview-drag-region'; app.js cancels the drag over '.nodrag' controls. -->
     <header id="titlebar" class="pywebview-drag-region">
       <div class="brand nodrag">
-        <span class="mark" aria-hidden="true"></span>
+        <!-- the app icon (sound wave) - keep in sync with assets\icon\sonelle.svg -->
+        <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+          <rect x="2" y="2" width="96" height="96" rx="22" fill="#241A33"/>
+          <path d="M20 50 q7.5 -18 15 0 t15 0 t15 0 t15 0" fill="none" stroke="#FF9B85" stroke-width="7" stroke-linecap="round"/>
+        </svg>
         <span class="word">sonelle</span>
       </div>
       <div id="tabs" class="tabs nodrag"></div>
@@ -31,7 +35,11 @@
 
     <!-- shown only when no tabs are open -->
     <section id="welcome" class="welcome glass" hidden>
-      <div class="w-mark" aria-hidden="true"></div>
+      <!-- the app icon (sound wave) - keep in sync with assets\icon\sonelle.svg -->
+      <svg class="w-mark" viewBox="0 0 100 100" aria-hidden="true">
+        <rect x="2" y="2" width="96" height="96" rx="22" fill="#241A33"/>
+        <path d="M20 50 q7.5 -18 15 0 t15 0 t15 0 t15 0" fill="none" stroke="#FF9B85" stroke-width="7" stroke-linecap="round"/>
+      </svg>
       <button id="w-open" class="primary nodrag">open a terminal</button>
     </section>
 

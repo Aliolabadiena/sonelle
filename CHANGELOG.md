@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.22 — 2026-06-19 (glass app: real app icon, softer glass, scrollbar clears the text)
+- **The brand mark is now the real app icon, not a gradient cube.** Both the titlebar mark and the
+  welcome-screen mark were plain lilac gradient squares; they now render the actual sonelle sound-wave
+  icon (inline SVG, kept in sync with `assets\icon\sonelle.svg`) - crisp at any size, no asset-path or
+  HTTP-server concerns. selftest 8e asserts the brand mark embeds the icon (and no longer a gradient cube).
+- **Glass dialled back ~20% (less "AI").** Every tunable glass effect was softened so the UI reads calmer:
+  backdrop blur/saturate, drop+inset shadows, the logo glow, the body "bloom" radial layers, and the
+  hairline border alphas all stepped down ~0.8x. Layout, radius, font, padding, and text colours are
+  untouched, and the panels/titlebar stay clearly separated from the background.
+- **Scrollbar clears the last glyph with a real gap.** The terminal's right gutter widened
+  (`.pane .xterm{ padding-right }` 14->18px, pane right padding 6->4px) and the thumb is now a thin pill
+  with a transparent border + `background-clip:content-box`, so it sits in its own lane with a few px of
+  air to the right of the text - verified with an overflow render. (FitAddon subtracts the element padding
+  when it sizes columns, which is the only real lever here.)
+- **Initial-prompt grey background: left as-is, by design.** That grey block is drawn by **claude itself**
+  (a 256/truecolor background SGR in its prompt box) only once claude is running - a raw-byte capture of
+  `sonelle.ps1 -Bare` confirmed nothing emits it before then, so neither `app.css` nor the xterm `THEME`
+  can restyle it. The only lever is rewriting that SGR out of the PTY stream, which is too fragile to
+  ship: the exact colour is a claude-version/theme detail (silent regression on update), a broad strip
+  would wreck legitimate claude backgrounds (diffs, selections, syntax), and a selftest could only check a
+  hardcoded sample, not live behaviour. Not worth the risk for a cosmetic tint.
+
 ## v1.21 — 2026-06-19 (glass app: scrollbar off the text, human tab names)
 - **Scrollbar no longer overlaps the terminal.** It used to ride the right inner edge of the xterm grid,
   painting over the last column of glyphs. The pane now pulls its right padding in and gives the terminal

@@ -179,6 +179,7 @@ Ok "index loads vendored xterm + app.js" (($srcHtml -match 'vendor/xterm\.js') -
 Ok "index loads the WebGL addon"      ($srcHtml -match 'vendor/addon-webgl\.js')
 Ok "index loads the tab-name pool"    ($srcHtml -match 'names\.js')
 Ok "titlebar is a pywebview drag region" ($srcHtml -match 'pywebview-drag-region')
+Ok "brand marks render the app icon (svg, not gradient cubes)" (($srcHtml -match '<svg class="mark"') -and ($srcHtml -match '<svg class="w-mark"') -and ($srcHtml -match 'stroke="#FF9B85"') -and (-not ($srcCss -match '\.brand \.mark\{[^}]*linear-gradient')) -and (-not ($srcCss -match '\.welcome \.w-mark\{[^}]*linear-gradient')))
 $srcGuiPs = Get-Content (Join-Path $engine 'bin\sonelle_gui.ps1') -Raw
 Ok "launcher installs deps + runs pythonw" (($srcGuiPs -match 'requirements\.txt') -and ($srcGuiPs -match 'pythonw'))
 $pyCmd = Get-Command py -ErrorAction SilentlyContinue

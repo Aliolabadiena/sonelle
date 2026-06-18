@@ -11,8 +11,8 @@
   --faint:#6f6a85;
   --accent:#9a86c4;       /* desaturated lilac - NOT neon */
   --accent-soft:rgba(154,134,196,.16);
-  --hair:rgba(170,150,210,.14);
-  --hair-strong:rgba(180,160,220,.26);
+  --hair:rgba(170,150,210,.11);
+  --hair-strong:rgba(180,160,220,.21);
   --pane-radius:16px;
   --font:"Cascadia Code","Cascadia Mono",Consolas,"Courier New",monospace;
 }
@@ -24,9 +24,9 @@ body{
   font-family:var(--font);
   overflow:hidden;
   background:
-    radial-gradient(70% 55% at 22% 8%, rgba(108,78,168,.34), transparent 60%),
-    radial-gradient(60% 50% at 92% 4%, rgba(78,54,124,.30), transparent 62%),
-    radial-gradient(75% 65% at 78% 102%, rgba(64,44,104,.26), transparent 60%),
+    radial-gradient(70% 55% at 22% 8%, rgba(108,78,168,.27), transparent 60%),
+    radial-gradient(60% 50% at 92% 4%, rgba(78,54,124,.24), transparent 62%),
+    radial-gradient(75% 65% at 78% 102%, rgba(64,44,104,.21), transparent 60%),
     linear-gradient(165deg, var(--bg1), var(--bg0));
   user-select:none;
 }
@@ -36,10 +36,10 @@ body{
 /* ---------- glass primitive ---------- */
 .glass{
   background:linear-gradient(160deg, rgba(42,30,66,.40), rgba(18,12,32,.32));
-  backdrop-filter:blur(20px) saturate(125%);
-  -webkit-backdrop-filter:blur(20px) saturate(125%);
+  backdrop-filter:blur(16px) saturate(120%);
+  -webkit-backdrop-filter:blur(16px) saturate(120%);
   border:1px solid var(--hair);
-  box-shadow:0 10px 40px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.05);
+  box-shadow:0 8px 32px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.04);
 }
 
 /* ---------- title bar (window drag handle) ---------- */
@@ -51,10 +51,10 @@ body{
   height:44px; padding:0 8px 0 14px;
   border-radius:14px;
   background:linear-gradient(160deg, rgba(40,28,64,.46), rgba(16,11,28,.36));
-  backdrop-filter:blur(20px) saturate(125%);
-  -webkit-backdrop-filter:blur(20px) saturate(125%);
+  backdrop-filter:blur(16px) saturate(120%);
+  -webkit-backdrop-filter:blur(16px) saturate(120%);
   border:1px solid var(--hair);
-  box-shadow:0 8px 30px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.05);
+  box-shadow:0 6px 24px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.04);
   flex:0 0 auto;
 }
 /* '.nodrag' marks the interactive titlebar controls; the app.js mousedown guard reads it to keep a
@@ -62,9 +62,8 @@ body{
 
 .brand{ display:flex; align-items:center; gap:9px; padding-right:6px; }
 .brand .mark{
-  width:18px; height:18px; border-radius:6px;
-  background:linear-gradient(135deg, var(--accent), #c7b3e6);
-  box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 2px 8px rgba(120,90,180,.35);
+  width:18px; height:18px; display:block;       /* the app icon (inline svg), not a gradient cube */
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
 }
 .brand .word{ font-size:14px; font-weight:500; color:#efe9f8; letter-spacing:.2px; }
 
@@ -122,13 +121,13 @@ body{
 .pane{
   position:absolute; inset:0;
   border-radius:var(--pane-radius);
-  /* right padding pulled in (6 vs 16 left) so the scrollbar rides the box edge, not the text */
-  padding:12px 6px 12px 16px;
+  /* right padding pulled in (4 vs 16 left) so the scrollbar rides the box edge, not the text */
+  padding:12px 4px 12px 16px;
   background:linear-gradient(160deg, rgba(34,24,56,.38), rgba(14,10,26,.30));
-  backdrop-filter:blur(16px) saturate(120%);
-  -webkit-backdrop-filter:blur(16px) saturate(120%);
+  backdrop-filter:blur(13px) saturate(116%);
+  -webkit-backdrop-filter:blur(13px) saturate(116%);
   border:1px solid var(--hair);
-  box-shadow:0 12px 44px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.04);
+  box-shadow:0 10px 35px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.03);
   overflow:hidden;
 }
 /* force xterm's own layers transparent so the glass shows through */
@@ -138,9 +137,12 @@ body{
 /* Give the terminal grid its own right-hand gutter so glyphs never sit under the scrollbar:
    FitAddon subtracts this element padding when it computes columns, so the text stops short and
    the scrollbar gets a clean lane at the right edge of the box (no more overlap). */
-.pane .xterm{ padding-right:14px; }
+.pane .xterm{ padding-right:18px; }
 .pane .xterm-viewport::-webkit-scrollbar{ width:8px; }
-.pane .xterm-viewport::-webkit-scrollbar-thumb{ background:rgba(154,134,196,.34); border-radius:6px; }
+.pane .xterm-viewport::-webkit-scrollbar-thumb{
+  background:rgba(154,134,196,.40); border-radius:6px;
+  border:2px solid transparent; background-clip:content-box;   /* thin thumb with a gap, off the text */
+}
 .pane .xterm-viewport::-webkit-scrollbar-track{ background:transparent; margin:6px 0; }
 
 /* ---------- welcome (empty state) ---------- */
@@ -153,9 +155,8 @@ body{
    specificity - re-assert none when hidden so the empty-state card disappears */
 .welcome[hidden]{ display:none !important; }
 .welcome .w-mark{
-  width:40px; height:40px; border-radius:12px; margin-bottom:4px;
-  background:linear-gradient(135deg, var(--accent), #c7b3e6);
-  box-shadow:0 4px 18px rgba(120,90,180,.4);
+  width:40px; height:40px; margin-bottom:4px; display:block;   /* the app icon (inline svg), not a gradient cube */
+  filter:drop-shadow(0 2px 8px rgba(0,0,0,.3));
 }
 .welcome h1{ margin:0; font-size:20px; font-weight:500; color:#efe9f8; }
 .welcome p{ margin:0; color:var(--dim); font-size:13px; }
