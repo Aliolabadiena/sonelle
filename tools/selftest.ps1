@@ -115,6 +115,9 @@ Ok "terminal has AppLaunch function" ($srcTerm -match 'function AppLaunch')
 Ok "AppLaunch opens the glass app"   ($srcTerm -match 'sonelle_gui\.ps1')
 Ok "terminal has an :app-classic handler" ($srcTerm -match ':app-classic')
 Ok "AppLaunchClassic opens WinForms -Sta" (($srcTerm -match 'function AppLaunchClassic') -and ($srcTerm -match 'sonelle_app\.ps1') -and ($srcTerm -match "'-Sta'"))
+Ok "terminal has a -Yolo switch"      ($srcTerm -match '\[switch\]\$Yolo')
+Ok "terminal has a :yolo toggle"      ($srcTerm -match '\^:yolo')
+Ok "-Yolo / SONELLE_YOLO sets bypass" (($srcTerm -match '\$Yolo -or \$env:SONELLE_YOLO') -and ($srcTerm -match 'bypassPermissions'))
 $srcLnk = Get-Content (Join-Path $engine 'bin\make_launcher.ps1') -Raw
 Ok "make_launcher default opens the glass app" ($srcLnk -match 'sonelle_gui\.ps1')
 Ok "make_launcher -Classic opens WinForms" ($srcLnk -match 'sonelle_app\.ps1')
@@ -132,7 +135,7 @@ $bareStr = (($bareOut -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
 Ok "bare mode suppresses the welcome" (-not ($bareStr -match 'orchestrator'))
 Ok "terminal has a Welcome function"   ($srcTerm -match 'function Welcome')
 Ok "welcome uses runtime box glyphs"   (($srcTerm -match '0x256D') -and ($srcTerm -match '0x2570'))
-Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -and (@(':projects',':new',':heal',':team',':status',':app',':dev',':attach',':clear',':help',':q') | Where-Object { $srcTerm -notmatch [regex]::Escape($_) }).Count -eq 0)
+Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -and (@(':projects',':new',':heal',':team',':status',':app',':dev',':yolo',':attach',':clear',':help',':q') | Where-Object { $srcTerm -notmatch [regex]::Escape($_) }).Count -eq 0)
 # invariant #4: the engine root must stay clean of hub state (no project TODO/ledger/memory)
 $rootTodo = @(Get-ChildItem $engine -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue).Count
 $rootLedg = @(Get-ChildItem $engine -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue).Count
@@ -143,8 +146,8 @@ $appDir = Join-Path $engine 'app'
 $guiPy  = Join-Path $appDir 'sonelle_gui.py'
 foreach ($rel in @(
   'app\sonelle_gui.py', 'app\requirements.txt', 'app\ui\index.html', 'app\ui\app.js', 'app\ui\app.css',
-  'app\ui\vendor\xterm.js', 'app\ui\vendor\xterm.css', 'app\ui\vendor\addon-fit.js', 'bin\sonelle_gui.ps1',
-  'assets\icon\sonelle.ico')) {
+  'app\ui\vendor\xterm.js', 'app\ui\vendor\xterm.css', 'app\ui\vendor\addon-fit.js', 'app\ui\vendor\addon-webgl.js',
+  'bin\sonelle_gui.ps1', 'assets\icon\sonelle.ico')) {
   Ok ("exists: " + $rel) (Test-Path (Join-Path $engine $rel))
 }
 $srcGui = if (Test-Path $guiPy) { Get-Content $guiPy -Raw } else { '' }
@@ -153,15 +156,20 @@ Ok "backend pushes via __ptyOutput"   ($srcGui -match '__ptyOutput')
 Ok "backend spawns sonelle.ps1 -Bare" ($srcGui -match '"-Bare"')
 Ok "backend kills the process tree"   ($srcGui -match 'taskkill')
 Ok "backend brands window with sonelle icon" (($srcGui -match 'sonelle\.ico') -and ($srcGui -match '"icon"'))
+Ok "backend claims its taskbar identity" ($srcGui -match 'SetCurrentProcessExplicitAppUserModelID')
 Ok "backend saves pasted images"      ($srcGui -match 'def save_paste_image')
 Ok "backend setwinsize(rows, cols)"   ($srcGui -match 'setwinsize\(rows, cols\)')
+Ok "backend forwards -Yolo on SONELLE_YOLO" (($srcGui -match 'SONELLE_YOLO') -and ($srcGui -match '"-Yolo"'))
 $srcJs = Get-Content (Join-Path $appDir 'ui\app.js') -Raw
 Ok "frontend has output sink + ready gate" (($srcJs -match 'window\.__ptyOutput') -and ($srcJs -match 'pywebviewready'))
 Ok "frontend uses FitAddon.FitAddon"  ($srcJs -match 'new FitAddon\.FitAddon\(\)')
+Ok "frontend mounts the WebGL renderer" (($srcJs -match 'WebglAddon\.WebglAddon') -and ($srcJs -match 'function mountWebgl'))
+Ok "frontend debounces resize fits"   ($srcJs -match 'function scheduleFit')
 Ok "frontend pastes images via save_paste_image" (($srcJs -match 'save_paste_image') -and ($srcJs -match '"paste"'))
 Ok "frontend guards titlebar drag"    ($srcJs -match "closest\(`"\.nodrag`"\)")
 $srcHtml = Get-Content (Join-Path $appDir 'ui\index.html') -Raw
 Ok "index loads vendored xterm + app.js" (($srcHtml -match 'vendor/xterm\.js') -and ($srcHtml -match 'app\.js'))
+Ok "index loads the WebGL addon"      ($srcHtml -match 'vendor/addon-webgl\.js')
 Ok "titlebar is a pywebview drag region" ($srcHtml -match 'pywebview-drag-region')
 $srcGuiPs = Get-Content (Join-Path $engine 'bin\sonelle_gui.ps1') -Raw
 Ok "launcher installs deps + runs pythonw" (($srcGuiPs -match 'requirements\.txt') -and ($srcGuiPs -match 'pythonw'))

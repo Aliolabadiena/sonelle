@@ -11,7 +11,7 @@
   Source is pure ASCII; Unicode glyphs are built at runtime via [char] codepoints.
 #>
 [CmdletBinding()]
-param([switch]$Demo, [switch]$Bare)   # -Bare: no welcome card, minimal routing echo (used by the glass app)
+param([switch]$Demo, [switch]$Bare, [switch]$Yolo)   # -Bare: chat-feel (glass app); -Yolo: claude skips permission prompts
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -29,6 +29,9 @@ if (Test-Path $cfg) {
     if ($c.models.orchestratorPermissionMode) { $orchPerm = $c.models.orchestratorPermissionMode }
   } catch {}
 }
+# -Yolo (or the env var the glass app forwards) overrides the mode so claude never asks for permission.
+# bypassPermissions is a real claude --permission-mode choice; toggle it live in the REPL with :yolo.
+if ($Yolo -or $env:SONELLE_YOLO) { $orchPerm = 'bypassPermissions' }
 $psExe = (Get-Process -Id $PID).Path
 . (Join-Path $root 'tools\_registry.ps1')
 
@@ -108,6 +111,7 @@ function ShowHelp {
     @(":app",                 "open the liquid-glass app (many terminals, one window)"),
     @(":app-classic",         "open the classic WinForms app (fallback)"),
     @(":dev [prompt]",        ("improve sonelle itself (or  " + $cream + $script:selfShort + ": ..." + $dim + ")")),
+    @(":yolo [on|off]",       "toggle claude skipping permission prompts (bypassPermissions)"),
     @(":clear",               "clear staged images"),
     @(":help   :q",           "this help / quit")
   )
@@ -275,6 +279,19 @@ while ($true) {
     continue
   }
   elseif ($t -eq ':clear') { $script:staged = @(); Write-Host ("  {0}staged images cleared{1}" -f $dim, $R); continue }
+  elseif ($t -match '^:yolo\b\s*(.*)$') {
+    # toggle (or set on/off) whether claude skips permission prompts; applies to the NEXT prompt onward
+    $a = $Matches[1].Trim().ToLower()
+    if     ($a -eq 'on')  { $orchPerm = 'bypassPermissions' }
+    elseif ($a -eq 'off') { $orchPerm = '' }
+    else   { $orchPerm = if ($orchPerm -eq 'bypassPermissions') { '' } else { 'bypassPermissions' } }
+    if ($orchPerm -eq 'bypassPermissions') {
+      Write-Host ("  {0}yolo {1}ON{0}  - claude will NOT ask for permission (bypassPermissions){2}" -f $dim, $clay, $R)
+    } else {
+      Write-Host ("  {0}yolo {1}OFF{0} - claude asks before risky actions (default){2}" -f $dim, $cream, $R)
+    }
+    continue
+  }
   else {
     $bodyText = $t
     # strip a leading "address," ONLY when what follows is a real "<short>: ..." (don't mangle prose with commas)

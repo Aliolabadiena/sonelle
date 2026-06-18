@@ -28,12 +28,37 @@
     const term = new Terminal({
       allowTransparency: true,
       disableStdin: true,          // output only - you type in the composer, not the window
-      fontFamily: 'Cascadia Code, Cascadia Mono, Consolas, "Courier New", monospace',
-      fontSize: 13, lineHeight: 1.15, cursorBlink: true, scrollback: 5000, theme: THEME
+      // Cascadia MONO first (no ligatures): xterm forces one glyph per cell, so a ligature font like
+      // Cascadia Code makes contextual glyphs overlap into neighbours - that was the "words mashed
+      // together" look. Consolas is the always-present Windows monospace fallback.
+      fontFamily: '"Cascadia Mono", Consolas, "Cascadia Code", "Courier New", monospace',
+      fontSize: 13, lineHeight: 1.2, cursorBlink: true, scrollback: 5000, theme: THEME
     });
     const fit = new FitAddon.FitAddon();   // double name: module.FitAddon
     term.loadAddon(fit);
     return { term, fit };
+  }
+
+  // The default DOM renderer GHOSTS and FLICKERS over a transparent (glass) background - old glyphs
+  // bleed through because a transparent "space" cell never paints over them, which is what mashed the
+  // text and made it flutter. The WebGL renderer composites on the GPU and clears every cell each
+  // frame, so it stays crisp. If a WebGL context can't be created (driver/blocklist) we dispose it
+  // and silently keep the DOM renderer. MUST be loaded AFTER term.open().
+  function mountWebgl(term) {
+    try {
+      if (!(window.WebglAddon && window.WebglAddon.WebglAddon)) return null;
+      const addon = new WebglAddon.WebglAddon();
+      addon.onContextLoss(() => { try { addon.dispose(); } catch (e) {} });
+      term.loadAddon(addon);
+      return addon;
+    } catch (e) { return null; }
+  }
+
+  // Coalesce a burst of ResizeObserver callbacks (window drag/animation fires many per second) into a
+  // single fit per frame - refitting on every pixel is what made the terminal churn/flutter on resize.
+  function scheduleFit(entry) {
+    if (entry._fitRaf) return;
+    entry._fitRaf = requestAnimationFrame(() => { entry._fitRaf = 0; safeFit(entry); });
   }
 
   function safeFit(entry) {
@@ -109,6 +134,7 @@
     if (live) { try { window.pywebview.api.close_tab(tabId); } catch (x) {} }
     try { if (e.ro) e.ro.disconnect(); } catch (x) {}
     try { (e.disposers || []).forEach((d) => d && d.dispose && d.dispose()); } catch (x) {}
+    try { if (e.webgl) e.webgl.dispose(); } catch (x) {}   // free the GL context before the term goes
     try { e.term.dispose(); } catch (x) {}
     try { e.pane.remove(); } catch (x) {}
     try { if (e.tabEl) e.tabEl.remove(); } catch (x) {}
@@ -132,7 +158,8 @@
     $("stack").appendChild(pane);
     const { term, fit } = newTermObj();
     term.open(pane);
-    return { term, fit, pane, tabEl: null, ro: null, disposers: [], dead: false };
+    const webgl = mountWebgl(term);   // GPU renderer (after open): crisp, no flutter over the glass
+    return { term, fit, pane, webgl, tabEl: null, ro: null, disposers: [], dead: false };
   }
 
   // ---------- live tab (real backend) ----------
@@ -169,7 +196,7 @@
     entry.disposers.push(entry.term.onResize(({ cols, rows }) => {
       try { window.pywebview.api.resize(tabId, cols, rows); } catch (x) {}
     }));
-    entry.ro = new ResizeObserver(() => safeFit(entry));
+    entry.ro = new ResizeObserver(() => scheduleFit(entry));
     entry.ro.observe(entry.pane);
     activateTab(tabId);
     try { window.pywebview.api.resize(tabId, entry.term.cols, entry.term.rows); } catch (x) {}
@@ -280,7 +307,7 @@
     const did = "demo" + (++tabCount);
     entry.tabEl = makeTabEl(did, "sonelle " + tabCount);
     TABS.set(did, entry);
-    entry.ro = new ResizeObserver(() => safeFit(entry));
+    entry.ro = new ResizeObserver(() => scheduleFit(entry));
     entry.ro.observe(entry.pane);
     activateTab(did);
     requestAnimationFrame(() => {

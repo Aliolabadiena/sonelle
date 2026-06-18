@@ -75,12 +75,19 @@ This WinForms host is now the **classic fallback** (`:app-classic`); the default
 Each tab is an **xterm.js** terminal; behind it, `app\sonelle_gui.py` spawns `powershell -File bin\sonelle.ps1`
 in a **pseudo-terminal** (`pywinpty`) and pumps bytes both ways - so the terminal brain runs hidden and
 the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread per tab.
+- **Renderer:** xterm.js uses the **WebGL** addon (GPU), not its default DOM renderer. Over a transparent
+  (glass) background the DOM renderer ghosts/flickers and mashes glyphs together (a transparent "space"
+  cell never paints over the glyph beneath it); WebGL clears every cell each frame, so text stays crisp.
+  It falls back to the DOM renderer if a GL context can't be created. The font is **Cascadia Mono** first
+  (no ligatures - a ligature font overlaps glyphs in xterm's one-glyph-per-cell grid), and resize fits are
+  debounced (`scheduleFit`, one per frame) so window drags don't churn the terminal.
 - **Contract:** JS->Python via `window.pywebview.api.{new_tab, send_input, resize, close_tab, list_projects,
   save_paste_image, win_minimize, win_toggle_max, win_close}`; Python->JS via fire-and-forget `run_js` calling
   `window.__ptyOutput(tabId, base64Bytes)` / `window.__ptyExit(tabId, code)`. `tabId` is Python-owned.
 - **Window move:** the frameless window drags from the title bar via pywebview's `.pywebview-drag-region`
   class (WebView2 ignores Electron's `-webkit-app-region`); an `app.js` mousedown guard cancels the drag
-  over `.nodrag` controls so buttons/tabs/the input still click. The taskbar/window icon is `sonelle.ico`.
+  over `.nodrag` controls so buttons/tabs/the input still click. The taskbar/window icon is `sonelle.ico`
+  (window icon via `icon=` on `webview.start()`; the taskbar also needs an explicit AppUserModelID - below).
 - **Paste images:** Ctrl+V in the composer saves the clipboard image to a temp file (`save_paste_image`,
   NOT the repo) and inserts an `@"<path>"` token; the terminal then routes it to claude like `:attach`/`@path`.
 - **Threading:** `webview.start()` on the main thread; js_api methods each run on their own thread
@@ -91,10 +98,18 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   gradient + translucent `backdrop-filter` panels - identical on Win10/11 (no OS acrylic dependency).
 - **Launch + deps:** `bin\sonelle_gui.ps1` bootstraps a local `.venv` (`pywebview` + `pywinpty`, pinned in
   `app\requirements.txt`) on first run, then starts the GUI with `pythonw` (no console). The window
-  passes `icon=assets\icon\sonelle.ico` to `webview.start()`, so the taskbar shows the sonelle mark, not
-  `pythonw.exe`'s Python feather (pywebview falls back to the exe's icon otherwise). `xterm.js` +
-  `addon-fit` are vendored under `app\ui\vendor\` (MIT, offline). selftest section 8e checks the files,
-  the JS<->Python contract markers, the launcher wiring, and `py_compile`s the backend; section 1 excludes `.venv`.
+  passes `icon=assets\icon\sonelle.ico` to `webview.start()` so the window's `Form.Icon` is the sonelle
+  mark. That alone fixes only the (hidden, frameless) title bar; the **taskbar** button still grouped
+  under `pythonw.exe` and showed its Python feather. So at startup the backend calls
+  `SetCurrentProcessExplicitAppUserModelID("sonelle.glass.app")` (Windows-only) to claim its own taskbar
+  identity, detaching the button from `pythonw` so it adopts the sonelle icon. `xterm.js`, `addon-fit`,
+  and `addon-webgl` are vendored under `app\ui\vendor\` (MIT, offline; versions paired - see its NOTICE).
+  selftest section 8e checks the files, the JS<->Python contract markers, the launcher wiring, and
+  `py_compile`s the backend; section 1 excludes `.venv`.
+- **Skip permission prompts (yolo):** by default `claude` asks before risky actions. Set `SONELLE_YOLO=1`
+  and the glass app spawns the terminal with `-Yolo`, which runs `claude --permission-mode bypassPermissions`
+  so it never asks. In any terminal you can also toggle it live with `:yolo` (or `:yolo on|off`), or set it
+  permanently via `sonelle.config.json` -> `models.orchestratorPermissionMode: "bypassPermissions"`.
 
 ## Billing
 The terminal hands prompts to `claude` (Claude Code), which runs on your Claude Pro/Max

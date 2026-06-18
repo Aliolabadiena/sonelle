@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.20 — 2026-06-18 (glass app: crisp WebGL terminal + a yolo switch to skip permission prompts)
+- **No more flicker / mashed-together text.** The glass terminal rendered with xterm.js's default DOM
+  renderer over a *transparent* background, where a "space" cell never paints over the glyph beneath it -
+  so old characters bled through and words ran together (`labai daug` -> `labaicdaug`), and the whole pane
+  fluttered on resize. It now uses the **WebGL** renderer (`@xterm/addon-webgl`, vendored), which clears
+  every cell each frame on the GPU; it falls back to the DOM renderer if no GL context is available. Also:
+  the font is **Cascadia Mono** first (ligature fonts overlap in xterm's one-glyph-per-cell grid), and
+  resize fits are debounced to one per frame (`scheduleFit`) so dragging the window no longer churns.
+- **`:yolo` - stop the permission prompts.** `claude` asks before risky actions by default. New ways to
+  skip them, all routed through `claude --permission-mode bypassPermissions`:
+  - `SONELLE_YOLO=1` env var -> the glass app launches each terminal with `-Yolo` (persistent, opt-in);
+  - `:yolo` (or `:yolo on|off`) toggles it live inside any terminal;
+  - `sonelle.ps1 -Yolo` flag, or `sonelle.config.json` -> `models.orchestratorPermissionMode`.
+  Opt-in by design (the public engine never bypasses by default). selftest 8a/8e assert the flag, the
+  toggle, the env-var wiring, the vendored addon, and that the front-end mounts WebGL + debounces fits.
+
+## v1.19 — 2026-06-18 (glass app: fix the Python icon still showing in the taskbar)
+- **The taskbar finally shows sonelle, not Python.** v1.18 set the window's `Form.Icon` via `icon=` on
+  `webview.start()`, but the **taskbar** button kept showing `pythonw.exe`'s Python-feather icon. The
+  window is frameless, so `Form.Icon` only ever brands the (hidden) title bar; the taskbar groups buttons
+  by **AppUserModelID**, and with none set the button stayed grouped under the host `pythonw.exe` and used
+  its icon. `sonelle_gui.py` now calls `SetCurrentProcessExplicitAppUserModelID("sonelle.glass.app")` at
+  startup (before any window exists; Windows-only, swallowed elsewhere), claiming its own taskbar identity
+  so the button adopts the sonelle mark. selftest 8e asserts the call is present.
+
 ## v1.18 — 2026-06-18 (glass app: sonelle icon, draggable window, Ctrl+V image paste)
 - **sonelle icon, not the Python feather.** The running glass app now shows the **sonelle** icon in the
   window/taskbar. pywebview's winforms backend, given no icon, extracts one from `sys.executable`

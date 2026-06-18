@@ -70,12 +70,20 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   ASCII-gates `.ps1`, but stay consistent). Underscore-prefix any data attribute on the `Api` class
   (pywebview introspects public attrs and will recurse into the WinForms window graph). Glass is in-app
   CSS only - WebView2 can't be transparent. Vendored xterm under `app\ui\vendor\` (refresh via its NOTICE.md;
-  core 5.5.0 must pair with fit 0.10.0). The launcher `bin\sonelle_gui.ps1` owns venv+deps; `.venv\` is gitignored.
-  The window brands itself `sonelle.ico` (`icon=` on `webview.start()`, else pywebview falls back to
-  `pythonw.exe`); it drags from the title bar via pywebview's `.pywebview-drag-region` (NOT Electron's
+  versions must pair - core 5.5.0 <-> fit 0.10.0 <-> webgl 0.18.0). xterm runs on the **WebGL** renderer
+  (`mountWebgl` in `app.js`), NOT the default DOM renderer: over the transparent glass the DOM renderer
+  ghosts/flickers and mashes glyphs, WebGL clears each cell on the GPU (falls back to DOM if no GL context).
+  Font is Cascadia Mono first (ligatures overlap in the cell grid); resize fits are debounced (`scheduleFit`).
+  The launcher `bin\sonelle_gui.ps1` owns venv+deps; `.venv\` is gitignored.
+  The window brands itself `sonelle.ico` (`icon=` on `webview.start()` sets `Form.Icon`; the TASKBAR
+  also needs `SetCurrentProcessExplicitAppUserModelID` at startup, else the button groups under
+  `pythonw.exe` and shows its Python feather); it drags from the title bar via pywebview's
+  `.pywebview-drag-region` (NOT Electron's
   `-webkit-app-region`, which WebView2 ignores) with an `app.js` mousedown guard over `.nodrag` controls;
   Ctrl+V in the composer saves the clipboard image to temp (`save_paste_image`) and inserts an `@"path"`
-  token. selftest 8e guards all three.
+  token. selftest 8e guards these. **Yolo (skip permission prompts):** `SONELLE_YOLO=1` makes the app spawn
+  the terminal with `-Yolo` -> `claude --permission-mode bypassPermissions`; `:yolo`/`-Yolo`/the config key
+  `models.orchestratorPermissionMode` are the other ways in (all funnel through `$orchPerm` in `sonelle.ps1`).
 - **Docs:** keep `README.md` + `docs\ARCHITECTURE.md` honest (mechanism vs discipline), and add a
   `CHANGELOG.md` entry.
 

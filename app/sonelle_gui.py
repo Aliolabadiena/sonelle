@@ -128,9 +128,14 @@ class SessionManager:
             cols, rows = 80, 24
         if not os.path.isfile(SONELLE_PS1):
             return {"ok": False, "error": "sonelle.ps1 not found at %s" % SONELLE_PS1}
+        ps_args = [PS, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", SONELLE_PS1, "-Bare"]
+        # SONELLE_YOLO=1 -> launch the terminal in -Yolo so claude skips permission prompts. (sonelle.ps1
+        # also reads the env var directly, but passing the flag keeps the spawned contract explicit.)
+        if os.environ.get("SONELLE_YOLO"):
+            ps_args.append("-Yolo")
         try:
             proc = PtyProcess.spawn(
-                [PS, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", SONELLE_PS1, "-Bare"],
+                ps_args,
                 dimensions=(rows, cols),     # (rows, cols); -Bare = no welcome, chat-feel
                 cwd=ENGINE,
                 env=os.environ.copy(),
@@ -386,9 +391,26 @@ class Api:
         return None
 
 
+def _set_taskbar_identity():
+    # Windows groups taskbar buttons by AppUserModelID. With none set, our window is grouped
+    # under the host pythonw.exe and the taskbar shows ITS Python-feather icon - even though
+    # pywebview sets the window's Form.Icon to sonelle.ico (that only fixes the title bar, which
+    # is hidden here since the window is frameless). Claiming our own AppUserModelID detaches the
+    # taskbar button from pythonw so it adopts the window's sonelle icon. Must run before any
+    # window exists. Windows-only; a no-op (swallowed) elsewhere.
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("sonelle.glass.app")
+    except Exception:
+        pass
+
+
 def main():
     if not os.path.isfile(SONELLE_PS1):
         sys.stderr.write("sonelle.ps1 not found at %s\n" % SONELLE_PS1)
+    _set_taskbar_identity()
     debug = bool(os.environ.get("SONELLE_DEBUG"))
     api = Api()
     win = webview.create_window(
