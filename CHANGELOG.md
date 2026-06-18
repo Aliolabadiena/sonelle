@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.15 — 2026-06-18 (glass app: chat feel, not coding feel)
+- The glass app now feels like talking, not coding. `bin\sonelle.ps1` got a `-Bare` switch (no
+  welcome card, minimal routing echo - just `> <project>`); the app spawns `sonelle.ps1 -Bare`, so a
+  tab opens to a calm empty terminal instead of the welcome/help wall.
+- Removed the project chips row from the app. You pick a project the way the grammar already works -
+  type `sotis: fix the build` in the one bottom composer - and that's it.
+- Composer placeholder is conversational ("ask a project to do something   e.g. sotis: fix the build");
+  the empty-state card is trimmed to just an "open a terminal" button.
+- selftest: asserts `-Bare` suppresses the welcome and that the backend spawns `sonelle.ps1 -Bare`.
+  Verified live (real window: no welcome wall, no chips, clean prompt, stderr clean).
+- (The bare welcome only affects the app; a plain `sonelle.ps1` console still shows the full welcome.)
+
 ## v1.14 — 2026-06-18 (the liquid-glass desktop app: Python front-end, terminal behind the scenes)
 - New `app/`: a frameless Python (pywebview / WebView2) desktop app with a muted dark-purple
   liquid-glass UI. Each tab is an xterm.js terminal; the real PowerShell (`bin\sonelle.ps1`) runs

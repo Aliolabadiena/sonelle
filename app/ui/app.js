@@ -184,24 +184,6 @@
     inp.value = "";
   }
 
-  // ---------- project chips ----------
-  function renderChips(projects) {
-    const box = $("chips");
-    box.innerHTML = "";
-    (projects || []).forEach((p) => {
-      const c = document.createElement("div");
-      c.className = "chip";
-      c.textContent = p.shortcut;
-      c.title = p.name || p.shortcut;
-      c.addEventListener("click", () => {
-        const inp = $("cmd");
-        inp.value = p.shortcut + ": ";
-        inp.focus();
-      });
-      box.appendChild(c);
-    });
-  }
-
   // ---------- chrome wiring (safe with or without the bridge) ----------
   function wireChrome() {
     const openTab = () => { if (live) createLiveTab(null); else createDemoTab(); };
@@ -219,7 +201,6 @@
   function initLive() {
     if (live) return;
     live = true;
-    try { window.pywebview.api.list_projects().then(renderChips).catch(() => {}); } catch (x) {}
     createLiveTab(null);
   }
 
@@ -235,25 +216,12 @@
     activateTab(did);
     requestAnimationFrame(() => {
       safeFit(entry);
-      const t = entry.term;
-      t.writeln("\x1b[38;2;154;134;196m  sonelle\x1b[0m   \x1b[2myour projects, one orchestrator\x1b[0m");
-      t.writeln("\x1b[2m  runs on your Claude subscription  ·  :help\x1b[0m");
-      t.writeln("");
-      t.writeln("  \x1b[38;2;154;134;196m▸\x1b[0m sotis: fix the build");
-      t.writeln("    \x1b[2mopus · xhigh · ~/Desktop/food app/maistas_telefone\x1b[0m");
-      t.writeln("");
-      t.writeln("    \x1b[38;2;155;191;144m✔\x1b[0m \x1b[2mflutter analyze - 0 issues\x1b[0m");
-      t.write("  \x1b[38;2;154;134;196m▸\x1b[0m ");
+      entry.term.write("  \x1b[38;2;154;134;196m▸\x1b[0m ");   // bare prompt - matches the real -Bare mode
     });
   }
 
   function initDemo() {
     if (live) return;
-    renderChips([
-      { shortcut: "sotis", name: "Sotis" },
-      { shortcut: "sockraid", name: "Sock Raid" },
-      { shortcut: "zazauber", name: "zazauber" }
-    ]);
     createDemoTab();
   }
 

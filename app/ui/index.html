@@ -31,18 +31,15 @@
     <!-- shown only when no tabs are open -->
     <section id="welcome" class="welcome glass" hidden>
       <div class="w-mark" aria-hidden="true"></div>
-      <h1>sonelle</h1>
-      <p>your projects, one orchestrator</p>
       <button id="w-open" class="primary nodrag">open a terminal</button>
     </section>
 
-    <!-- command bar: type a line, it goes to the terminal running behind the scenes -->
+    <!-- the one composer: type a line, it goes to the terminal running behind the scenes -->
     <footer id="bar">
-      <div id="chips" class="chips" aria-label="projects"></div>
       <div class="cmdbar glass">
         <span class="prompt" aria-hidden="true"></span>
         <input id="cmd" type="text" autocomplete="off" autocapitalize="off"
-               spellcheck="false" placeholder="ask a project, or type :help ...">
+               spellcheck="false" placeholder="ask a project to do something    e.g.  sotis: fix the build">
         <button id="send" class="send" title="send" aria-label="send"><span class="g-send"></span></button>
       </div>
     </footer>

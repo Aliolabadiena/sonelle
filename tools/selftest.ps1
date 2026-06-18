@@ -127,6 +127,9 @@ $demoStr  = (($demoOut -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
 Ok "terminal -Demo exit 0"             ($demoExit -eq 0)
 Ok "welcome shows brand + tagline"     (($demoStr -match 'sonelle') -and ($demoStr -match 'your projects, one orchestrator'))
 Ok "welcome no longer dumps all commands" (-not ($demoStr -match ':projects'))
+$bareOut = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo -Bare
+$bareStr = (($bareOut -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
+Ok "bare mode suppresses the welcome" (-not ($bareStr -match 'orchestrator'))
 Ok "terminal has a Welcome function"   ($srcTerm -match 'function Welcome')
 Ok "welcome uses runtime box glyphs"   (($srcTerm -match '0x256D') -and ($srcTerm -match '0x2570'))
 Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -and (@(':projects',':new',':heal',':team',':status',':app',':dev',':attach',':clear',':help',':q') | Where-Object { $srcTerm -notmatch [regex]::Escape($_) }).Count -eq 0)
@@ -146,6 +149,7 @@ foreach ($rel in @(
 $srcGui = if (Test-Path $guiPy) { Get-Content $guiPy -Raw } else { '' }
 Ok "backend exposes the api contract" (($srcGui -match 'def new_tab') -and ($srcGui -match 'def send_input') -and ($srcGui -match 'def resize') -and ($srcGui -match 'def close_tab') -and ($srcGui -match 'def list_projects'))
 Ok "backend pushes via __ptyOutput"   ($srcGui -match '__ptyOutput')
+Ok "backend spawns sonelle.ps1 -Bare" ($srcGui -match '"-Bare"')
 Ok "backend kills the process tree"   ($srcGui -match 'taskkill')
 Ok "backend setwinsize(rows, cols)"   ($srcGui -match 'setwinsize\(rows, cols\)')
 $srcJs = Get-Content (Join-Path $appDir 'ui\app.js') -Raw

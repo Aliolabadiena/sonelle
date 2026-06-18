@@ -11,7 +11,7 @@
   Source is pure ASCII; Unicode glyphs are built at runtime via [char] codepoints.
 #>
 [CmdletBinding()]
-param([switch]$Demo)
+param([switch]$Demo, [switch]$Bare)   # -Bare: no welcome card, minimal routing echo (used by the glass app)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -54,6 +54,7 @@ $gH  = [string][char]0x2500; $gV  = [string][char]0x2502; $dot = [string][char]0
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 $script:staged = @()   # image paths staged via :attach, consumed by the next routed prompt
 $script:selfShort = (Split-Path $root -Leaf).ToLower()   # the engine's own name -> routes to self-development (:dev)
+$script:bare = [bool]$Bare   # chat-feel mode for the app: suppress welcome + trim routing echo
 
 function ProjectShorts {
   $pf = Join-Path $hub 'PROJECTS.md'
@@ -235,16 +236,20 @@ function Route($short, $prompt, $images) {
     $finalPrompt = $prompt + "`n`nAttached image(s) - please read them:`n" + (($images | ForEach-Object { " - $_" }) -join "`n")
     Write-Host ("  {0}+ {1} image(s) attached{2}" -f $dim, $images.Count, $R)
   }
-  Write-Host ("  " + $clay + $arrow + " " + $short + $R + "  " + $dim + $orchModel + " " + $dot + " " + $orchEffort + $R)
-  Write-Host ("    " + $dim + $code + $R)
-  Write-Host ("    " + $dim + ($finalPrompt -replace "`n", " / ") + $R)
+  if ($script:bare) {
+    Write-Host ("  " + $clay + $arrow + " " + $R + $dim + $short + $R)   # chat feel: just confirm the project
+  } else {
+    Write-Host ("  " + $clay + $arrow + " " + $short + $R + "  " + $dim + $orchModel + " " + $dot + " " + $orchEffort + $R)
+    Write-Host ("    " + $dim + $code + $R)
+    Write-Host ("    " + $dim + ($finalPrompt -replace "`n", " / ") + $R)
+  }
   $cargs = @('--model', $orchModel, '--effort', $orchEffort); if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }
   if ($code -notmatch '^[-(]' -and (Test-Path $code)) { Push-Location $code } else { Push-Location $root }
   try { & claude @cargs $finalPrompt } finally { Pop-Location }
   $script:staged = @()   # staged images consumed
 }
 
-Welcome -NoClear:([bool]$Demo)
+if (-not $script:bare) { Welcome -NoClear:([bool]$Demo) }
 if ($Demo) { Write-Host ("  " + $dim + "(demo mode - welcome only; no REPL)" + $R); return }
 
 while ($true) {

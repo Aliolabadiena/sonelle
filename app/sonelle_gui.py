@@ -125,8 +125,8 @@ class SessionManager:
             return {"ok": False, "error": "sonelle.ps1 not found at %s" % SONELLE_PS1}
         try:
             proc = PtyProcess.spawn(
-                [PS, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", SONELLE_PS1],
-                dimensions=(rows, cols),     # (rows, cols)
+                [PS, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", SONELLE_PS1, "-Bare"],
+                dimensions=(rows, cols),     # (rows, cols); -Bare = no welcome, chat-feel
                 cwd=ENGINE,
                 env=os.environ.copy(),
             )
