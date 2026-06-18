@@ -32,6 +32,7 @@ $clay = "$E[38;2;204;120;92m"; $cream = "$E[38;2;235;232;222m"; $dim = "$E[38;2;
 $bold = "$E[1m"; $R = "$E[0m"
 $bar = ([string][char]0x2500) * 50
 $arrow = [string][char]0x25B8
+$script:staged = @()   # image paths staged via :attach, consumed by the next routed prompt
 
 function Banner {
   Clear-Host
@@ -48,6 +49,8 @@ function ShowHelp {
   Write-Host ("    {0}:projects{1}            list registered projects" -f $cream, $R)
   Write-Host ("    {0}:new{1}                 scaffold a new project" -f $cream, $R)
   Write-Host ("    {0}:heal [short]{1}        run the doctor (health/heal detector)" -f $cream, $R)
+  Write-Host ("    {0}:attach <path>{1}       stage an image for the next prompt (or inline {0}@<path>{1})" -f $cream, $R)
+  Write-Host ("    {0}:clear{1}               clear staged images" -f $cream, $R)
   Write-Host ("    {0}:help{1}  {0}:q{1}            this help / quit" -f $cream, $R)
 }
 function ShowProjects {
@@ -71,14 +74,15 @@ function NewProject {
   if (-not $s) { return }
   $n = (Read-Host "  project name").Trim()
   $p = (Read-Host "  code path").Trim()
-  & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'tools\new_project.ps1') $s $n $p | Out-Host
+  & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'tools\new_project.ps1') $s $n $p -Hub $hub | Out-Host
 }
 function Heal($short) {
-  $args = @('-ExecutionPolicy','Bypass','-File',(Join-Path $root 'tools\doctor.ps1'))
-  if ($short) { $args += $short }
-  & $psExe @args | Out-Host
+  $dargs = @('-ExecutionPolicy','Bypass','-File',(Join-Path $root 'tools\doctor.ps1'))
+  if ($short) { $dargs += $short }
+  $dargs += @('-Hub', $hub)
+  & $psExe @dargs | Out-Host
 }
-function Route($short, $prompt) {
+function Route($short, $prompt, $images) {
   $code = ResolveCode $short
   if (-not $code) {
     Write-Host ("  {0}'{1}' is not in the registry.{2}" -f $clay, $short, $R)
@@ -92,9 +96,15 @@ function Route($short, $prompt) {
     Write-Host ("  {0}    then this terminal will hand prompts to it. (https://claude.com/claude-code){1}" -f $dim, $R)
     return
   }
+  $finalPrompt = $prompt
+  if ($images -and $images.Count -gt 0) {
+    $finalPrompt = $prompt + "`n`nAttached image(s) - please read them:`n" + (($images | ForEach-Object { " - $_" }) -join "`n")
+    Write-Host ("  {0}+ {1} image(s) attached{2}" -f $dim, $images.Count, $R)
+  }
   Write-Host ("  {0}-> {1}{2}{3}  {4}{5}{3}" -f $dim, $clay, $short, $R, $dim, $code)
   if ($code -notmatch '^[-(]' -and (Test-Path $code)) { Push-Location $code } else { Push-Location $root }
-  try { & claude $prompt } finally { Pop-Location }
+  try { & claude $finalPrompt } finally { Pop-Location }
+  $script:staged = @()   # staged images consumed
 }
 
 Banner
@@ -113,10 +123,24 @@ while ($true) {
   elseif ($t -eq ':projects') { ShowProjects; continue }
   elseif ($t -eq ':new') { NewProject; continue }
   elseif ($t -match '^:heal\s*(.*)$') { Heal ($Matches[1].Trim()); continue }
+  elseif ($t -match '^:attach\s+(.+)$') {
+    $ip = $Matches[1].Trim().Trim('"')
+    if (Test-Path $ip) { $script:staged += (Resolve-Path $ip).Path; Write-Host ("  {0}staged ({1} total): {2}{3}" -f $dim, $script:staged.Count, $ip, $R) }
+    else { Write-Host ("  {0}[!] not found: {1}{2}" -f $clay, $ip, $R) }
+    continue
+  }
+  elseif ($t -eq ':clear') { $script:staged = @(); Write-Host ("  {0}staged images cleared{1}" -f $dim, $R); continue }
   else {
     $bodyText = $t
     if ($bodyText -match '^[^,:]+,\s*(.+)$') { $bodyText = $Matches[1] }   # strip leading "address,"
-    if ($bodyText -match '^([a-z0-9_]+)\s*:\s*(.+)$') { Route $Matches[1] $Matches[2] }
+    # collect inline @<path> images, then strip them from the prompt text
+    $imgs = @() + $script:staged
+    foreach ($mm in [regex]::Matches($bodyText, '@"([^"]+)"|@(\S+)')) {
+      $p = if ($mm.Groups[1].Value) { $mm.Groups[1].Value } else { $mm.Groups[2].Value }
+      if (Test-Path $p) { $imgs += (Resolve-Path $p).Path } else { Write-Host ("  {0}[!] image not found: {1}{2}" -f $clay, $p, $R) }
+    }
+    $bodyText = ([regex]::Replace($bodyText, '@"[^"]+"|@\S+', '')).Trim()
+    if ($bodyText -match '^([a-z0-9_]+)\s*:\s*(.+)$') { Route $Matches[1] $Matches[2] $imgs }
     else { Write-Host ("  {0}? use  {1}<short>: <prompt>{0}  (e.g.  myproj: fix the build){2}" -f $dim, $cream, $R) }
   }
 }

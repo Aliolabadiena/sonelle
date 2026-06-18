@@ -18,12 +18,14 @@
 param(
   [Parameter(Mandatory = $true, Position = 0)][string]$Short,
   [Parameter(Mandatory = $true, Position = 1)][string]$Name,
-  [Parameter(Mandatory = $true, Position = 2)][string]$Path
+  [Parameter(Mandatory = $true, Position = 2)][string]$Path,
+  [string]$Hub = ''
 )
 
 $ErrorActionPreference = 'Stop'
-$hub        = Split-Path $PSScriptRoot -Parent
-$tpl        = Join-Path $hub 'templates'
+$engine     = Split-Path $PSScriptRoot -Parent           # engine assets (templates) always live here
+$hub        = if ($Hub) { $Hub } else { $engine }        # workspace where registry/state/memory live
+$tpl        = Join-Path $engine 'templates'
 $memDir     = Join-Path $hub 'memory'
 $projects   = Join-Path $hub 'PROJECTS.md'
 $date       = (Get-Date).ToString('yyyy-MM-dd')

@@ -11,10 +11,10 @@
 
   Exit: 0 = healthy, 1 = at least one FAIL.
 #>
-param([string]$Short = '')
+param([string]$Short = '', [string]$Hub = '')
 
 $ErrorActionPreference = 'Stop'
-$hub = Split-Path $PSScriptRoot -Parent
+$hub = if ($Hub) { $Hub } else { Split-Path $PSScriptRoot -Parent }
 $ps  = (Get-Process -Id $PID).Path  # this powershell exe, for child invocations
 $fails = 0
 function Section($t) { Write-Host ""; Write-Host ("== {0} ==" -f $t) -ForegroundColor Cyan }
@@ -24,7 +24,7 @@ function Result($label, $ok, $detail) {
 }
 
 Section "pointers"
-& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') | Out-Null
+& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $hub | Out-Null
 Result "registry pointers resolve" ($LASTEXITCODE -eq 0) "(run check_pointers.ps1 for detail)"
 
 Section "git (hub)"

@@ -40,7 +40,15 @@ Never leave knowledge only in chat — chat vanishes, files remain.
 ## The terminal
 `bin\luna.ps1` is the luna terminal (Claude-styled). It parses the grammar above, routes to
 the right project via `PROJECTS.md`, and hands the prompt to `claude` (your Claude
-subscription). `bin\luna.ps1 -Demo` shows the banner without entering the REPL.
+subscription). Attach images with `:attach <path>` or inline `@<path>`. `bin\luna.ps1 -Demo`
+shows the banner without entering the REPL. Verify the whole engine anytime with
+`tools\selftest.ps1` (or `luna.check.ps1`).
+
+## Engine vs hub
+Engine assets (`bin/ tools/ templates/ docs/`) are read relative to the scripts. The hub
+(`CLAUDE.md` + `PROJECTS.md` + `memory/` + per-project state) is where work lands — default
+the engine folder, or any `-Hub <path>` / `luna.config.json`. `new_project.ps1` reads
+templates from the engine and writes state to the hub, so one engine can drive many hubs.
 
 ## House rule
 PowerShell scripts here are **pure ASCII** (PS 5.1 misreads non-ASCII in a no-BOM `.ps1`).

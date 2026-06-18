@@ -2,11 +2,13 @@
   check_pointers.ps1 - validate that the core luna files and every registry pointer
   resolve on disk. Catches silent renames/deletes. Hub = parent of this tools/ folder.
 
-  Usage:  .\check_pointers.ps1
+  Usage:  .\check_pointers.ps1 [-Hub <workspace>]
   Exit:   0 = all OK, 1 = at least one MISS.
 #>
+param([string]$Hub = '')
 $ErrorActionPreference = 'Stop'
-$hub    = Split-Path $PSScriptRoot -Parent
+$engine = Split-Path $PSScriptRoot -Parent
+$hub    = if ($Hub) { $Hub } else { $engine }
 $memDir = Join-Path $hub 'memory'
 
 $script:ok = 0; $script:miss = 0
@@ -15,14 +17,16 @@ function Check($label, $path) {
   else { Write-Host ("  [MISS] {0}  -> {1}" -f $label, $path) -ForegroundColor Red; $script:miss++ }
 }
 
-Write-Host "[check] core engine files:"
+Write-Host "[check] hub files:"
 Check 'CLAUDE.md'           (Join-Path $hub 'CLAUDE.md')
 Check 'PROJECTS.md'         (Join-Path $hub 'PROJECTS.md')
-Check 'README.md'           (Join-Path $hub 'README.md')
-Check 'bin\luna.ps1'        (Join-Path $hub 'bin\luna.ps1')
-Check 'tools\new_project.ps1' (Join-Path $hub 'tools\new_project.ps1')
-Check 'tools\doctor.ps1'    (Join-Path $hub 'tools\doctor.ps1')
-Check 'templates dir'       (Join-Path $hub 'templates')
+
+Write-Host "[check] engine files:"
+Check 'bin\luna.ps1'          (Join-Path $engine 'bin\luna.ps1')
+Check 'tools\new_project.ps1' (Join-Path $engine 'tools\new_project.ps1')
+Check 'tools\doctor.ps1'      (Join-Path $engine 'tools\doctor.ps1')
+Check 'tools\log_lesson.ps1'  (Join-Path $engine 'tools\log_lesson.ps1')
+Check 'templates dir'         (Join-Path $engine 'templates')
 
 Write-Host "[check] registered projects (code paths + memory refs from PROJECTS.md):"
 $pf = Join-Path $hub 'PROJECTS.md'
