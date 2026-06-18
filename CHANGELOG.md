@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.13 — 2026-06-18 (terminal UI: a calm welcome, Claude Code-style)
+- The terminal no longer dumps all 11 commands on every launch. A new `Welcome` function draws a
+  single clean rounded card (brand + tagline, your projects pulled live from `PROJECTS.md`, and one
+  worked example like `sotis: fix the build`) plus a one-line footer (`runs on your Claude
+  subscription  ·  @path attaches an image  ·  :help`). The full command list moved to `:help`
+  (on demand) - so the first thing you see is calm and obvious, not a wall.
+- The prompt is now just a clay `>` arrow (`  >`), matching the minimal Claude Code feel; routing
+  feedback is tidier (`> sotis  opus . xhigh` / code path / prompt on their own dim lines).
+- Commands are UNCHANGED - still the `:` prefix (`:help :new :dev` ...) and the same grammar
+  `[address,] <short>: <prompt>`. Only the presentation changed; nothing to relearn.
+- `:help` and `:projects` got a scannable header + aligned two-column layout. The box-drawing glyphs
+  are built at runtime via `[char]` codepoints (source stays pure ASCII); output encoding is set to
+  UTF-8 so they render in the embedded app consoles too.
+- App (`bin\sonelle_app.ps1`): friendlier empty state ("each tab is a full sonelle"). Each embedded
+  tab now shows the new welcome, so the whole app reads cleaner with no structural change.
+- selftest section 8b: runs `sonelle.ps1 -Demo`, asserts it exits 0, shows the brand + tagline, no
+  longer dumps the command list, has a `Welcome` function drawn with runtime box glyphs, and that
+  `:help` still lists every command. ALL PASS.
+
 ## v1.12 — 2026-06-18 (the sonelle app: many terminals, one window)
 - New `bin\sonelle_app.ps1`: a single Claude-styled window that hosts MANY sonelle terminals as
   tabs. Each tab embeds a REAL console running `bin\sonelle.ps1` (reparented into the window via

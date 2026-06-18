@@ -48,40 +48,84 @@ if ($useColor) {
 } else { $clay = ''; $cream = ''; $dim = ''; $bold = ''; $R = '' }
 $bar = ([string][char]0x2500) * 50
 $arrow = [string][char]0x25B8
+# rounded box-drawing glyphs (built at runtime so the source stays pure ASCII)
+$gTL = [string][char]0x256D; $gTR = [string][char]0x256E; $gBL = [string][char]0x2570; $gBR = [string][char]0x256F
+$gH  = [string][char]0x2500; $gV  = [string][char]0x2502; $dot = [string][char]0x00B7
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 $script:staged = @()   # image paths staged via :attach, consumed by the next routed prompt
 $script:selfShort = (Split-Path $root -Leaf).ToLower()   # the engine's own name -> routes to self-development (:dev)
 
-function Banner {
-  Clear-Host
+function ProjectShorts {
+  $pf = Join-Path $hub 'PROJECTS.md'
+  if (Test-Path $pf) { return @((Get-SonelleProjects $pf) | ForEach-Object { $_.Short }) }
+  return @()
+}
+# A clean welcome card (drawn once at start; -NoClear skips the screen clear for demo/piped runs).
+# Replaces the old full-command dump: the welcome stays minimal, and :help shows everything on demand.
+function Welcome {
+  param([switch]$NoClear)
+  if (-not $NoClear) { try { Clear-Host } catch {} }
+  $iw = 46
+  function Row($plain, $body) {
+    $pad = $iw - 2 - $plain.Length; if ($pad -lt 0) { $pad = 0 }
+    Write-Host ("  " + $clay + $gV + $R + " " + $body + (' ' * $pad) + " " + $clay + $gV + $R)
+  }
   Write-Host ""
-  Write-Host ("  {0}{1}sonelle{2}   {3}your projects, one orchestrator{2}" -f $clay, $bold, $R, $dim)
-  Write-Host ("  {0}{1}{2}" -f $clay, $bar, $R)
-  Write-Host ("  {0}runs on your Claude subscription via {1}claude{0}.{2}" -f $dim, $cream, $R)
-  Write-Host ("  {0}type  {1}<short>: <prompt>{0}   or   {1}:help{2}" -f $dim, $cream, $R)
+  Write-Host ("  " + $clay + $gTL + ($gH * $iw) + $gTR + $R)
+  Row "sonelle   your projects, one orchestrator" ($clay + $bold + "sonelle" + $R + "   " + $dim + "your projects, one orchestrator" + $R)
+  Row "" ""
+  $shorts = ProjectShorts
+  if ($shorts.Count -gt 0) {
+    $show  = @($shorts | Select-Object -First 5)
+    $extra = $shorts.Count - $show.Count
+    $sepP  = " " + $dot + " "
+    $plainList = ($show -join $sepP)
+    $colList   = (($show | ForEach-Object { $clay + $_ + $R }) -join (" " + $dim + $dot + $R + " "))
+    if ($extra -gt 0) { $plainList += $sepP + "+" + $extra; $colList += " " + $dim + $dot + $R + " " + $dim + "+" + $extra + $R }
+    Row ("projects   " + $plainList) ($dim + "projects   " + $R + $colList)
+    $eg = $show[0]
+  } else {
+    Row ("projects   none yet " + $dot + " type :new") ($dim + "projects   none yet " + $dot + " type " + $R + $cream + ":new" + $R)
+    $eg = "myproj"
+  }
+  Row ("type       " + $eg + ": fix the build") ($dim + "type       " + $R + $cream + $eg + ": fix the build" + $R)
+  Write-Host ("  " + $clay + $gBL + ($gH * $iw) + $gBR + $R)
+  Write-Host ("  " + $dim + "runs on your Claude subscription  " + $dot + "  @path attaches an image  " + $dot + "  :help" + $R)
   Write-Host ""
 }
 function ShowHelp {
-  Write-Host ("  {0}commands{1}" -f $bold, $R)
-  Write-Host ("    {0}<short>: <prompt>{1}   open a project and run the prompt (e.g.  myproj: fix the build)" -f $cream, $R)
-  Write-Host ("    {0}:projects{1}            list registered projects" -f $cream, $R)
-  Write-Host ("    {0}:new{1}                 scaffold a new project" -f $cream, $R)
-  Write-Host ("    {0}:heal [short]{1}        run the doctor (health/heal detector)" -f $cream, $R)
-  Write-Host ("    {0}:team <proj> <lanes>{1} launch up to 5 parallel lanes (e.g. :team myproj bugs,docs)" -f $cream, $R)
-  Write-Host ("    {0}:status <proj>{1}       show each lane's status" -f $cream, $R)
-  Write-Host ("    {0}:app{1}                 open the sonelle app: many terminals as tabs in one window" -f $cream, $R)
-  Write-Host ("    {0}:dev [prompt]{1}        improve the engine itself (or  {0}{2}: <prompt>{1})" -f $cream, $R, $script:selfShort)
-  Write-Host ("    {0}:attach <path>{1}       stage an image for the next prompt (or inline {0}@<path>{1})" -f $cream, $R)
-  Write-Host ("    {0}:clear{1}               clear staged images" -f $cream, $R)
-  Write-Host ("    {0}:help{1}  {0}:q{1}            this help / quit" -f $cream, $R)
+  Write-Host ("  " + $bold + "commands" + $R)
+  Write-Host ""
+  $rows = @(
+    @("<short>: <prompt>",    ("run a prompt in a project  (e.g. " + $cream + "sotis: fix the build" + $dim + ")")),
+    @(":attach <path>",       ("attach an image to the next prompt (or inline " + $cream + "@path" + $dim + ")")),
+    @(":projects",            "list your projects"),
+    @(":new",                 "scaffold a new project"),
+    @(":heal [short]",        "health-check / heal a project"),
+    @(":team <proj> <lanes>", "run up to 5 parallel lanes on one project"),
+    @(":status <proj>",       "show each lane's status"),
+    @(":app",                 "open the app: many terminals, one window"),
+    @(":dev [prompt]",        ("improve sonelle itself (or  " + $cream + $script:selfShort + ": ..." + $dim + ")")),
+    @(":clear",               "clear staged images"),
+    @(":help   :q",           "this help / quit")
+  )
+  # NOTE: loop var must NOT be $r - PowerShell vars are case-insensitive, so $r would clobber the
+  # ANSI reset $R used just below. Concatenated descriptions are parenthesized because the comma
+  # operator binds tighter than +, which would otherwise split a row into many array elements.
+  foreach ($row in $rows) {
+    $left = $row[0]; $pad = 22 - $left.Length; if ($pad -lt 1) { $pad = 1 }
+    Write-Host ("    " + $cream + $left + $R + (' ' * $pad) + $dim + $row[1] + $R)
+  }
 }
 function ShowProjects {
+  Write-Host ("  " + $bold + "projects" + $R)
   $pf = Join-Path $hub 'PROJECTS.md'
   if (Test-Path $pf) {
     $projs = Get-SonelleProjects $pf
-    if ($projs.Count -eq 0) { Write-Host ("  {0}registry empty - type :new to create your first project.{1}" -f $dim, $R) }
-    else { foreach ($p in $projs) { Write-Host ("    {0}{1}{2}  {3}{4}{2}" -f $clay, $p.Short, $R, $dim, $p.Name) } }
-  } else { Write-Host ("  {0}no PROJECTS.md at hub: {1}{2}" -f $dim, $hub, $R) }
-  Write-Host ("    {0}{1}{2}  {3}(the engine itself - develop it; same as :dev){2}" -f $clay, $script:selfShort, $R, $dim)
+    if ($projs.Count -eq 0) { Write-Host ("    " + $dim + "registry empty - type :new to create your first project." + $R) }
+    else { foreach ($p in $projs) { Write-Host ("    " + $clay + $p.Short + $R + "   " + $dim + $p.Name + $R) } }
+  } else { Write-Host ("    " + $dim + "no PROJECTS.md at hub: " + $hub + $R) }
+  Write-Host ("    " + $clay + $script:selfShort + $R + "   " + $dim + "(the engine itself - develop it; same as :dev)" + $R)
 }
 function ResolveCode($short) {
   $pf = Join-Path $hub 'PROJECTS.md'
@@ -134,8 +178,7 @@ function DevSelf($prompt, $images) {
           "Read docs\DEVELOPING.md and docs\ARCHITECTURE.md FIRST, and treat docs\DEVELOPING.md as your SOLE authority for THIS session. Claude Code auto-loads the root CLAUDE.md (the dispatcher template the engine ships) - IGNORE its dispatcher / project-routing / state-reading framing here; this session develops the engine, it does not route projects or manage a hub.`n" +
           "Honor every invariant in DEVELOPING.md: pure-ASCII PowerShell, no personal data in the repo, do NOT scaffold hub/project state (never run new_project or log_lesson at the engine root), and run tools\selftest.ps1 to ALL PASS before any commit (extend selftest for new features so the engine stays self-verifying). Everything is git-versioned, so changes are rewindable.`n`n" +
           "Task: $ask"
-  Write-Host ("  {0}-> {1}dev{2}  {3}developing the engine itself{2}" -f $dim, $clay, $R, $dim)
-  Write-Host ("  {0}orchestrator: {1} (effort {2}){3}" -f $dim, $orchModel, $orchEffort, $R)
+  Write-Host ("  " + $clay + $arrow + " dev" + $R + "  " + $dim + "developing the engine itself  " + $dot + "  " + $orchModel + " " + $dot + " " + $orchEffort + $R)
   $dirty = $false
   if (Get-Command git -ErrorAction SilentlyContinue) { try { $dirty = [bool](& git -C $root status --porcelain 2>$null) } catch {} }
   if ($dirty) { Write-Host ("  {0}note: engine has uncommitted changes - commit/stash first for a clean rewind point.{1}" -f $dim, $R) }
@@ -169,21 +212,20 @@ function Route($short, $prompt, $images) {
     $finalPrompt = $prompt + "`n`nAttached image(s) - please read them:`n" + (($images | ForEach-Object { " - $_" }) -join "`n")
     Write-Host ("  {0}+ {1} image(s) attached{2}" -f $dim, $images.Count, $R)
   }
-  Write-Host ("  {0}-> {1}{2}{3}  {4}{5}{3}" -f $dim, $clay, $short, $R, $dim, $code)
-  Write-Host ("  {0}orchestrator: {1} (effort {2})  |  prompt: {3}{4}" -f $dim, $orchModel, $orchEffort, ($finalPrompt -replace "`n", " / "), $R)
+  Write-Host ("  " + $clay + $arrow + " " + $short + $R + "  " + $dim + $orchModel + " " + $dot + " " + $orchEffort + $R)
+  Write-Host ("    " + $dim + $code + $R)
+  Write-Host ("    " + $dim + ($finalPrompt -replace "`n", " / ") + $R)
   $cargs = @('--model', $orchModel, '--effort', $orchEffort); if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }
   if ($code -notmatch '^[-(]' -and (Test-Path $code)) { Push-Location $code } else { Push-Location $root }
   try { & claude @cargs $finalPrompt } finally { Pop-Location }
   $script:staged = @()   # staged images consumed
 }
 
-Banner
-ShowHelp
-if ($Demo) { Write-Host ""; Write-Host ("  {0}(demo mode - exiting before REPL){1}" -f $dim, $R); return }
-Write-Host ""
+Welcome -NoClear:([bool]$Demo)
+if ($Demo) { Write-Host ("  " + $dim + "(demo mode - welcome only; no REPL)" + $R); return }
 
 while ($true) {
-  Write-Host -NoNewline ("{0}sonelle {1}{2} " -f $clay, $arrow, $R)
+  Write-Host -NoNewline ("  " + $clay + $arrow + " " + $R)
   $in = Read-Host
   if ($null -eq $in) { break }
   $t = $in.Trim()

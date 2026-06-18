@@ -45,6 +45,11 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
 ## Common changes
 - **New terminal command:** add a handler in the REPL loop of `bin\sonelle.ps1`, a line in
   `ShowHelp`, and a selftest assertion that the handler exists.
+- **Terminal UI:** the launch screen is `Welcome` (a minimal rounded card - brand, live project list,
+  one example, footer); the full command list lives in `ShowHelp` (`:help`, on demand) - keep the two
+  split (don't move the command dump back into the welcome). Box glyphs are built at runtime via
+  `[char]` codepoints (e.g. `0x256D`); never paste a non-ASCII glyph into the source. selftest 8b
+  guards the welcome (brand shown, no command dump) and that `:help` still lists every command.
 - **New tool:** add `tools\<name>.ps1` (ASCII, `$ErrorActionPreference='Stop'`, `-Hub`-aware if it
   touches hub state), wire it where it is used, and cover it in selftest.
 - **New template:** add it to `templates\`, have `new_project.ps1` write it, and assert it

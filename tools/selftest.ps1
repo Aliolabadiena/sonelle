@@ -115,6 +115,17 @@ Ok "AppLaunch opens the app -Sta"    (($srcTerm -match 'sonelle_app\.ps1') -and 
 $srcLnk = Get-Content (Join-Path $engine 'bin\make_launcher.ps1') -Raw
 Ok "make_launcher default opens the app" ($srcLnk -match 'sonelle_app\.ps1')
 Ok "make_launcher has a -Terminal switch" ($srcLnk -match '\[switch\]\$Terminal')
+
+Write-Host "== 8b. terminal welcome + help (UI) =="
+$demoOut = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo
+$demoExit = $LASTEXITCODE
+$demoStr  = (($demoOut -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
+Ok "terminal -Demo exit 0"             ($demoExit -eq 0)
+Ok "welcome shows brand + tagline"     (($demoStr -match 'sonelle') -and ($demoStr -match 'your projects, one orchestrator'))
+Ok "welcome no longer dumps all commands" (-not ($demoStr -match ':projects'))
+Ok "terminal has a Welcome function"   ($srcTerm -match 'function Welcome')
+Ok "welcome uses runtime box glyphs"   (($srcTerm -match '0x256D') -and ($srcTerm -match '0x2570'))
+Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -and (@(':projects',':new',':heal',':team',':status',':app',':dev',':attach',':clear',':help',':q') | Where-Object { $srcTerm -notmatch [regex]::Escape($_) }).Count -eq 0)
 # invariant #4: the engine root must stay clean of hub state (no project TODO/ledger/memory)
 $rootTodo = @(Get-ChildItem $engine -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue).Count
 $rootLedg = @(Get-ChildItem $engine -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue).Count

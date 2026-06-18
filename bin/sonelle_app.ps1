@@ -276,7 +276,7 @@ $script:hostPanel.Add_SizeChanged({ try { Resize-Active } catch {} })
 $rootTable.Controls.Add($script:hostPanel, 0, 2)
 
 $script:emptyLabel = New-Object System.Windows.Forms.Label
-$script:emptyLabel.Text = "no terminals - click  + new  to open one"
+$script:emptyLabel.Text = "no terminals open" + [Environment]::NewLine + [Environment]::NewLine + "click  + new  to start one  " + ([char]0x00B7) + "  each tab is a full sonelle"
 $script:emptyLabel.ForeColor = $cDim; $script:emptyLabel.Dock = 'Fill'; $script:emptyLabel.TextAlign = 'MiddleCenter'
 $script:emptyLabel.Font = New-Object System.Drawing.Font('Segoe UI', 11)
 $script:hostPanel.Controls.Add($script:emptyLabel)

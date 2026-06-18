@@ -16,7 +16,7 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
    dir), set `memoryDir` to that path so heal/validate resolve memory pointers correctly.
    `sonelle.config.json` is gitignored, so your local paths never enter the repo.
 3. Log into your Claude subscription (Claude Code / `claude`).
-4. Run the terminal:  `powershell -File bin\sonelle.ps1`
+4. Run the terminal:  `powershell -File bin\sonelle.ps1`  (a clean welcome card shows your projects; type `:help` for the full command list)
 5. Create a project:  type `:new`  (or `tools\new_project.ps1 <short> "<name>" "<path>"`)
 6. Work:  type `myproj: do the thing`
 7. Attach an image:  `myproj: what's in @C:\pics\food.jpg?`  (or `:attach <path>` to stage one)
@@ -43,7 +43,7 @@ The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max
 ## What's inside
 | Path | What |
 |---|---|
-| `bin\sonelle.ps1` | the terminal (Claude-styled launcher; routes to `claude`) |
+| `bin\sonelle.ps1` | the terminal (Claude-styled launcher; calm welcome card, `:help` on demand; routes to `claude`) |
 | `bin\sonelle_app.ps1` | the app: one window hosting many sonelle terminals as tabs (`:app`) |
 | `CLAUDE.md` | the dispatcher — how a session orients + routes |
 | `PROJECTS.md` | the registry (single source of truth; starts empty) |
