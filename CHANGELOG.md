@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.7 — 2026-06-18 (usage status line)
+- `tools/statusline.ps1`: a Claude Code statusLine showing usage every session - `model+effort | 5h% |
+  7d% | ctx% | $cost`, colour-coded green/amber/red by load. Wire via settings.json `statusLine` ->
+  `powershell -NoProfile -File .../tools/statusline.ps1` (+ `refreshInterval`). 5h/7d rate-limit % appear
+  for Pro/Max after the first API response; gracefully omitted otherwise (cost/ctx always shown).
+- selftest asserts the status line renders usage from a sample payload.
+- On-demand subscription audit: the `/usage` slash command (account-level, day/week toggle).
+
 ## v1.6 — 2026-06-18 (permissions: no-ask deploy + autonomous lanes)
 - Lanes take a permission mode: `luna_team` start scripts add `--permission-mode <mode>` (config
   `models.lanePermissionMode`, engine default `acceptEdits`). Set `bypassPermissions` in luna.config.json

@@ -27,6 +27,9 @@ foreach ($jf in @((Join-Path $engine '.claude\settings.json'), (Join-Path $engin
   $okj = $true; try { [void](Get-Content $jf -Raw | ConvertFrom-Json) } catch { $okj = $false }
   Ok ("valid JSON: " + (Split-Path $jf -Leaf)) $okj
 }
+$slj = '{"model":{"display_name":"Opus"},"rate_limits":{"five_hour":{"used_percentage":50}},"cost":{"total_cost_usd":0}}'
+$slOut = ($slj | & $ps -NoProfile -File (Join-Path $engine 'tools\statusline.ps1')) -replace "$([char]27)\[[0-9;]*m", ''
+Ok "statusline renders usage" ($slOut -match 'luna.*5h 50%')
 
 Write-Host "== 2. scaffold into a temp hub =="
 $tmp = Join-Path $env:TEMP 'luna_selftest'
