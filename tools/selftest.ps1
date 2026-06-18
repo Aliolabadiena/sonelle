@@ -101,6 +101,18 @@ $rootTodo = @(Get-ChildItem $engine -Filter '*_TODO.txt' -File -ErrorAction Sile
 $rootLedg = @(Get-ChildItem $engine -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue).Count
 Ok "engine root clean (no hub state)" (($rootTodo -eq 0) -and ($rootLedg -eq 0) -and (-not (Test-Path (Join-Path $engine 'memory'))))
 
+Write-Host "== 9. config resolver (hub + memoryDir) =="
+. (Join-Path $PSScriptRoot '_registry.ps1')
+$fakeHub = Join-Path $env:TEMP 'sonelle_cfgtest_hub'   # real drive (Join-Path validates the drive); path need not exist
+$fakeMem = Join-Path $env:TEMP 'sonelle_cfgtest_mem'
+$r1 = Get-SonelleConfig -Engine $engine -HubOverride $fakeHub
+Ok "hub override wins"                  ($r1.Hub -eq $fakeHub)
+Ok "memory defaults to <override-hub>\memory" ($r1.MemoryDir -eq (Join-Path $fakeHub 'memory'))
+$r2 = Get-SonelleConfig -Engine $engine -HubOverride $fakeHub -MemoryOverride $fakeMem
+Ok "explicit -MemoryDir wins"           ($r2.MemoryDir -eq $fakeMem)
+Ok "check_pointers accepts -MemoryDir"  ((Get-Content (Join-Path $PSScriptRoot 'check_pointers.ps1') -Raw) -match '\$MemoryDir')
+Ok "doctor forwards -MemoryDir"         ((Get-Content (Join-Path $PSScriptRoot 'doctor.ps1') -Raw) -match 'check_pointers\.ps1.*-MemoryDir')
+
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 
 Write-Host ""

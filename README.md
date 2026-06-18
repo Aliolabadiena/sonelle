@@ -12,7 +12,9 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
    Terminal). macOS/Linux are not supported yet (PowerShell-only).
 2. *(optional)* copy `sonelle.config.example.json` -> `sonelle.config.json` and set `hub` to
    your workspace path (where `CLAUDE.md` + `PROJECTS.md` + `memory/` live). Default `.`
-   = this folder. `sonelle.config.json` is gitignored, so your local paths never enter the repo.
+   = this folder. If your project memory lives OUTSIDE `<hub>/memory` (e.g. a Claude Code memory
+   dir), set `memoryDir` to that path so heal/validate resolve memory pointers correctly.
+   `sonelle.config.json` is gitignored, so your local paths never enter the repo.
 3. Log into your Claude subscription (Claude Code / `claude`).
 4. Run the terminal:  `powershell -File bin\sonelle.ps1`
 5. Create a project:  type `:new`  (or `tools\new_project.ps1 <short> "<name>" "<path>"`)

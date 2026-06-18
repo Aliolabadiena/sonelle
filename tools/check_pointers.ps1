@@ -2,15 +2,17 @@
   check_pointers.ps1 - validate that the core sonelle files and every registry pointer
   resolve on disk. Catches silent renames/deletes. Hub = parent of this tools/ folder.
 
-  Usage:  .\check_pointers.ps1 [-Hub <workspace>]
+  Usage:  .\check_pointers.ps1 [-Hub <workspace>] [-MemoryDir <path>]
+  Hub + memory dir come from sonelle.config.json (hub / memoryDir) unless overridden by params.
   Exit:   0 = all OK, 1 = at least one MISS.
 #>
-param([string]$Hub = '')
+param([string]$Hub = '', [string]$MemoryDir = '')
 $ErrorActionPreference = 'Stop'
 $engine = Split-Path $PSScriptRoot -Parent
-$hub    = if ($Hub) { $Hub } else { $engine }
-$memDir = Join-Path $hub 'memory'
 . (Join-Path $PSScriptRoot '_registry.ps1')
+$resolved = Get-SonelleConfig -Engine $engine -HubOverride $Hub -MemoryOverride $MemoryDir
+$hub    = $resolved.Hub
+$memDir  = $resolved.MemoryDir
 
 $script:ok = 0; $script:miss = 0
 function Check($label, $path) {
@@ -39,9 +41,14 @@ if (-not (Test-Path $pf)) {
   foreach ($p in $projects) {
     if ($p.CodePath -and $p.CodePath -notmatch '^[-(]') { Check ("$($p.Short) code path") $p.CodePath }
   }
-  # memory files referenced anywhere in the registry
-  $refs = [regex]::Matches((Get-Content $pf -Raw), 'project_[a-z0-9_]+\.md') | ForEach-Object { $_.Value } | Sort-Object -Unique
-  foreach ($r in $refs) { Check ("memory\$r") (Join-Path $memDir $r) }
+  # memory files referenced anywhere in the registry (resolved against $memDir from config)
+  if (-not (Test-Path $memDir -PathType Container)) {
+    Write-Host ("  [MISS] memory dir not found -> {0}  (set 'memoryDir' in sonelle.config.json)" -f $memDir) -ForegroundColor Red
+    $script:miss++
+  } else {
+    $refs = [regex]::Matches((Get-Content $pf -Raw), 'project_[a-z0-9_]+\.md') | ForEach-Object { $_.Value } | Sort-Object -Unique
+    foreach ($r in $refs) { Check ("memory\$r") (Join-Path $memDir $r) }
+  }
 }
 
 Write-Host ""

@@ -11,12 +11,15 @@
 
   Exit: 0 = healthy, 1 = at least one FAIL.
 #>
-param([string]$Short = '', [string]$Hub = '')
+param([string]$Short = '', [string]$Hub = '', [string]$MemoryDir = '')
 
 $ErrorActionPreference = 'Stop'
-$hub = if ($Hub) { $Hub } else { Split-Path $PSScriptRoot -Parent }
+$engine = Split-Path $PSScriptRoot -Parent
 $ps  = (Get-Process -Id $PID).Path  # this powershell exe, for child invocations
 . (Join-Path $PSScriptRoot '_registry.ps1')
+$resolved = Get-SonelleConfig -Engine $engine -HubOverride $Hub -MemoryOverride $MemoryDir
+$hub    = $resolved.Hub
+$memDir = $resolved.MemoryDir
 $fails = 0
 $checked = 0
 function Section($t) { Write-Host ""; Write-Host ("== {0} ==" -f $t) -ForegroundColor Cyan }
@@ -31,7 +34,7 @@ if (Get-Command claude -ErrorAction SilentlyContinue) { Write-Host "  [PASS] cla
 else { Write-Host "  [warn] claude NOT on PATH - the terminal cannot hand off until Claude Code is installed + on PATH" -ForegroundColor Yellow }
 
 Section "pointers"
-& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $hub | Out-Null
+& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $hub -MemoryDir $memDir | Out-Null
 Result "registry pointers resolve" ($LASTEXITCODE -eq 0) "(run check_pointers.ps1 for detail)"
 
 Section "git (hub)"

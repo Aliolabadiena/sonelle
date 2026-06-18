@@ -24,3 +24,33 @@ function Get-SonelleProjects([string]$RegistryPath) {
   }
   return $out
 }
+
+# Resolve {Hub, MemoryDir} from sonelle.config.json + optional overrides. Precedence:
+#   param override > config > default. An explicit -HubOverride means a DIFFERENT workspace,
+#   so config.memoryDir (which describes the config's hub) does NOT apply to it - memory then
+#   defaults to <override-hub>\memory unless -MemoryOverride is also given. This keeps the engine's
+#   own config from leaking into a temp/other hub (e.g. selftest's throwaway hub).
+function Get-SonelleConfig {
+  param([string]$Engine, [string]$HubOverride = '', [string]$MemoryOverride = '')
+  $cfgHub = ''; $cfgMem = ''
+  $cfgFile = Join-Path $Engine 'sonelle.config.json'
+  if (Test-Path $cfgFile) {
+    try {
+      $c = Get-Content $cfgFile -Raw | ConvertFrom-Json
+      if ($c.hub -and $c.hub -ne '.') {
+        $cfgHub = if ([System.IO.Path]::IsPathRooted($c.hub)) { $c.hub } else { Join-Path $Engine $c.hub }
+      }
+      if ($c.memoryDir) {
+        $cfgMem = if ([System.IO.Path]::IsPathRooted($c.memoryDir)) { $c.memoryDir } else { Join-Path $Engine $c.memoryDir }
+      }
+    } catch {}
+  }
+  if ($HubOverride) {
+    $hub = $HubOverride
+    $mem = if ($MemoryOverride) { $MemoryOverride } else { [System.IO.Path]::Combine($hub, 'memory') }
+  } else {
+    $hub = if ($cfgHub) { $cfgHub } else { $Engine }
+    $mem = if ($MemoryOverride) { $MemoryOverride } elseif ($cfgMem) { $cfgMem } else { [System.IO.Path]::Combine($hub, 'memory') }
+  }
+  return [pscustomobject]@{ Hub = $hub; MemoryDir = $mem }
+}

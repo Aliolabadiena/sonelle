@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.11 — 2026-06-18 (config: memoryDir; cleaner validate)
+- `check_pointers` + `doctor` are now config-aware: they read `hub` AND a new `memoryDir` from
+  `sonelle.config.json` (params still override) via a shared `Get-SonelleConfig` in `tools\_registry.ps1`.
+  Set `memoryDir` when your project memory lives OUTSIDE `<hub>\memory` (e.g. a Claude Code memory dir),
+  so the validate ritual resolves memory pointers correctly instead of reporting false MISS.
+- Precedence: an explicit `-Hub` override uses `<hub>\memory` (config.memoryDir does NOT leak into a
+  different / temp hub - e.g. selftest's throwaway hub stays correct). `doctor` forwards `-MemoryDir` to
+  `check_pointers`. selftest section 9 covers the resolver precedence.
+- (brain-backup, separate `sonelle-state` repo) `sonelle_sync.ps1`: `git add` stderr is now redirected
+  like commit/push, so the LF->CRLF warnings no longer surface as error records and the script returns a
+  clean exit 0 on success.
+
 ## v1.10 — 2026-06-18 (address the engine by its own name)
 - The engine's own shortcode now routes to self-development: `<engine-name>: <prompt>` (e.g.
   `sonelle, sonelle: add a :foo command`) is the grammar form of `:dev`. The shortcode is derived from
