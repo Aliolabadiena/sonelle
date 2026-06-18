@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.9 — 2026-06-18 (self-development: improve the engine from the engine)
+- New terminal command `:dev [prompt]`: opens an orchestrator session (your max model) rooted in the
+  engine, seeded so it develops the ENGINE itself - it reads `docs\DEVELOPING.md` + `docs\ARCHITECTURE.md`,
+  honors the invariants (pure-ASCII PS, no personal data, no hub state in the engine), and must keep
+  `tools\selftest.ps1` green. The seed overrides the dispatcher framing of the root `CLAUDE.md` for that session.
+- `docs\DEVELOPING.md`: the canonical guide for changing the engine safely (invariants, the selftest gate,
+  "extend selftest for every new feature", rewind-via-git, how to add a command/tool/template).
+- `CLAUDE.md` + `docs\ARCHITECTURE.md` + `README.md` updated to point at the self-develop path.
+- selftest section 8 asserts the `:dev` handler, the `DevSelf` function, `DEVELOPING.md`, and the
+  dispatcher pointer are all wired.
+
 ## v1.8 — 2026-06-18 (named "sonelle" + final icon)
 - NAME: the engine and its private brain-backup were renamed from the working name `luna` to
   **sonelle** (feminine, distinctive). All folders, file names, file content, the two GitHub repos,

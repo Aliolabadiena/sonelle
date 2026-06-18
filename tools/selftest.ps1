@@ -87,6 +87,18 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
   }
 } else { Write-Host "  [skip] git not on PATH" -ForegroundColor DarkGray }
 
+Write-Host "== 8. self-develop wiring =="
+$srcTerm = Get-Content (Join-Path $engine 'bin\sonelle.ps1') -Raw
+Ok "terminal has a :dev handler"   ($srcTerm -match '\^:dev')
+Ok "terminal has DevSelf function" ($srcTerm -match 'function DevSelf')
+Ok "DEVELOPING.md exists"          (Test-Path (Join-Path $engine 'docs\DEVELOPING.md'))
+Ok "dispatcher points to self-dev" ((Get-Content (Join-Path $engine 'CLAUDE.md') -Raw) -match 'DEVELOPING\.md|:dev')
+Ok "DevSelf seeds + guards engine"  (($srcTerm -match 'IGNORE its dispatcher') -and ($srcTerm -match 'hub-state'))
+# invariant #4: the engine root must stay clean of hub state (no project TODO/ledger/memory)
+$rootTodo = @(Get-ChildItem $engine -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue).Count
+$rootLedg = @(Get-ChildItem $engine -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue).Count
+Ok "engine root clean (no hub state)" (($rootTodo -eq 0) -and ($rootLedg -eq 0) -and (-not (Test-Path (Join-Path $engine 'memory'))))
+
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 
 Write-Host ""

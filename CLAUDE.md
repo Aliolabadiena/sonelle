@@ -49,6 +49,12 @@ subscription). Attach images with `:attach <path>` or inline `@<path>`. `bin\son
 shows the banner without entering the REPL. Verify the whole engine anytime with
 `tools\selftest.ps1` (or `sonelle.check.ps1`).
 
+## Improving sonelle itself
+To work ON the engine (not on a project), type `:dev` in the terminal - it opens a session here
+seeded with the engine-dev invariants from `docs\DEVELOPING.md` (pure-ASCII PowerShell,
+`tools\selftest.ps1` green before every commit, no personal data in this public repo), overriding
+the dispatcher framing above for that session. Everything is git-versioned, so changes are rewindable.
+
 ## Engine vs hub
 Engine assets (`bin/ tools/ templates/ docs/`) are read relative to the scripts. The hub
 (`CLAUDE.md` + `PROJECTS.md` + `memory/` + per-project state) is where work lands — default

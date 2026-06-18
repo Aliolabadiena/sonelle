@@ -7,7 +7,7 @@
     powershell -File bin\sonelle.ps1          start the terminal (REPL)
     powershell -File bin\sonelle.ps1 -Demo    print the banner + help, then exit (no REPL)
 
-  Commands inside:  <short>: <prompt>   :projects   :new   :heal [short]   :help   :q
+  Commands inside:  <short>: <prompt>   :projects   :new   :heal [short]   :team   :status   :dev   :help   :q
   Source is pure ASCII; Unicode glyphs are built at runtime via [char] codepoints.
 #>
 [CmdletBinding()]
@@ -67,6 +67,7 @@ function ShowHelp {
   Write-Host ("    {0}:heal [short]{1}        run the doctor (health/heal detector)" -f $cream, $R)
   Write-Host ("    {0}:team <proj> <lanes>{1} launch up to 5 parallel lanes (e.g. :team myproj bugs,docs)" -f $cream, $R)
   Write-Host ("    {0}:status <proj>{1}       show each lane's status" -f $cream, $R)
+  Write-Host ("    {0}:dev [prompt]{1}        improve the engine itself (opens a dev session here)" -f $cream, $R)
   Write-Host ("    {0}:attach <path>{1}       stage an image for the next prompt (or inline {0}@<path>{1})" -f $cream, $R)
   Write-Host ("    {0}:clear{1}               clear staged images" -f $cream, $R)
   Write-Host ("    {0}:help{1}  {0}:q{1}            this help / quit" -f $cream, $R)
@@ -107,6 +108,31 @@ function Team($rest) {
 function StatusLanes($pj) {
   if (-not $pj) { Write-Host ("  {0}usage: :status <project>{1}" -f $dim, $R); return }
   & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'bin\sonelle_team.ps1') $pj -Status -Hub $hub | Out-Host
+}
+function DevSelf($prompt) {
+  $claude = Get-Command claude -ErrorAction SilentlyContinue
+  if (-not $claude) {
+    Write-Host ("  {0}[!] 'claude' not found on PATH - install Claude Code + log into your subscription first.{1}" -f $clay, $R)
+    return
+  }
+  $ask = if ($prompt) { $prompt } else { 'Ask me what to improve, then propose a short plan before editing.' }
+  $seed = "You are developing the sonelle ENGINE ITSELF (this repository = your current working directory). It is a PUBLIC repo with ZERO personal data.`n" +
+          "Read docs\DEVELOPING.md and docs\ARCHITECTURE.md FIRST, and treat docs\DEVELOPING.md as your SOLE authority for THIS session. Claude Code auto-loads the root CLAUDE.md (the dispatcher template the engine ships) - IGNORE its dispatcher / project-routing / state-reading framing here; this session develops the engine, it does not route projects or manage a hub.`n" +
+          "Honor every invariant in DEVELOPING.md: pure-ASCII PowerShell, no personal data in the repo, do NOT scaffold hub/project state (never run new_project or log_lesson at the engine root), and run tools\selftest.ps1 to ALL PASS before any commit (extend selftest for new features so the engine stays self-verifying). Everything is git-versioned, so changes are rewindable.`n`n" +
+          "Task: $ask"
+  Write-Host ("  {0}-> {1}dev{2}  {3}developing the engine itself{2}" -f $dim, $clay, $R, $dim)
+  Write-Host ("  {0}orchestrator: {1} (effort {2}){3}" -f $dim, $orchModel, $orchEffort, $R)
+  $dirty = $false
+  if (Get-Command git -ErrorAction SilentlyContinue) { try { $dirty = [bool](& git -C $root status --porcelain 2>$null) } catch {} }
+  if ($dirty) { Write-Host ("  {0}note: engine has uncommitted changes - commit/stash first for a clean rewind point.{1}" -f $dim, $R) }
+  $cargs = @('--model', $orchModel, '--effort', $orchEffort); if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }
+  Push-Location $root
+  try { & claude @cargs $seed } finally { Pop-Location }
+  # invariant #4 guard: the engine must stay clean of hub state - warn if a session left any behind
+  $junk = @(Get-ChildItem $root -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue) + @(Get-ChildItem $root -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue)
+  if ($junk.Count -gt 0 -or (Test-Path (Join-Path $root 'memory'))) {
+    Write-Host ("  {0}[!] hub-state (TODO/ledger/memory) detected in the engine root - it must stay clean; move it to your hub or delete it.{1}" -f $clay, $R)
+  }
 }
 function Route($short, $prompt, $images) {
   $code = ResolveCode $short
@@ -153,6 +179,7 @@ while ($true) {
   elseif ($t -match '^:heal\s*(.*)$') { Heal ($Matches[1].Trim()); continue }
   elseif ($t -match '^:team\s+(.+)$') { Team $Matches[1]; continue }
   elseif ($t -match '^:status\s*(.*)$') { StatusLanes ($Matches[1].Trim()); continue }
+  elseif ($t -match '^:dev\b\s*(.*)$') { DevSelf ($Matches[1].Trim()); continue }
   elseif ($t -match '^:attach\s+(.+)$') {
     $ip = $Matches[1].Trim().Trim('"')
     if (Test-Path $ip) { $script:staged += (Resolve-Path $ip).Path; Write-Host ("  {0}staged ({1} total): {2}{3}" -f $dim, $script:staged.Count, $ip, $R) }

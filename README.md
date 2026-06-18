@@ -21,6 +21,7 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
 8. Verify the engine:  `powershell -File tools\selftest.ps1`
 9. Pin to taskbar:  `powershell -File bin\make_launcher.ps1`, then right-click the Desktop `sonelle` shortcut -> Pin to taskbar.
 10. Multi-instance:  `:team myproj bugs=opus,docs=haiku` opens parallel lanes (per-task models); `:status myproj` shows them. The orchestrator (your terminal session) always runs your max model (`opus`/`xhigh`).
+11. Improve sonelle itself:  type `:dev` (opens a dev session in the engine, seeded with `docs\DEVELOPING.md`; keep `selftest` green before committing).
 
 ## The three capabilities (honest about what's mechanism vs discipline)
 - **Scaffold** (real mechanism) — new projects in one command, consistently structured (`tools\new_project.ps1`).
@@ -53,7 +54,7 @@ The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max
 | `bin\sonelle_team.ps1` | run up to 5 parallel lanes on one project (multi-instance) |
 | `assets\icon\` | app icon: `sonelle.svg` (vector) + `make_icon.py` -> `sonelle.ico` / `sonelle.png` |
 | `templates\` | project skeletons used by `new_project` |
-| `docs\` | `HEAL.md`, `SELF_IMPROVE.md`, `ARCHITECTURE.md` |
+| `docs\` | `HEAL.md`, `SELF_IMPROVE.md`, `ARCHITECTURE.md`, `DEVELOPING.md` (how to improve the engine) |
 
 ## Engine vs hub (where things live)
 The **engine** assets (this repo: `bin/`, `tools/`, `templates/`, `docs/`) are always read
