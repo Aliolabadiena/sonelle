@@ -1,0 +1,4 @@
+{
+  "_comment": "Copy this to luna.config.json (gitignored) and set 'hub' to your workspace path - the folder that holds CLAUDE.md + PROJECTS.md + memory/. Default '.' means the luna folder itself. On your main machine you might point it at an existing hub, e.g. C:\\Users\\you\\Desktop\\proj.",
+  "hub": "."
+}

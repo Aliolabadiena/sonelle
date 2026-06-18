@@ -1,0 +1,15 @@
+# luna engine — keep the repo clean and personal-data-free.
+# Anything you create/run locally (your hub config, brain, per-project state) stays local.
+
+luna.config.json      # your local hub path — machine-specific, never commit
+memory/               # any brain created in this workspace stays local
+*_TODO.txt            # per-project state files (created locally by new_project)
+_*_run_STATUS.md
+state/
+
+# OS / editor cruft
+*.tmp
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store

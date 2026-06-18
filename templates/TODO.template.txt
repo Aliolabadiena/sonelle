@@ -1,0 +1,17 @@
+=== {{NAME}} ({{SHORT}}) — TODO ===
+Created: {{DATE}}
+Code: {{PATH}}
+Ledger: _{{SHORT}}_run_STATUS.md
+Onboarding: {{PATH}}\CLAUDE.md
+Memory: memory/project_{{SHORT}}.md
+
+--- STATE HEADER (update after every build / milestone) ---
+Latest build / release: (none yet)
+Version / SHA: -
+What's inside: -
+QA notes: -
+
+--- TASKS (collection-only; work starts on "start") ---
+[ ] (first task here)
+
+--- DONE ---
