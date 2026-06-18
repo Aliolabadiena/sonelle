@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.17 — 2026-06-18 (glass app: composer is the only input, terminal is read-only)
+- Reversed v1.16: the bottom composer is back AND is now the ONLY place you type. The terminal pane
+  is output-only (`xterm` `disableStdin: true`) - you can't type into the window, which is what made
+  it feel ambiguous. You type in the composer; it forwards to the hidden PowerShell/claude.
+- The composer forwards the keys an interactive TUI needs so claude stays fully usable: Enter sends the
+  line; Up/Down, Tab, Esc pass through; Ctrl+C sends an interrupt (unless text is selected, so copy still
+  works). Clicking the read-only terminal refocuses the composer (unless you selected text to copy).
+- The composer auto-focuses on open; minimal placeholder ("ask a project to do something").
+- Verified live (real window: composer present, typing ":help" in it drove the hidden terminal and the
+  output rendered, composer cleared, stderr clean); selftest ALL PASS.
+
 ## v1.16 — 2026-06-18 (glass app: one input - the terminal itself)
 - Removed the bottom composer box (and its placeholder). Two input surfaces (a composer + the
   terminal) was confusing; claude's interactive TUI needs raw keys (arrows, Ctrl+C) in the terminal

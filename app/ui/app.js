@@ -27,6 +27,7 @@
   function newTermObj() {
     const term = new Terminal({
       allowTransparency: true,
+      disableStdin: true,          // output only - you type in the composer, not the window
       fontFamily: 'Cascadia Code, Cascadia Mono, Consolas, "Courier New", monospace',
       fontSize: 13, lineHeight: 1.15, cursorBlink: true, scrollback: 5000, theme: THEME
     });
@@ -96,7 +97,7 @@
       requestAnimationFrame(() => {
         safeFit(e);
         if (live && !e.dead) { try { window.pywebview.api.resize(tabId, e.term.cols, e.term.rows); } catch (x) {} }
-        e.term.focus();
+        const inp = $("cmd"); if (inp) inp.focus();   // focus the composer, not the (read-only) terminal
       });
     }
     updateWelcome();
@@ -174,11 +175,49 @@
     try { window.pywebview.api.resize(tabId, entry.term.cols, entry.term.rows); } catch (x) {}
   }
 
+  // ---------- composer (the one input; forwards to the active tab's PTY) ----------
+  function sendRaw(data) {
+    if (!active) return;
+    if (live) { try { window.pywebview.api.send_input(active, data); } catch (x) {} }
+    else { const e = TABS.get(active); if (e) e.term.write(data === "\r" ? "\r\n" : data); }  // demo echo
+  }
+  function sendLine() {
+    const inp = $("cmd");
+    if (!active || !inp) return;
+    if (live) { try { window.pywebview.api.send_input(active, inp.value + "\r"); } catch (x) {} }
+    else { const e = TABS.get(active); if (e) e.term.write(inp.value + "\r\n"); }
+    inp.value = "";
+  }
+  // forward the keys an interactive TUI (claude) needs, since the terminal itself can't be typed in
+  function composerKey(e) {
+    if (e.key === "Enter") { e.preventDefault(); sendLine(); return; }
+    if (e.key === "ArrowUp") { e.preventDefault(); sendRaw("\x1b[A"); return; }     // menu / history (no-op in a 1-line input)
+    if (e.key === "ArrowDown") { e.preventDefault(); sendRaw("\x1b[B"); return; }
+    if (e.key === "Tab") { e.preventDefault(); sendRaw("\t"); return; }
+    if (e.key === "Escape") { e.preventDefault(); sendRaw("\x1b"); return; }
+    if (e.ctrlKey && (e.key === "c" || e.key === "C")) {
+      const sel = (window.getSelection && window.getSelection().toString()) || "";
+      if (!sel) { e.preventDefault(); sendRaw("\x03"); }   // no selection -> interrupt; with one -> let copy happen
+      return;
+    }
+  }
+
   // ---------- chrome wiring (safe with or without the bridge) ----------
   function wireChrome() {
     const openTab = () => { if (live) createLiveTab(null); else createDemoTab(); };
     $("btn-new").addEventListener("click", openTab);
     $("w-open").addEventListener("click", openTab);
+    $("send").addEventListener("click", sendLine);
+    $("cmd").addEventListener("keydown", composerKey);
+    // clicking the read-only terminal shouldn't strand keyboard focus: refocus the composer
+    // unless the user just selected text (so copy still works)
+    $("stack").addEventListener("mouseup", () => {
+      setTimeout(() => {
+        const sel = (window.getSelection && window.getSelection().toString()) || "";
+        const inp = $("cmd");
+        if (!sel && inp) inp.focus();
+      }, 0);
+    });
     $("btn-min").addEventListener("click", () => { if (live) { try { window.pywebview.api.win_minimize(); } catch (x) {} } });
     $("btn-close").addEventListener("click", () => { if (live) { try { window.pywebview.api.win_close(); } catch (x) {} } });
     $("btn-max").addEventListener("click", () => { if (live) { try { window.pywebview.api.win_toggle_max(); } catch (x) {} } });
