@@ -42,9 +42,11 @@ body{
   box-shadow:0 10px 40px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.05);
 }
 
-/* ---------- title bar ---------- */
+/* ---------- title bar (window drag handle) ---------- */
+/* WebView2 ignores -webkit-app-region (an Electron-only feature), so the window move is driven by
+   pywebview's '.pywebview-drag-region' class on #titlebar (index.html). A mousedown guard in app.js
+   stops the drag over '.nodrag' controls so buttons/tabs/the input still click normally. */
 #titlebar{
-  -webkit-app-region:drag;
   display:flex; align-items:center; gap:10px;
   height:44px; padding:0 8px 0 14px;
   border-radius:14px;
@@ -55,9 +57,8 @@ body{
   box-shadow:0 8px 30px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.05);
   flex:0 0 auto;
 }
-.nodrag{ -webkit-app-region:no-drag; }
-/* -webkit-app-region is NOT inherited - opt every interactive titlebar child out of drag explicitly */
-#titlebar button, #titlebar .tab, #titlebar .tab .x { -webkit-app-region:no-drag; }
+/* '.nodrag' marks the interactive titlebar controls; the app.js mousedown guard reads it to keep a
+   window drag from starting on a button/tab/the input (the bare bar + spacer stay draggable). */
 
 .brand{ display:flex; align-items:center; gap:9px; padding-right:6px; }
 .brand .mark{

@@ -19,6 +19,7 @@ import re
 import json
 import queue
 import base64
+import tempfile
 import threading
 import subprocess
 
@@ -33,6 +34,10 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 ENGINE = os.path.dirname(APP_DIR)
 UI_INDEX = os.path.join(APP_DIR, "ui", "index.html")
 SONELLE_PS1 = os.path.join(ENGINE, "bin", "sonelle.ps1")
+# Window/taskbar icon. Without this, pywebview's winforms backend extracts the icon from
+# sys.executable (pythonw.exe) and the running app shows the generic Python feather - this
+# brands it as sonelle instead (matching the launcher .lnk and the classic WinForms host).
+ICON_ICO = os.path.join(ENGINE, "assets", "icon", "sonelle.ico")
 CREATE_NO_WINDOW = 0x08000000
 
 
@@ -282,6 +287,49 @@ def list_projects():
     return out
 
 
+# --- pasted-image staging (Ctrl+V in the composer) -------------------------------------------
+# Pasted clipboard images are written to a temp dir (NOT the repo - they may be personal data and
+# must never be committed). The JS side then inserts an @"<path>" token into the composer; the
+# terminal (bin\sonelle.ps1) extracts that inline path and tells claude to read it, so the image
+# enters claude's context - exactly the path :attach / @path already use.
+_PASTE_LOCK = threading.Lock()
+_PASTE_N = 0
+_PASTE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
+
+
+def save_paste_image(b64, ext=".png"):
+    """Decode a base64 clipboard image, write it to a temp file, return {ok, path}."""
+    try:
+        raw = base64.b64decode(b64 or "")
+    except Exception:
+        return {"ok": False, "error": "bad image data"}
+    if not raw:
+        return {"ok": False, "error": "empty image"}
+    e = (ext or ".png").lower()
+    if not e.startswith("."):
+        e = "." + e
+    if e == ".jpeg":
+        e = ".jpg"
+    if e not in _PASTE_EXTS:
+        e = ".png"
+    d = os.path.join(tempfile.gettempdir(), "sonelle_paste")
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        d = tempfile.gettempdir()
+    global _PASTE_N
+    with _PASTE_LOCK:
+        _PASTE_N += 1
+        n = _PASTE_N
+    path = os.path.join(d, "paste_%d_%d%s" % (os.getpid(), n, e))
+    try:
+        with open(path, "wb") as f:
+            f.write(raw)
+    except Exception as ex:
+        return {"ok": False, "error": str(ex)}
+    return {"ok": True, "path": path}
+
+
 class Api:
     # NOTE: only the public (no-underscore) METHODS below are exposed to JS. Data attributes
     # are underscore-prefixed so pywebview does NOT introspect/serialize them - walking the
@@ -306,6 +354,9 @@ class Api:
 
     def list_projects(self):
         return list_projects()
+
+    def save_paste_image(self, b64, ext=".png"):
+        return save_paste_image(b64, ext)
 
     # window controls (no built-in JS window API -> expose wrappers)
     def win_minimize(self):
@@ -372,7 +423,12 @@ def main():
         win.events.restored += _on_restore
     except Exception:
         pass
-    webview.start(gui="edgechromium", debug=debug)
+    # icon= brands the window/taskbar as sonelle; pywebview's winforms backend applies it
+    # (Icon(path) when the file exists, else it would fall back to pythonw.exe's icon).
+    start_kwargs = {"gui": "edgechromium", "debug": debug}
+    if os.path.isfile(ICON_ICO):
+        start_kwargs["icon"] = ICON_ICO
+    webview.start(**start_kwargs)
 
 
 if __name__ == "__main__":

@@ -202,6 +202,43 @@
     }
   }
 
+  // ---------- Ctrl+V image paste -> temp file -> @"path" token (enters claude's context) ----------
+  // The clipboard image is saved by Python to a temp file; we drop an @"<path>" token into the
+  // composer. When you send a routed prompt, the terminal extracts that path and tells claude to
+  // read it - same mechanism as :attach / @path, just sourced from the clipboard.
+  async function attachPastedImage(b64, ext) {
+    if (!live) return;                       // demo preview has no backend to save to
+    let res = null;
+    try { res = await window.pywebview.api.save_paste_image(b64, ext); } catch (x) { res = null; }
+    if (!res || !res.ok || !res.path) return;
+    const inp = $("cmd");
+    if (!inp) return;
+    const token = '@"' + res.path + '"';
+    const cur = inp.value.replace(/\s+$/, "");
+    inp.value = (cur ? cur + " " : "") + token + " ";
+    inp.focus();
+    try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (x) {}
+  }
+  function onComposerPaste(e) {
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind === "file" && it.type && it.type.indexOf("image/") === 0) {
+        const file = it.getAsFile();
+        if (!file) continue;
+        e.preventDefault();                  // don't let the raw blob land as junk text
+        const ext = "." + ((it.type.split("/")[1] || "png"));
+        const reader = new FileReader();
+        reader.onload = () => {
+          const b64 = String(reader.result || "").split(",")[1] || "";
+          if (b64) attachPastedImage(b64, ext);
+        };
+        reader.readAsDataURL(file);
+        return;                              // first image only
+      }
+    }
+  }
+
   // ---------- chrome wiring (safe with or without the bridge) ----------
   function wireChrome() {
     const openTab = () => { if (live) createLiveTab(null); else createDemoTab(); };
@@ -209,6 +246,13 @@
     $("w-open").addEventListener("click", openTab);
     $("send").addEventListener("click", sendLine);
     $("cmd").addEventListener("keydown", composerKey);
+    $("cmd").addEventListener("paste", onComposerPaste);   // Ctrl+V an image -> attach it for claude
+    // window drag: pywebview drags from '.pywebview-drag-region' (#titlebar); stop it over the
+    // interactive '.nodrag' controls so buttons/tabs/the input still click instead of moving the window.
+    const tb = $("titlebar");
+    if (tb) tb.addEventListener("mousedown", (e) => {
+      if (e.target.closest(".nodrag")) e.stopPropagation();
+    });
     // clicking the read-only terminal shouldn't strand keyboard focus: refocus the composer
     // unless the user just selected text (so copy still works)
     $("stack").addEventListener("mouseup", () => {

@@ -143,7 +143,8 @@ $appDir = Join-Path $engine 'app'
 $guiPy  = Join-Path $appDir 'sonelle_gui.py'
 foreach ($rel in @(
   'app\sonelle_gui.py', 'app\requirements.txt', 'app\ui\index.html', 'app\ui\app.js', 'app\ui\app.css',
-  'app\ui\vendor\xterm.js', 'app\ui\vendor\xterm.css', 'app\ui\vendor\addon-fit.js', 'bin\sonelle_gui.ps1')) {
+  'app\ui\vendor\xterm.js', 'app\ui\vendor\xterm.css', 'app\ui\vendor\addon-fit.js', 'bin\sonelle_gui.ps1',
+  'assets\icon\sonelle.ico')) {
   Ok ("exists: " + $rel) (Test-Path (Join-Path $engine $rel))
 }
 $srcGui = if (Test-Path $guiPy) { Get-Content $guiPy -Raw } else { '' }
@@ -151,12 +152,17 @@ Ok "backend exposes the api contract" (($srcGui -match 'def new_tab') -and ($src
 Ok "backend pushes via __ptyOutput"   ($srcGui -match '__ptyOutput')
 Ok "backend spawns sonelle.ps1 -Bare" ($srcGui -match '"-Bare"')
 Ok "backend kills the process tree"   ($srcGui -match 'taskkill')
+Ok "backend brands window with sonelle icon" (($srcGui -match 'sonelle\.ico') -and ($srcGui -match '"icon"'))
+Ok "backend saves pasted images"      ($srcGui -match 'def save_paste_image')
 Ok "backend setwinsize(rows, cols)"   ($srcGui -match 'setwinsize\(rows, cols\)')
 $srcJs = Get-Content (Join-Path $appDir 'ui\app.js') -Raw
 Ok "frontend has output sink + ready gate" (($srcJs -match 'window\.__ptyOutput') -and ($srcJs -match 'pywebviewready'))
 Ok "frontend uses FitAddon.FitAddon"  ($srcJs -match 'new FitAddon\.FitAddon\(\)')
+Ok "frontend pastes images via save_paste_image" (($srcJs -match 'save_paste_image') -and ($srcJs -match '"paste"'))
+Ok "frontend guards titlebar drag"    ($srcJs -match "closest\(`"\.nodrag`"\)")
 $srcHtml = Get-Content (Join-Path $appDir 'ui\index.html') -Raw
 Ok "index loads vendored xterm + app.js" (($srcHtml -match 'vendor/xterm\.js') -and ($srcHtml -match 'app\.js'))
+Ok "titlebar is a pywebview drag region" ($srcHtml -match 'pywebview-drag-region')
 $srcGuiPs = Get-Content (Join-Path $engine 'bin\sonelle_gui.ps1') -Raw
 Ok "launcher installs deps + runs pythonw" (($srcGuiPs -match 'requirements\.txt') -and ($srcGuiPs -match 'pythonw'))
 $pyCmd = Get-Command py -ErrorAction SilentlyContinue

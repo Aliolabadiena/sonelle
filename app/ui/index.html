@@ -9,8 +9,9 @@
 </head>
 <body>
   <div id="app">
-    <!-- title bar: drag region; every interactive child is .nodrag -->
-    <header id="titlebar">
+    <!-- title bar = window drag handle. WebView2 ignores -webkit-app-region (Electron-only), so the
+         move uses pywebview's '.pywebview-drag-region'; app.js cancels the drag over '.nodrag' controls. -->
+    <header id="titlebar" class="pywebview-drag-region">
       <div class="brand nodrag">
         <span class="mark" aria-hidden="true"></span>
         <span class="word">sonelle</span>

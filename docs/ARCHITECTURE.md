@@ -76,8 +76,13 @@ Each tab is an **xterm.js** terminal; behind it, `app\sonelle_gui.py` spawns `po
 in a **pseudo-terminal** (`pywinpty`) and pumps bytes both ways - so the terminal brain runs hidden and
 the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread per tab.
 - **Contract:** JS->Python via `window.pywebview.api.{new_tab, send_input, resize, close_tab, list_projects,
-  win_minimize, win_toggle_max, win_close}`; Python->JS via fire-and-forget `run_js` calling
+  save_paste_image, win_minimize, win_toggle_max, win_close}`; Python->JS via fire-and-forget `run_js` calling
   `window.__ptyOutput(tabId, base64Bytes)` / `window.__ptyExit(tabId, code)`. `tabId` is Python-owned.
+- **Window move:** the frameless window drags from the title bar via pywebview's `.pywebview-drag-region`
+  class (WebView2 ignores Electron's `-webkit-app-region`); an `app.js` mousedown guard cancels the drag
+  over `.nodrag` controls so buttons/tabs/the input still click. The taskbar/window icon is `sonelle.ico`.
+- **Paste images:** Ctrl+V in the composer saves the clipboard image to a temp file (`save_paste_image`,
+  NOT the repo) and inserts an `@"<path>"` token; the terminal then routes it to claude like `:attach`/`@path`.
 - **Threading:** `webview.start()` on the main thread; js_api methods each run on their own thread
   (shared session dict under a lock); read-threads push through ONE guard that checks a `_window_open`
   flag + try/except so a torn-down window can never crash them. On close: terminate+close each PTY then
@@ -85,7 +90,9 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
 - **Glass:** WebView2 **cannot** be transparent on Windows, so the glass is self-contained - an in-app
   gradient + translucent `backdrop-filter` panels - identical on Win10/11 (no OS acrylic dependency).
 - **Launch + deps:** `bin\sonelle_gui.ps1` bootstraps a local `.venv` (`pywebview` + `pywinpty`, pinned in
-  `app\requirements.txt`) on first run, then starts the GUI with `pythonw` (no console). `xterm.js` +
+  `app\requirements.txt`) on first run, then starts the GUI with `pythonw` (no console). The window
+  passes `icon=assets\icon\sonelle.ico` to `webview.start()`, so the taskbar shows the sonelle mark, not
+  `pythonw.exe`'s Python feather (pywebview falls back to the exe's icon otherwise). `xterm.js` +
   `addon-fit` are vendored under `app\ui\vendor\` (MIT, offline). selftest section 8e checks the files,
   the JS<->Python contract markers, the launcher wiring, and `py_compile`s the backend; section 1 excludes `.venv`.
 

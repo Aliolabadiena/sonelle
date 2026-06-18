@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.18 — 2026-06-18 (glass app: sonelle icon, draggable window, Ctrl+V image paste)
+- **sonelle icon, not the Python feather.** The running glass app now shows the **sonelle** icon in the
+  window/taskbar. pywebview's winforms backend, given no icon, extracts one from `sys.executable`
+  (`pythonw.exe`) - so the app branded itself as Python. `sonelle_gui.py` now passes
+  `icon=assets\icon\sonelle.ico` to `webview.start()`, matching the launcher `.lnk` and the classic
+  WinForms host. Falls back gracefully if the .ico is missing.
+- **The window moves now.** The frameless title bar was styled with `-webkit-app-region:drag`, which is
+  an Electron-only feature that **WebView2 ignores** - so the window was stuck. It now uses pywebview's
+  `.pywebview-drag-region` class on `#titlebar`, with an `app.js` mousedown guard that cancels the drag
+  over `.nodrag` controls so buttons/tabs/the input still click normally.
+- **Ctrl+V pastes images into claude's context.** Paste a clipboard image into the composer and it is
+  saved to a temp file (new `save_paste_image` API; written to the OS temp dir, never the repo) and an
+  `@"<path>"` token is inserted. Sending the routed prompt hands that path to claude exactly like
+  `:attach` / inline `@path` already do, so the image enters context.
+- selftest 8e now asserts the icon is wired, the title bar is a drag region with the guard, and both
+  sides of `save_paste_image` exist.
+
 ## v1.17 — 2026-06-18 (glass app: composer is the only input, terminal is read-only)
 - Reversed v1.16: the bottom composer is back AND is now the ONLY place you type. The terminal pane
   is output-only (`xterm` `disableStdin: true`) - you can't type into the window, which is what made
