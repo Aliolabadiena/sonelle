@@ -1,4 +1,10 @@
 {
-  "_comment": "Copy this to luna.config.json (gitignored) and set 'hub' to your workspace path - the folder that holds CLAUDE.md + PROJECTS.md + memory/. Default '.' means the luna folder itself. On your main machine you might point it at an existing hub, e.g. C:\\Users\\you\\Desktop\\proj.",
-  "hub": "."
+  "_comment": "Copy to luna.config.json (gitignored). 'hub' = your workspace path (default '.' = the luna folder). 'models' = model policy. The ORCHESTRATOR (the session you talk to via the terminal) is ALWAYS your max model + effort - a strong boss orchestrates the workers well. LANES (workers) default to laneDefault and can be overridden per lane (e.g. :team proj bugs=opus,triage=haiku). Models: haiku | sonnet | opus | claude-fable-5. Effort: low | medium | high | xhigh.",
+  "hub": ".",
+  "models": {
+    "orchestrator": "opus",
+    "orchestratorEffort": "xhigh",
+    "laneDefault": "opus",
+    "laneEffort": "high"
+  }
 }

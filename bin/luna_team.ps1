@@ -21,10 +21,15 @@ param(
 $ErrorActionPreference = 'Stop'
 $engine = Split-Path $PSScriptRoot -Parent
 $hub = if ($Hub) { $Hub } else { $engine }
+$laneModel = 'opus'; $laneEffort = 'high'   # worker defaults; per-lane override via name=model:effort
 $cfg = Join-Path $engine 'luna.config.json'
-if (-not $Hub -and (Test-Path $cfg)) {
-  try { $h = (Get-Content $cfg -Raw | ConvertFrom-Json).hub
-        if ($h -and $h -ne '.') { $hub = if ([System.IO.Path]::IsPathRooted($h)) { $h } else { Join-Path $engine $h } } } catch {}
+if (Test-Path $cfg) {
+  try {
+    $c = Get-Content $cfg -Raw | ConvertFrom-Json
+    if (-not $Hub -and $c.hub -and $c.hub -ne '.') { $hub = if ([System.IO.Path]::IsPathRooted($c.hub)) { $c.hub } else { Join-Path $engine $c.hub } }
+    if ($c.models.laneDefault) { $laneModel = $c.models.laneDefault }
+    if ($c.models.laneEffort)  { $laneEffort = $c.models.laneEffort }
+  } catch {}
 }
 . (Join-Path $engine 'tools\_registry.ps1')
 
@@ -48,12 +53,20 @@ if ($Status) {
   exit 0
 }
 
-if (-not $Lanes -or $Lanes.Count -eq 0) { Write-Host "[X] give -Lanes (e.g. -Lanes bugs,concepts,website)" -ForegroundColor Red; exit 1 }
-$Lanes = @($Lanes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToLower() } | Where-Object { $_ })
-foreach ($l in $Lanes) { if ($l -notmatch '^[a-z0-9_-]+$') { Write-Host "[X] bad lane name '$l' (use a-z 0-9 _ -)." -ForegroundColor Red; exit 1 } }
-if (($Lanes | Sort-Object -Unique).Count -ne $Lanes.Count) { Write-Host "[X] duplicate lane names." -ForegroundColor Red; exit 1 }
-if ($Lanes.Count -gt 5) { Write-Host "[X] max 5 lanes (got $($Lanes.Count))." -ForegroundColor Red; exit 1 }
-if ($Lanes.Count -gt 3) { Write-Host "[!] $($Lanes.Count) parallel sessions ~= $($Lanes.Count)x your Claude usage - watch rate limits." -ForegroundColor Yellow }
+if (-not $Lanes -or $Lanes.Count -eq 0) { Write-Host "[X] give -Lanes (e.g. -Lanes bugs,concepts,website  or  bugs=opus,triage=haiku:medium)" -ForegroundColor Red; exit 1 }
+$specs = @()
+foreach ($entry in ($Lanes | ForEach-Object { $_ -split ',' })) {
+  $e = $entry.Trim(); if (-not $e) { continue }
+  $eq = $e.Split('='); $name = $eq[0].Trim().ToLower(); $m = $laneModel; $ef = $laneEffort
+  if ($eq.Count -gt 1 -and $eq[1].Trim()) { $me = $eq[1].Trim().Split(':'); $m = $me[0].Trim(); if ($me.Count -gt 1 -and $me[1].Trim()) { $ef = $me[1].Trim().ToLower() } }
+  if ($name -notmatch '^[a-z0-9_-]+$') { Write-Host "[X] bad lane name '$name' (use a-z 0-9 _ -)." -ForegroundColor Red; exit 1 }
+  if (@('low', 'medium', 'high', 'xhigh') -notcontains $ef) { Write-Host "[X] bad effort '$ef' for lane '$name' (low|medium|high|xhigh)." -ForegroundColor Red; exit 1 }
+  $specs += [pscustomobject]@{ Name = $name; Model = $m; Effort = $ef }
+}
+$names = @($specs | ForEach-Object { $_.Name })
+if (($names | Sort-Object -Unique).Count -ne $names.Count) { Write-Host "[X] duplicate lane names." -ForegroundColor Red; exit 1 }
+if ($specs.Count -gt 5) { Write-Host "[X] max 5 lanes (got $($specs.Count))." -ForegroundColor Red; exit 1 }
+if ($specs.Count -gt 3) { Write-Host "[!] $($specs.Count) parallel sessions ~= $($specs.Count)x your Claude usage - watch rate limits." -ForegroundColor Yellow }
 
 if (-not (Test-Path $lanesDir)) { New-Item -ItemType Directory -Path $lanesDir -Force | Out-Null }
 $date = (Get-Date).ToString('yyyy-MM-dd HH:mm')
@@ -61,15 +74,16 @@ $wt = Get-Command wt -ErrorAction SilentlyContinue
 function Wr($p, $t) { [System.IO.File]::WriteAllText($p, $t, (New-Object System.Text.UTF8Encoding($false))) }
 
 $wtTabs = @()
-foreach ($l in $Lanes) {
-  $others = ($Lanes | Where-Object { $_ -ne $l }) -join ', '
+foreach ($s in $specs) {
+  $l = $s.Name
+  $others = ($names | Where-Object { $_ -ne $l }) -join ', '
   $statusFile = Join-Path $lanesDir ($l + '.md')
-  Wr $statusFile "# lane: $l ($Project)`r`nstarted: $date`r`nstatus: active`r`nowns: (declare files/dirs this lane edits)`r`nother lanes - DO NOT touch their files: $others`r`n`r`n## log`r`n- $date started`r`n"
+  Wr $statusFile "# lane: $l ($Project)`r`nmodel: $($s.Model) (effort $($s.Effort))`r`nstarted: $date`r`nstatus: active`r`nowns: (declare files/dirs this lane edits)`r`nother lanes - DO NOT touch their files: $others`r`n`r`n## log`r`n- $date started`r`n"
   $seed = "You are luna lane '$l' for project '$Project'. You own ONLY the '$l' workstream. The other lanes are: $others - read .luna/lanes/ and DO NOT edit their files (keep ownership disjoint; this project may have no git merge safety). Update .luna/lanes/$l.md as you work. Tell me this lane's task and I will work only within it."
   $startPs = Join-Path $lanesDir ($l + '.start.ps1')
-  Wr $startPs "Set-Location -LiteralPath '$code'`r`nclaude @'`r`n$seed`r`n'@`r`n"
+  Wr $startPs "Set-Location -LiteralPath '$code'`r`nclaude --model $($s.Model) --effort $($s.Effort) @'`r`n$seed`r`n'@`r`n"
   $wtTabs += 'new-tab --title "luna:' + $Project + ':' + $l + '" -d "' + $code + '" powershell -NoExit -ExecutionPolicy Bypass -File "' + $startPs + '"'
-  Write-Host "[+] lane '$l' -> .luna\lanes\$l.md (+ start script)"
+  Write-Host ("[+] lane '{0}' ({1}/{2}) -> .luna\lanes\{0}.md (+ start script)" -f $l, $s.Model, $s.Effort)
 }
 
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
@@ -77,12 +91,12 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
 }
 if ($DryRun) { Write-Host "[dry-run] board + start scripts written under $lanesDir (not launched)."; exit 0 }
 
-Write-Host "launching $($Lanes.Count) lane(s)..."
+Write-Host "launching $($specs.Count) lane(s)..."
 if ($wt) {
   Start-Process $wt.Source -ArgumentList ($wtTabs -join ' ; ')
 } else {
-  foreach ($l in $Lanes) {
-    Start-Process powershell -ArgumentList @('-NoExit', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $lanesDir ($l + '.start.ps1')))
+  foreach ($s in $specs) {
+    Start-Process powershell -ArgumentList @('-NoExit', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $lanesDir ($s.Name + '.start.ps1')))
   }
 }
 Write-Host "launched. check status: luna_team.ps1 $Project -Status"

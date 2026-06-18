@@ -16,12 +16,16 @@ param([switch]$Demo)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $hub  = $root
-# optional: routing hub override from luna.config.json (advanced; :new always targets $root)
+$orchModel = 'opus'; $orchEffort = 'xhigh'   # orchestrator (the session you talk to) is ALWAYS max
+# optional overrides from luna.config.json (hub for routing; models for the orchestrator)
 $cfg = Join-Path $root 'luna.config.json'
 if (Test-Path $cfg) {
   try {
-    $h = (Get-Content $cfg -Raw | ConvertFrom-Json).hub
+    $c = Get-Content $cfg -Raw | ConvertFrom-Json
+    $h = $c.hub
     if ($h -and $h -ne '.') { if ([System.IO.Path]::IsPathRooted($h)) { $hub = $h } else { $hub = Join-Path $root $h } }
+    if ($c.models.orchestrator)       { $orchModel = $c.models.orchestrator }
+    if ($c.models.orchestratorEffort) { $orchEffort = $c.models.orchestratorEffort }
   } catch {}
 }
 $psExe = (Get-Process -Id $PID).Path
@@ -123,9 +127,10 @@ function Route($short, $prompt, $images) {
     Write-Host ("  {0}+ {1} image(s) attached{2}" -f $dim, $images.Count, $R)
   }
   Write-Host ("  {0}-> {1}{2}{3}  {4}{5}{3}" -f $dim, $clay, $short, $R, $dim, $code)
-  Write-Host ("  {0}prompt: {1}{2}" -f $dim, ($finalPrompt -replace "`n", " / "), $R)   # echo final prompt so silent mutations are visible
+  Write-Host ("  {0}orchestrator: {1} (effort {2})  |  prompt: {3}{4}" -f $dim, $orchModel, $orchEffort, ($finalPrompt -replace "`n", " / "), $R)
+  $cargs = @('--model', $orchModel, '--effort', $orchEffort)
   if ($code -notmatch '^[-(]' -and (Test-Path $code)) { Push-Location $code } else { Push-Location $root }
-  try { & claude $finalPrompt } finally { Pop-Location }
+  try { & claude @cargs $finalPrompt } finally { Pop-Location }
   $script:staged = @()   # staged images consumed
 }
 

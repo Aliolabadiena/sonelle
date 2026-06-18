@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.5 — 2026-06-18 (model + effort policy)
+- ORCHESTRATOR is ALWAYS max: the terminal session you talk to launches `claude` with
+  `--model opus --effort xhigh` (a strong boss orchestrates the workers well). Overridable via
+  `luna.config.json` `models.orchestrator` / `orchestratorEffort`, but defaults to max.
+- LANES (workers) take per-lane model + effort: `:team proj bugs=opus,triage=haiku:medium,write=opus`.
+  Each lane's start script runs `claude --model <m> --effort <e>`. Defaults `laneDefault=opus` /
+  `laneEffort=high` (config `models.laneDefault` / `laneEffort`); per-lane `name=model[:effort]` overrides.
+  Models: `haiku | sonnet | opus | claude-fable-5`; effort `low|medium|high|xhigh` (bad effort rejected).
+- The terminal echoes the orchestrator model+effort before each hand-off; selftest asserts the per-lane
+  model lands in the start script.
+
 ## v1.4 — 2026-06-18 (icon + launcher + multi-instance)
 - ICON (concept #47, moon phases, charcoal/lime): vector source `assets/icon/luna.svg` + Pillow
   generator `assets/icon/make_icon.py` -> multi-size `luna.ico` (16-256) + `luna.png`. Re-themeable
