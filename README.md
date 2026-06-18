@@ -19,6 +19,8 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
 6. Work:  type `myproj: do the thing`
 7. Attach an image:  `myproj: what's in @C:\pics\food.jpg?`  (or `:attach <path>` to stage one)
 8. Verify the engine:  `powershell -File tools\selftest.ps1`
+9. Pin to taskbar:  `powershell -File bin\make_launcher.ps1`, then right-click the Desktop `luna` shortcut -> Pin to taskbar.
+10. Multi-instance:  in the terminal, `:team myproj bugs,docs` opens parallel lanes; `:status myproj` shows them.
 
 ## The three capabilities (honest about what's mechanism vs discipline)
 - **Scaffold** (real mechanism) — new projects in one command, consistently structured (`tools\new_project.ps1`).
@@ -46,6 +48,9 @@ The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max
 | `tools\log_lesson.ps1` | capture a lesson into memory (self-improve) |
 | `tools\selftest.ps1` | end-to-end self-test (dogfoods scaffold/heal into a temp hub) |
 | `luna.check.ps1` | the engine's own health check (runs the self-test) |
+| `bin\make_launcher.ps1` | create a pinnable taskbar shortcut (`luna.lnk`) with the icon |
+| `bin\luna_team.ps1` | run up to 5 parallel lanes on one project (multi-instance) |
+| `assets\icon\` | app icon: `luna.svg` (vector) + `make_icon.py` -> `luna.ico` / `luna.png` |
 | `templates\` | project skeletons used by `new_project` |
 | `docs\` | `HEAL.md`, `SELF_IMPROVE.md`, `ARCHITECTURE.md` |
 

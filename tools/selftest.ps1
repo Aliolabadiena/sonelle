@@ -62,6 +62,14 @@ Write-Host "== 5. duplicate guard =="
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') st "Dup" $codePath -Hub $tmp | Out-Null
 Ok "duplicate rejected (exit 1)"   ($LASTEXITCODE -eq 1)
 
+Write-Host "== 5b. multi-instance dry-run =="
+& $ps -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\luna_team.ps1') st -Lanes a,b -Hub $tmp -DryRun | Out-Null
+Ok "luna_team dry-run exit 0"        ($LASTEXITCODE -eq 0)
+Ok "lane board written"             (Test-Path (Join-Path $codePath '.luna\lanes\a.md'))
+Ok "lane start script written"      (Test-Path (Join-Path $codePath '.luna\lanes\a.start.ps1'))
+$le=$null;$lt=$null;[void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $codePath '.luna\lanes\a.start.ps1'),[ref]$lt,[ref]$le)
+Ok "lane start script parses"       ($le.Count -eq 0)
+
 Write-Host "== 6. check_pointers DETECTS a broken pointer (negative test) =="
 Remove-Item $codePath -Recurse -Force
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $tmp | Out-Null

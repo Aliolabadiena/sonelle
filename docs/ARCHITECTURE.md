@@ -37,6 +37,14 @@ already did the routing. The engine root `CLAUDE.md` is the dispatcher for a hum
 directly inside the luna folder. If `-Hub` points at a workspace that has its OWN `CLAUDE.md`, that file
 governs its sessions - luna's routing only reads `PROJECTS.md` and does not merge hub-level dispatchers.
 
+## Multi-instance (lanes)
+`bin\luna_team.ps1 <proj> -Lanes a,b,c` runs up to 5 parallel `claude` sessions on one project, each a
+LANE scoped to a disjoint workstream (e.g. bugs / concepts / website). They do NOT share live memory -
+they coordinate via a shared board at `<code>\.luna\lanes\` (one status file per lane) + DISJOINT file
+ownership (critical when the project has no git merge safety). Windows Terminal tabs if `wt` is
+installed, else separate PowerShell windows. `:team` / `:status` in the terminal wrap it. Hard cap 5;
+>3 warns about rate limits (N lanes ~= Nx subscription usage).
+
 ## Billing
 The terminal hands prompts to `claude` (Claude Code), which runs on your Claude Pro/Max
 subscription — no API key for personal use. (Shipping this as a product to *other* users

@@ -60,6 +60,8 @@ function ShowHelp {
   Write-Host ("    {0}:projects{1}            list registered projects" -f $cream, $R)
   Write-Host ("    {0}:new{1}                 scaffold a new project" -f $cream, $R)
   Write-Host ("    {0}:heal [short]{1}        run the doctor (health/heal detector)" -f $cream, $R)
+  Write-Host ("    {0}:team <proj> <lanes>{1} launch up to 5 parallel lanes (e.g. :team myproj bugs,docs)" -f $cream, $R)
+  Write-Host ("    {0}:status <proj>{1}       show each lane's status" -f $cream, $R)
   Write-Host ("    {0}:attach <path>{1}       stage an image for the next prompt (or inline {0}@<path>{1})" -f $cream, $R)
   Write-Host ("    {0}:clear{1}               clear staged images" -f $cream, $R)
   Write-Host ("    {0}:help{1}  {0}:q{1}            this help / quit" -f $cream, $R)
@@ -89,6 +91,17 @@ function Heal($short) {
   if ($short) { $dargs += $short }
   $dargs += @('-Hub', $hub)
   & $psExe @dargs | Out-Host
+}
+function Team($rest) {
+  $rest = $rest.Trim(); $sp = $rest.IndexOf(' ')
+  if ($sp -lt 1) { Write-Host ("  {0}usage: :team <project> <lane1,lane2,...>{1}" -f $dim, $R); return }
+  $pj = $rest.Substring(0, $sp)
+  $ln = ($rest.Substring($sp + 1).Trim()) -replace '\s+', ','
+  & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'bin\luna_team.ps1') $pj -Lanes $ln -Hub $hub | Out-Host
+}
+function StatusLanes($pj) {
+  if (-not $pj) { Write-Host ("  {0}usage: :status <project>{1}" -f $dim, $R); return }
+  & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'bin\luna_team.ps1') $pj -Status -Hub $hub | Out-Host
 }
 function Route($short, $prompt, $images) {
   $code = ResolveCode $short
@@ -132,6 +145,8 @@ while ($true) {
   elseif ($t -eq ':projects') { ShowProjects; continue }
   elseif ($t -eq ':new') { NewProject; continue }
   elseif ($t -match '^:heal\s*(.*)$') { Heal ($Matches[1].Trim()); continue }
+  elseif ($t -match '^:team\s+(.+)$') { Team $Matches[1]; continue }
+  elseif ($t -match '^:status\s*(.*)$') { StatusLanes ($Matches[1].Trim()); continue }
   elseif ($t -match '^:attach\s+(.+)$') {
     $ip = $Matches[1].Trim().Trim('"')
     if (Test-Path $ip) { $script:staged += (Resolve-Path $ip).Path; Write-Host ("  {0}staged ({1} total): {2}{3}" -f $dim, $script:staged.Count, $ip, $R) }

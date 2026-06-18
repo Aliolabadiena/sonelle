@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.4 — 2026-06-18 (icon + launcher + multi-instance)
+- ICON (concept #47, moon phases, charcoal/lime): vector source `assets/icon/luna.svg` + Pillow
+  generator `assets/icon/make_icon.py` -> multi-size `luna.ico` (16-256) + `luna.png`. Re-themeable
+  (edit colors, re-run). Phases drawn a touch bolder than the picker preview for taskbar legibility.
+- LAUNCHER: `bin/make_launcher.ps1` creates a pinnable `luna.lnk` (Desktop + Start Menu) carrying the
+  icon, opening the luna terminal from ANYWHERE. Target = Windows Terminal if installed, else powershell.exe.
+- MULTI-INSTANCE: `bin/luna_team.ps1` runs up to 5 parallel "lanes" on one project - each a `claude`
+  session scoped to a DISJOINT workstream, coordinating via a shared board `<code>/.luna/lanes/` +
+  disjoint ownership (NOT shared live memory). WT tabs if `wt`, else separate windows. Added `:team
+  <proj> <lanes>` and `:status <proj>` to the terminal. Cap 5; warns at >3 (rate limits); rejects
+  duplicate/bad lane names; `-DryRun` writes the board + start scripts without launching.
+- selftest now covers the new scripts (parse/ASCII) + a luna_team dry-run (board + start script + parse).
+- NOTE: launcher + lane launching fire in real sessions (structurally verified here). `wt` is not
+  installed on this machine -> they use PowerShell windows; install Windows Terminal for tabs.
+
 ## v1.3 — 2026-06-18 (enforcement hooks)
 - **Heal + self-improve are now ENFORCED, not just ritual.** Added Claude Code hooks in
   `.claude/settings.json`: a **SessionStart** hook (recall reminder -> context) and a **Stop** hook
