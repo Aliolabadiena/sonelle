@@ -1,6 +1,6 @@
 <#
   statusline.ps1 - luna usage status line. Reads Claude Code's statusLine JSON from stdin and prints a
-  one-line indicator: model+effort | 5h% | 7d% | ctx% | $cost. Colour by load (green/amber/red).
+  one-line indicator: model+effort | 5h% | 7d% | ctx%. Colour by load (green/amber/red).
   Wire in settings.json:
     "statusLine": { "type": "command", "command": "powershell -NoProfile -File C:/Users/you/Desktop/luna/tools/statusline.ps1", "refreshInterval": 10 }
   NOTE: 5h%/7d% appear only for Pro/Max subscribers and only after the first API response in a session.
@@ -28,9 +28,6 @@ if ($null -ne $j.rate_limits.seven_day.used_percentage) {
 }
 if ($null -ne $j.context_window.used_percentage) {
   $parts += "$dim" + ('ctx ' + [math]::Round([double]$j.context_window.used_percentage) + '%') + $R
-}
-if ($null -ne $j.cost.total_cost_usd) {
-  $parts += "$dim" + ('$' + ('{0:N2}' -f [double]$j.cost.total_cost_usd)) + $R
 }
 
 Write-Output (($parts) -join "$dim | $R")

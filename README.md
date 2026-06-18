@@ -47,7 +47,7 @@ The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max
 | `tools\doctor.ps1` | health check / heal detector for a project |
 | `tools\log_lesson.ps1` | capture a lesson into memory (self-improve) |
 | `tools\selftest.ps1` | end-to-end self-test (dogfoods scaffold/heal into a temp hub) |
-| `tools\statusline.ps1` | usage status line: 5h/7d rate-limit %, context %, session $cost |
+| `tools\statusline.ps1` | usage status line: 5h/7d rate-limit %, context % |
 | `luna.check.ps1` | the engine's own health check (runs the self-test) |
 | `bin\make_launcher.ps1` | create a pinnable taskbar shortcut (`luna.lnk`) with the icon |
 | `bin\luna_team.ps1` | run up to 5 parallel lanes on one project (multi-instance) |
