@@ -74,7 +74,9 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   (`mountWebgl` in `app.js`), NOT the default DOM renderer: over the transparent glass the DOM renderer
   ghosts/flickers and mashes glyphs, WebGL clears each cell on the GPU (falls back to DOM if no GL context).
   Font is Cascadia Mono first (ligatures overlap in the cell grid); resize fits are debounced (`scheduleFit`).
-  The launcher `bin\sonelle_gui.ps1` owns venv+deps; `.venv\` is gitignored.
+  The scrollbar gets its own lane via a right gutter on `.pane .xterm` (FitAddon drops the columns it covers)
+  so it rides the box edge, not the text. Tabs are labelled with random women's names from `app\ui\names.js`
+  (`pickName` in `app.js`), not `sonelle N`. The launcher `bin\sonelle_gui.ps1` owns venv+deps; `.venv\` is gitignored.
   The window brands itself `sonelle.ico` (`icon=` on `webview.start()` sets `Form.Icon`; the TASKBAR
   also needs `SetCurrentProcessExplicitAppUserModelID` at startup, else the button groups under
   `pythonw.exe` and shows its Python feather); it drags from the title bar via pywebview's

@@ -80,7 +80,13 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   cell never paints over the glyph beneath it); WebGL clears every cell each frame, so text stays crisp.
   It falls back to the DOM renderer if a GL context can't be created. The font is **Cascadia Mono** first
   (no ligatures - a ligature font overlaps glyphs in xterm's one-glyph-per-cell grid), and resize fits are
-  debounced (`scheduleFit`, one per frame) so window drags don't churn the terminal.
+  debounced (`scheduleFit`, one per frame) so window drags don't churn the terminal. The pane pulls its
+  RIGHT padding in and gives the xterm grid a right gutter (`.pane .xterm{ padding-right }`) so the
+  scrollbar rides the box edge in its own lane instead of overlapping the last column of glyphs (FitAddon
+  subtracts that element padding when it computes columns).
+- **Tab names:** each terminal tab is labelled with a random woman's name (Megan, Sakura, Sidney...) from
+  the pool in `app\ui\names.js` (a few hundred, ASCII), not `sonelle 1 / sonelle 2`. `pickName()` in
+  `app.js` prefers a name not already on an open tab; a project-named tab keeps the project name.
 - **Contract:** JS->Python via `window.pywebview.api.{new_tab, send_input, resize, close_tab, list_projects,
   save_paste_image, win_minimize, win_toggle_max, win_close}`; Python->JS via fire-and-forget `run_js` calling
   `window.__ptyOutput(tabId, base64Bytes)` / `window.__ptyExit(tabId, code)`. `tabId` is Python-owned.

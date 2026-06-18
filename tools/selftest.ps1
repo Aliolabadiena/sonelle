@@ -146,6 +146,7 @@ $appDir = Join-Path $engine 'app'
 $guiPy  = Join-Path $appDir 'sonelle_gui.py'
 foreach ($rel in @(
   'app\sonelle_gui.py', 'app\requirements.txt', 'app\ui\index.html', 'app\ui\app.js', 'app\ui\app.css',
+  'app\ui\names.js',
   'app\ui\vendor\xterm.js', 'app\ui\vendor\xterm.css', 'app\ui\vendor\addon-fit.js', 'app\ui\vendor\addon-webgl.js',
   'bin\sonelle_gui.ps1', 'assets\icon\sonelle.ico')) {
   Ok ("exists: " + $rel) (Test-Path (Join-Path $engine $rel))
@@ -165,11 +166,18 @@ Ok "frontend has output sink + ready gate" (($srcJs -match 'window\.__ptyOutput'
 Ok "frontend uses FitAddon.FitAddon"  ($srcJs -match 'new FitAddon\.FitAddon\(\)')
 Ok "frontend mounts the WebGL renderer" (($srcJs -match 'WebglAddon\.WebglAddon') -and ($srcJs -match 'function mountWebgl'))
 Ok "frontend debounces resize fits"   ($srcJs -match 'function scheduleFit')
+Ok "frontend names tabs from the pool" (($srcJs -match 'function pickName') -and ($srcJs -match 'SONELLE_NAMES') -and (-not ($srcJs -match '"sonelle " \+')))
 Ok "frontend pastes images via save_paste_image" (($srcJs -match 'save_paste_image') -and ($srcJs -match '"paste"'))
 Ok "frontend guards titlebar drag"    ($srcJs -match "closest\(`"\.nodrag`"\)")
+$srcNames = Get-Content (Join-Path $appDir 'ui\names.js') -Raw
+$nameCount = ([regex]::Matches($srcNames, '"[A-Za-z]+"')).Count
+Ok "names pool is sizable (>=200)"    (($srcNames -match 'window\.SONELLE_NAMES') -and ($nameCount -ge 200))
+$srcCss = Get-Content (Join-Path $appDir 'ui\app.css') -Raw
+Ok "css gives the terminal a scrollbar gutter" (($srcCss -match '\.pane \.xterm\{ padding-right') -and ($srcCss -match 'xterm-viewport::-webkit-scrollbar'))
 $srcHtml = Get-Content (Join-Path $appDir 'ui\index.html') -Raw
 Ok "index loads vendored xterm + app.js" (($srcHtml -match 'vendor/xterm\.js') -and ($srcHtml -match 'app\.js'))
 Ok "index loads the WebGL addon"      ($srcHtml -match 'vendor/addon-webgl\.js')
+Ok "index loads the tab-name pool"    ($srcHtml -match 'names\.js')
 Ok "titlebar is a pywebview drag region" ($srcHtml -match 'pywebview-drag-region')
 $srcGuiPs = Get-Content (Join-Path $engine 'bin\sonelle_gui.ps1') -Raw
 Ok "launcher installs deps + runs pythonw" (($srcGuiPs -match 'requirements\.txt') -and ($srcGuiPs -match 'pythonw'))

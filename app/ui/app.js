@@ -87,6 +87,22 @@
     if (t.tabEl) t.tabEl.classList.add("dead");
   };
 
+  // ---------- tab naming ----------
+  // Each tab reads like a person (Megan, Sakura, Sidney...) from the big pool in names.js, instead of
+  // "sonelle 1 / sonelle 2". Prefer a name not already on an open tab; fall back to any (or "sonelle"
+  // if the pool is somehow empty) so a tab always gets a label.
+  function pickName() {
+    const pool = (window.SONELLE_NAMES && window.SONELLE_NAMES.length) ? window.SONELLE_NAMES : null;
+    if (!pool) return "sonelle";
+    const used = new Set();
+    for (const [, e] of TABS) { if (e && e.name) used.add(e.name); }
+    for (let i = 0; i < 16; i++) {
+      const n = pool[Math.floor(Math.random() * pool.length)];
+      if (!used.has(n)) return n;
+    }
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
   // ---------- tab pills ----------
   function makeTabEl(tabId, label) {
     const el = document.createElement("div");
@@ -186,7 +202,8 @@
     }
     const tabId = res.tabId;
     tabCount++;
-    entry.tabEl = makeTabEl(tabId, project || ("sonelle " + tabCount));
+    entry.name = project || pickName();   // a project keeps its name; otherwise a random woman's name
+    entry.tabEl = makeTabEl(tabId, entry.name);
     TABS.set(tabId, entry);
     const q = PENDING.get(tabId);
     if (q) { q.forEach((b) => entry.term.write(b)); PENDING.delete(tabId); }
@@ -305,7 +322,8 @@
     const entry = buildPane();
     for (const [, e] of TABS) e.pane.style.display = "none";
     const did = "demo" + (++tabCount);
-    entry.tabEl = makeTabEl(did, "sonelle " + tabCount);
+    entry.name = pickName();
+    entry.tabEl = makeTabEl(did, entry.name);
     TABS.set(did, entry);
     entry.ro = new ResizeObserver(() => scheduleFit(entry));
     entry.ro.observe(entry.pane);

@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.21 — 2026-06-19 (glass app: scrollbar off the text, human tab names)
+- **Scrollbar no longer overlaps the terminal.** It used to ride the right inner edge of the xterm grid,
+  painting over the last column of glyphs. The pane now pulls its right padding in and gives the terminal
+  its own right gutter (`.pane .xterm{ padding-right }`) - FitAddon subtracts that padding when it sizes
+  the columns, so the text stops short and the scrollbar sits in a clean lane at the box edge.
+- **Tabs read like people, not `sonelle 1 / sonelle 2`.** Each tab is now labelled with a random woman's
+  name (Megan, Sakura, Sidney...) drawn from a few-hundred-strong, culturally diverse pool in
+  `app\ui\names.js`. `pickName()` avoids names already on an open tab; a project-named tab keeps its
+  project name. selftest 8e checks the pool, the picker, the gutter CSS, and the new script include.
+
 ## v1.20 — 2026-06-18 (glass app: crisp WebGL terminal + a yolo switch to skip permission prompts)
 - **No more flicker / mashed-together text.** The glass terminal rendered with xterm.js's default DOM
   renderer over a *transparent* background, where a "space" cell never paints over the glyph beneath it -
