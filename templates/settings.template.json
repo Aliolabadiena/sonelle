@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "matcher": "startup|resume", "hooks": [
+        { "type": "command", "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/session_start.ps1" }
+      ] }
+    ],
+    "Stop": [
+      { "matcher": "*", "hooks": [
+        { "type": "command", "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/stop.ps1" }
+      ] }
+    ]
+  }
+}

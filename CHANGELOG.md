@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.3 — 2026-06-18 (enforcement hooks)
+- **Heal + self-improve are now ENFORCED, not just ritual.** Added Claude Code hooks in
+  `.claude/settings.json`: a **SessionStart** hook (recall reminder -> context) and a **Stop** hook
+  (auto-runs the project's `luna.check.ps1` + a "capture a lesson" reminder). Hooks ship in the engine
+  and are scaffolded into every new project (`.claude/hooks/{session_start,stop}.ps1` + `settings.json`).
+- `new_project` now also writes a starter `luna.check.ps1` into each project (so the Stop hook + doctor
+  have a real health surface to run).
+- selftest verifies hook scripts parse + are ASCII, both `settings.json` files are valid JSON, and a
+  scaffolded project gets `.claude/settings.json` + hooks + `luna.check.ps1`.
+- NOTE: hooks are structurally verified (parse / JSON / scaffold) but fire only inside real Claude Code
+  sessions - not triggered in this build session. Conservative by design (always exit 0, Test-Path guards).
+
 ## v1.2 — 2026-06-18 (skeptical-audit fixes)
 - **SECURITY:** `.gitignore` had trailing inline comments (git treats `pattern  # x` as a literal
   filename), so `luna.config.json` / `memory/` / `*_TODO.txt` were NOT ignored - a `git add -A`

@@ -29,6 +29,11 @@ the sources first.
   feedback, fixes, dead-ends) into `memory/` so the next session recalls it. Recall relevant
   memory BEFORE starting. Quick capture: `tools\log_lesson.ps1`. Full loop: `docs\SELF_IMPROVE.md`.
 
+## Enforcement (hooks)
+`.claude/settings.json` wires a **SessionStart** hook (recall reminder) and a **Stop** hook (auto-runs
+the project's `luna.check.ps1` + a capture reminder) so the heal/self-improve loop runs via the harness,
+not just goodwill. Ships in the engine and is scaffolded into every new project by `new_project.ps1`.
+
 ## End-of-task ritual (mandatory, every task)
 1. Update the project's **TODO** ([x] + short note) and **ledger** (what was done, new gotchas,
    and exact RESUME instructions if unfinished).

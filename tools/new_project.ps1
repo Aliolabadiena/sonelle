@@ -65,6 +65,17 @@ Write-Utf8 $statusFile (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'run
 Write-Utf8 $claudeFile (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'CLAUDE.template.md'))));       Write-Host "[+] $claudeFile"
 Write-Utf8 $memFile    (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'project_memory.template.md')))); Write-Host "[+] $memFile"
 
+# project hooks (Stop -> heal/check + lesson reminder; SessionStart -> recall) + a starter health check
+$hooksDir = Join-Path $Path '.claude\hooks'
+if (-not (Test-Path $hooksDir)) { New-Item -ItemType Directory -Path $hooksDir -Force | Out-Null }
+Copy-Item (Join-Path $tpl 'settings.template.json')   (Join-Path $Path '.claude\settings.json')   -Force
+Copy-Item (Join-Path $tpl 'hooks\session_start.ps1')  (Join-Path $hooksDir 'session_start.ps1')   -Force
+Copy-Item (Join-Path $tpl 'hooks\stop.ps1')           (Join-Path $hooksDir 'stop.ps1')            -Force
+Write-Host "[+] $Path\.claude\settings.json (+ hooks)"
+$check = Join-Path $Path 'luna.check.ps1'
+Write-Utf8 $check "# luna.check.ps1 - health check for $Name. Put REAL checks here (tests/build/lint).`n# Exit 0 = healthy, non-zero = doctor / Stop-hook flags it. Replace the placeholder below.`nWrite-Output '[$Short] TODO: add real health checks to luna.check.ps1 (placeholder).'`nexit 0`n"
+Write-Host "[+] $check (starter)"
+
 # memory index line (clean append)
 $idxLine = "- [$Name ($Short)](project_$Short.md) - new project ($date); state {{U}}_TODO.txt + ledger".Replace('{{U}}', $shortUpper)
 $exIdx = ([System.IO.File]::ReadAllText($memIndex) -replace "`r`n", "`n").TrimEnd("`n")

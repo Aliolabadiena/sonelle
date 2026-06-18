@@ -22,12 +22,13 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
 
 ## The three capabilities (honest about what's mechanism vs discipline)
 - **Scaffold** (real mechanism) — new projects in one command, consistently structured (`tools\new_project.ps1`).
-- **Heal** (detector + guided fix) — `tools\doctor.ps1` DETECTS problems (broken pointers, a failing
-  per-project `luna.check.ps1`); the diagnose->fix->verify loop is Claude-driven, not automatic
-  (see `docs\HEAL.md`). With no `luna.check.ps1`, a project's health check is just "code path exists".
-- **Self-improve** (capture tool + discipline) — `tools\log_lesson.ps1` writes lessons to `memory/`;
-  recall-before / reflect-after is a ritual a session follows, **not enforced by the engine** yet
-  (see `docs\SELF_IMPROVE.md`).
+- **Heal** (detector + guided fix) — `tools\doctor.ps1` DETECTS problems; the diagnose->fix->verify
+  loop is Claude-driven. A **Stop hook** (`.claude/settings.json`) auto-runs each project's
+  `luna.check.ps1` after every task. With no `luna.check.ps1` it's just "code path exists" (`docs\HEAL.md`).
+- **Self-improve** (capture + hook-enforced loop) — `tools\log_lesson.ps1` writes lessons to `memory/`;
+  a **SessionStart hook** reminds to recall before, a **Stop hook** reminds to capture after — so the
+  loop is enforced by the harness, not just discipline (`docs\SELF_IMPROVE.md`). Hooks ship in
+  `.claude/` and are scaffolded into every new project.
 
 ## Runs on your Claude subscription
 The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max plan —

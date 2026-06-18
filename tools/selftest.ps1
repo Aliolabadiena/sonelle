@@ -23,6 +23,10 @@ Get-ChildItem $engine -Recurse -Filter *.ps1 | ForEach-Object {
   Ok ("parse " + $_.Name) ($e.Count -eq 0)
   Ok ("ascii " + $_.Name) ($na -eq 0)
 }
+foreach ($jf in @((Join-Path $engine '.claude\settings.json'), (Join-Path $engine 'templates\settings.template.json'))) {
+  $okj = $true; try { [void](Get-Content $jf -Raw | ConvertFrom-Json) } catch { $okj = $false }
+  Ok ("valid JSON: " + (Split-Path $jf -Leaf)) $okj
+}
 
 Write-Host "== 2. scaffold into a temp hub =="
 $tmp = Join-Path $env:TEMP 'luna_selftest'
@@ -40,6 +44,11 @@ Ok "memory file created"           (Test-Path (Join-Path $tmp 'memory\project_st
 Ok "registry row present"          ((Get-Content (Join-Path $tmp 'PROJECTS.md') -Raw) -match '(?m)^\|\s*st\s*\|')
 $ph = (Select-String -Path (Join-Path $tmp 'ST_TODO.txt'), (Join-Path $codePath 'CLAUDE.md'), (Join-Path $tmp 'memory\project_st.md') -Pattern '\{\{' -ErrorAction SilentlyContinue).Count
 Ok "no unfilled placeholders"      ($ph -eq 0)
+Ok "project .claude/settings.json created" (Test-Path (Join-Path $codePath '.claude\settings.json'))
+Ok "project Stop+SessionStart hooks created" ((Test-Path (Join-Path $codePath '.claude\hooks\stop.ps1')) -and (Test-Path (Join-Path $codePath '.claude\hooks\session_start.ps1')))
+Ok "project luna.check.ps1 created" (Test-Path (Join-Path $codePath 'luna.check.ps1'))
+$vj = $true; try { [void](Get-Content (Join-Path $codePath '.claude\settings.json') -Raw | ConvertFrom-Json) } catch { $vj = $false }
+Ok "project settings.json is valid JSON" $vj
 
 Write-Host "== 3. check_pointers on temp hub =="
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $tmp | Out-Null
