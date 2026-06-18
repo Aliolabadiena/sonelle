@@ -21,14 +21,15 @@ param(
 $ErrorActionPreference = 'Stop'
 $engine = Split-Path $PSScriptRoot -Parent
 $hub = if ($Hub) { $Hub } else { $engine }
-$laneModel = 'opus'; $laneEffort = 'high'   # worker defaults; per-lane override via name=model:effort
+$laneModel = 'opus'; $laneEffort = 'high'; $lanePerm = 'acceptEdits'   # worker defaults; per-lane override via name=model:effort
 $cfg = Join-Path $engine 'luna.config.json'
 if (Test-Path $cfg) {
   try {
     $c = Get-Content $cfg -Raw | ConvertFrom-Json
     if (-not $Hub -and $c.hub -and $c.hub -ne '.') { $hub = if ([System.IO.Path]::IsPathRooted($c.hub)) { $c.hub } else { Join-Path $engine $c.hub } }
-    if ($c.models.laneDefault) { $laneModel = $c.models.laneDefault }
-    if ($c.models.laneEffort)  { $laneEffort = $c.models.laneEffort }
+    if ($c.models.laneDefault)        { $laneModel = $c.models.laneDefault }
+    if ($c.models.laneEffort)         { $laneEffort = $c.models.laneEffort }
+    if ($c.models.lanePermissionMode) { $lanePerm = $c.models.lanePermissionMode }
   } catch {}
 }
 . (Join-Path $engine 'tools\_registry.ps1')
@@ -81,7 +82,7 @@ foreach ($s in $specs) {
   Wr $statusFile "# lane: $l ($Project)`r`nmodel: $($s.Model) (effort $($s.Effort))`r`nstarted: $date`r`nstatus: active`r`nowns: (declare files/dirs this lane edits)`r`nother lanes - DO NOT touch their files: $others`r`n`r`n## log`r`n- $date started`r`n"
   $seed = "You are luna lane '$l' for project '$Project'. You own ONLY the '$l' workstream. The other lanes are: $others - read .luna/lanes/ and DO NOT edit their files (keep ownership disjoint; this project may have no git merge safety). Update .luna/lanes/$l.md as you work. Tell me this lane's task and I will work only within it."
   $startPs = Join-Path $lanesDir ($l + '.start.ps1')
-  Wr $startPs "Set-Location -LiteralPath '$code'`r`nclaude --model $($s.Model) --effort $($s.Effort) @'`r`n$seed`r`n'@`r`n"
+  Wr $startPs "Set-Location -LiteralPath '$code'`r`nclaude --model $($s.Model) --effort $($s.Effort) --permission-mode $lanePerm @'`r`n$seed`r`n'@`r`n"
   $wtTabs += 'new-tab --title "luna:' + $Project + ':' + $l + '" -d "' + $code + '" powershell -NoExit -ExecutionPolicy Bypass -File "' + $startPs + '"'
   Write-Host ("[+] lane '{0}' ({1}/{2}) -> .luna\lanes\{0}.md (+ start script)" -f $l, $s.Model, $s.Effort)
 }

@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.6 — 2026-06-18 (permissions: no-ask deploy + autonomous lanes)
+- Lanes take a permission mode: `luna_team` start scripts add `--permission-mode <mode>` (config
+  `models.lanePermissionMode`, engine default `acceptEdits`). Set `bypassPermissions` in luna.config.json
+  for fully-autonomous workers (never prompt).
+- Orchestrator optional `models.orchestratorPermissionMode` (default unset -> inherits your global default).
+- (User-side, not in repo) allow-rules in `~/.claude/settings.json`: `Bash(ssh *)` / `Bash(scp *)` /
+  `Bash(git push*)` so VPS deploy + push never prompt; `skipDangerousModePermissionPrompt` so bypass mode
+  isn't gated by the danger dialog.
+- MCP NOTE: Supabase/Canva/Drive/Calendar/Gmail are claude.ai ACCOUNT connectors (not project-scoped),
+  so every luna session inherits them already - nothing to move. Chrome = a browser extension that
+  attaches per-session (a luna session is attachable).
+- selftest asserts lane start scripts carry `--permission-mode`.
+
 ## v1.5 — 2026-06-18 (model + effort policy)
 - ORCHESTRATOR is ALWAYS max: the terminal session you talk to launches `claude` with
   `--model opus --effort xhigh` (a strong boss orchestrates the workers well). Overridable via

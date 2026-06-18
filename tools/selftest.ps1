@@ -70,6 +70,7 @@ Ok "lane start script written"      (Test-Path (Join-Path $codePath '.luna\lanes
 $le=$null;$lt=$null;[void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $codePath '.luna\lanes\a.start.ps1'),[ref]$lt,[ref]$le)
 Ok "lane start script parses"       ($le.Count -eq 0)
 Ok "lane per-model in start script" ((Get-Content (Join-Path $codePath '.luna\lanes\a.start.ps1') -Raw) -match '--model haiku')
+Ok "lane permission-mode in start script" ((Get-Content (Join-Path $codePath '.luna\lanes\a.start.ps1') -Raw) -match '--permission-mode')
 
 Write-Host "== 6. check_pointers DETECTS a broken pointer (negative test) =="
 Remove-Item $codePath -Recurse -Force

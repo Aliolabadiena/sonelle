@@ -1,10 +1,11 @@
 {
-  "_comment": "Copy to luna.config.json (gitignored). 'hub' = your workspace path (default '.' = the luna folder). 'models' = model policy. The ORCHESTRATOR (the session you talk to via the terminal) is ALWAYS your max model + effort - a strong boss orchestrates the workers well. LANES (workers) default to laneDefault and can be overridden per lane (e.g. :team proj bugs=opus,triage=haiku). Models: haiku | sonnet | opus | claude-fable-5. Effort: low | medium | high | xhigh.",
+  "_comment": "Copy to luna.config.json (gitignored). 'hub' = your workspace path (default '.' = the luna folder; point it at your real registry to route those projects). 'models': the ORCHESTRATOR (the session you talk to) is ALWAYS your max model+effort. LANES (workers) default to laneDefault/laneEffort and a permission mode; per-lane override via :team proj bugs=opus,triage=haiku:medium. Models: haiku | sonnet | opus | claude-fable-5. Effort: low | medium | high | xhigh. Permission mode: default | acceptEdits | bypassPermissions | plan (lanePermissionMode for workers; optional orchestratorPermissionMode for the boss - unset = inherit your global default).",
   "hub": ".",
   "models": {
     "orchestrator": "opus",
     "orchestratorEffort": "xhigh",
     "laneDefault": "opus",
-    "laneEffort": "high"
+    "laneEffort": "high",
+    "lanePermissionMode": "acceptEdits"
   }
 }
