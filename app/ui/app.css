@@ -1,0 +1,197 @@
+/* sonelle liquid-glass UI - muted dark purple/black, easy on the eyes.
+   WebView2 can't be transparent, so the "glass" is self-contained: a full-bleed
+   page gradient (the scene) + translucent panels with backdrop-filter over it. */
+
+:root{
+  --bg0:#0d0a14;          /* near-black */
+  --bg1:#150f22;
+  --bg2:#1b1330;          /* deep muted purple */
+  --txt:#d7d0e6;          /* soft lavender-white, not pure white */
+  --dim:#8b85a0;
+  --faint:#6f6a85;
+  --accent:#9a86c4;       /* desaturated lilac - NOT neon */
+  --accent-soft:rgba(154,134,196,.16);
+  --hair:rgba(170,150,210,.14);
+  --hair-strong:rgba(180,160,220,.26);
+  --pane-radius:16px;
+  --font:"Cascadia Code","Cascadia Mono",Consolas,"Courier New",monospace;
+}
+
+*{ box-sizing:border-box; }
+html,body{ height:100%; margin:0; }
+body{
+  color:var(--txt);
+  font-family:var(--font);
+  overflow:hidden;
+  background:
+    radial-gradient(70% 55% at 22% 8%, rgba(108,78,168,.34), transparent 60%),
+    radial-gradient(60% 50% at 92% 4%, rgba(78,54,124,.30), transparent 62%),
+    radial-gradient(75% 65% at 78% 102%, rgba(64,44,104,.26), transparent 60%),
+    linear-gradient(165deg, var(--bg1), var(--bg0));
+  user-select:none;
+}
+
+#app{ position:relative; display:flex; flex-direction:column; height:100vh; padding:8px; gap:8px; }
+
+/* ---------- glass primitive ---------- */
+.glass{
+  background:linear-gradient(160deg, rgba(42,30,66,.40), rgba(18,12,32,.32));
+  backdrop-filter:blur(20px) saturate(125%);
+  -webkit-backdrop-filter:blur(20px) saturate(125%);
+  border:1px solid var(--hair);
+  box-shadow:0 10px 40px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+/* ---------- title bar ---------- */
+#titlebar{
+  -webkit-app-region:drag;
+  display:flex; align-items:center; gap:10px;
+  height:44px; padding:0 8px 0 14px;
+  border-radius:14px;
+  background:linear-gradient(160deg, rgba(40,28,64,.46), rgba(16,11,28,.36));
+  backdrop-filter:blur(20px) saturate(125%);
+  -webkit-backdrop-filter:blur(20px) saturate(125%);
+  border:1px solid var(--hair);
+  box-shadow:0 8px 30px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.05);
+  flex:0 0 auto;
+}
+.nodrag{ -webkit-app-region:no-drag; }
+/* -webkit-app-region is NOT inherited - opt every interactive titlebar child out of drag explicitly */
+#titlebar button, #titlebar .tab, #titlebar .tab .x { -webkit-app-region:no-drag; }
+
+.brand{ display:flex; align-items:center; gap:9px; padding-right:6px; }
+.brand .mark{
+  width:18px; height:18px; border-radius:6px;
+  background:linear-gradient(135deg, var(--accent), #c7b3e6);
+  box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 2px 8px rgba(120,90,180,.35);
+}
+.brand .word{ font-size:14px; font-weight:500; color:#efe9f8; letter-spacing:.2px; }
+
+.tabs{ display:flex; align-items:center; gap:6px; overflow-x:auto; overflow-y:hidden; flex:0 1 auto; scrollbar-width:none; }
+.tabs::-webkit-scrollbar{ display:none; }
+.tab{
+  flex:0 0 auto;                 /* never crush tabs to unclickable slivers */
+  display:flex; align-items:center; gap:8px;
+  height:30px; max-width:170px; padding:0 8px 0 12px;
+  border-radius:10px; cursor:default; color:var(--dim);
+  border:1px solid transparent; transition:background .12s, color .12s, border-color .12s;
+}
+.tab:hover{ background:rgba(255,255,255,.04); color:var(--txt); }
+.tab.active{ color:#f1ecf9; background:var(--accent-soft); border-color:var(--hair-strong); }
+.tab .label{ font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tab.dead .label{ color:var(--faint); text-decoration:line-through; }
+.tab .x{
+  display:flex; align-items:center; justify-content:center;
+  width:16px; height:16px; border-radius:5px; color:var(--faint); font-size:13px; line-height:1;
+}
+.tab .x:hover{ background:rgba(255,255,255,.08); color:var(--txt); }
+
+.spacer{ flex:1 1 auto; }
+
+.iconbtn{
+  display:flex; align-items:center; justify-content:center;
+  width:28px; height:28px; border-radius:9px; cursor:default;
+  background:transparent; color:var(--accent); border:1px solid var(--hair);
+  font-family:var(--font); font-size:18px; line-height:1; padding:0;
+}
+.iconbtn:hover{ background:var(--accent-soft); color:#efe9f8; }
+
+.wctrls{ display:flex; align-items:center; gap:4px; margin-left:4px; }
+.wbtn{
+  display:flex; align-items:center; justify-content:center;
+  width:30px; height:30px; border:0; border-radius:9px; background:transparent; cursor:default;
+}
+.wbtn:hover{ background:rgba(255,255,255,.07); }
+.wbtn.close:hover{ background:rgba(196,86,110,.55); }
+/* CSS-drawn window glyphs (crisp, no font dependency) */
+.g-min{ width:10px; height:0; border-top:1.5px solid var(--dim); }
+.g-max{ width:9px; height:9px; border:1.5px solid var(--dim); border-radius:2px; }
+.g-close{ position:relative; width:11px; height:11px; }
+.g-close::before,.g-close::after{
+  content:""; position:absolute; top:50%; left:0; width:100%; height:1.5px;
+  background:var(--dim); border-radius:1px;
+}
+.g-close::before{ transform:rotate(45deg); }
+.g-close::after{ transform:rotate(-45deg); }
+.wbtn:hover .g-min,.wbtn:hover .g-max{ border-color:var(--txt); }
+.wbtn:hover .g-close::before,.wbtn:hover .g-close::after{ background:#fff; }
+
+/* ---------- terminal stack ---------- */
+#stack{ position:relative; flex:1 1 auto; min-height:0; }
+.pane{
+  position:absolute; inset:0;
+  border-radius:var(--pane-radius);
+  padding:12px 14px;
+  background:linear-gradient(160deg, rgba(34,24,56,.38), rgba(14,10,26,.30));
+  backdrop-filter:blur(16px) saturate(120%);
+  -webkit-backdrop-filter:blur(16px) saturate(120%);
+  border:1px solid var(--hair);
+  box-shadow:0 12px 44px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.04);
+  overflow:hidden;
+}
+/* force xterm's own layers transparent so the glass shows through */
+.pane .xterm,
+.pane .xterm-viewport,
+.pane .xterm-screen{ background:transparent !important; }
+.pane .xterm-viewport::-webkit-scrollbar{ width:9px; }
+.pane .xterm-viewport::-webkit-scrollbar-thumb{ background:rgba(154,134,196,.30); border-radius:6px; }
+.pane .xterm-viewport::-webkit-scrollbar-track{ background:transparent; }
+
+/* ---------- welcome (empty state) ---------- */
+.welcome{
+  position:absolute; left:50%; top:46%; transform:translate(-50%,-50%);
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  padding:30px 42px; border-radius:18px; text-align:center;
+}
+/* the UA [hidden] rule is display:none, but .welcome sets display:flex and wins on
+   specificity - re-assert none when hidden so the empty-state card disappears */
+.welcome[hidden]{ display:none !important; }
+.welcome .w-mark{
+  width:40px; height:40px; border-radius:12px; margin-bottom:4px;
+  background:linear-gradient(135deg, var(--accent), #c7b3e6);
+  box-shadow:0 4px 18px rgba(120,90,180,.4);
+}
+.welcome h1{ margin:0; font-size:20px; font-weight:500; color:#efe9f8; }
+.welcome p{ margin:0; color:var(--dim); font-size:13px; }
+.primary{
+  margin-top:10px; padding:9px 18px; border-radius:11px; cursor:default;
+  color:#0f0b16; background:var(--accent); border:0; font-family:var(--font);
+  font-size:13px; font-weight:500;
+}
+.primary:hover{ background:#ab98d2; }
+
+/* ---------- command bar ---------- */
+#bar{ flex:0 0 auto; display:flex; flex-direction:column; gap:7px; }
+.chips{ display:flex; gap:6px; overflow-x:auto; padding:0 2px; min-height:0; scrollbar-width:none; }
+.chips::-webkit-scrollbar{ display:none; }
+.chip{
+  flex:0 0 auto; padding:5px 11px; border-radius:9px; cursor:default;
+  font-size:12px; color:var(--dim); background:rgba(255,255,255,.03); border:1px solid var(--hair);
+  white-space:nowrap;
+}
+.chip:hover{ color:#efe9f8; background:var(--accent-soft); border-color:var(--hair-strong); }
+
+.cmdbar{
+  display:flex; align-items:center; gap:11px;
+  height:52px; padding:0 8px 0 16px; border-radius:14px;
+}
+.cmdbar .prompt{ width:9px; height:9px; flex:0 0 auto; }
+.cmdbar .prompt::before{
+  content:""; display:block; width:0;height:0;
+  border-left:8px solid var(--accent); border-top:5px solid transparent; border-bottom:5px solid transparent;
+}
+#cmd{
+  flex:1 1 auto; height:100%; border:0; outline:0; background:transparent;
+  color:var(--txt); font-family:var(--font); font-size:14px; user-select:text;
+}
+#cmd::placeholder{ color:var(--faint); }
+.send{
+  flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+  width:38px; height:38px; border:0; border-radius:11px; cursor:default;
+  background:var(--accent); color:#0f0b16;
+}
+.send:hover{ background:#ab98d2; }
+.send .g-send{
+  width:0;height:0;
+  border-bottom:11px solid #0f0b16; border-left:6px solid transparent; border-right:6px solid transparent;
+}

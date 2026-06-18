@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sonelle</title>
+  <link rel="stylesheet" href="vendor/xterm.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <!-- title bar: drag region; every interactive child is .nodrag -->
+    <header id="titlebar">
+      <div class="brand nodrag">
+        <span class="mark" aria-hidden="true"></span>
+        <span class="word">sonelle</span>
+      </div>
+      <div id="tabs" class="tabs nodrag"></div>
+      <button id="btn-new" class="nodrag iconbtn" title="new terminal (Ctrl+T)" aria-label="new terminal">+</button>
+      <div class="spacer"></div>
+      <div class="wctrls nodrag">
+        <button id="btn-min" class="wbtn" title="minimize" aria-label="minimize"><span class="g-min"></span></button>
+        <button id="btn-max" class="wbtn" title="maximize" aria-label="maximize"><span class="g-max"></span></button>
+        <button id="btn-close" class="wbtn close" title="close" aria-label="close"><span class="g-close"></span></button>
+      </div>
+    </header>
+
+    <!-- terminal panes mount here (one per tab; only the active one is shown) -->
+    <main id="stack"></main>
+
+    <!-- shown only when no tabs are open -->
+    <section id="welcome" class="welcome glass" hidden>
+      <div class="w-mark" aria-hidden="true"></div>
+      <h1>sonelle</h1>
+      <p>your projects, one orchestrator</p>
+      <button id="w-open" class="primary nodrag">open a terminal</button>
+    </section>
+
+    <!-- command bar: type a line, it goes to the terminal running behind the scenes -->
+    <footer id="bar">
+      <div id="chips" class="chips" aria-label="projects"></div>
+      <div class="cmdbar glass">
+        <span class="prompt" aria-hidden="true"></span>
+        <input id="cmd" type="text" autocomplete="off" autocapitalize="off"
+               spellcheck="false" placeholder="ask a project, or type :help ...">
+        <button id="send" class="send" title="send" aria-label="send"><span class="g-send"></span></button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="vendor/xterm.js"></script>
+  <script src="vendor/addon-fit.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

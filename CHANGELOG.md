@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.14 — 2026-06-18 (the liquid-glass desktop app: Python front-end, terminal behind the scenes)
+- New `app/`: a frameless Python (pywebview / WebView2) desktop app with a muted dark-purple
+  liquid-glass UI. Each tab is an xterm.js terminal; the real PowerShell (`bin\sonelle.ps1`) runs
+  BEHIND THE SCENES inside a pseudo-terminal (pywinpty) and is rendered by xterm.js - so what you
+  type goes to a hidden shell and the interactive `claude` TUI works in-app. The PowerShell routing
+  brain is reused unchanged; the Python layer is purely front-end + PTY plumbing.
+- `bin\sonelle_gui.ps1`: bootstraps a local `.venv` (pywebview + pywinpty) on first run, then launches
+  the GUI with `pythonw` (no console). `:app` and the taskbar shortcut now open this glass app by
+  default; the classic WinForms host stays available via `:app-classic` and `make_launcher -Classic`
+  (`-Terminal` still makes a single bare console).
+- xterm.js 5.5.0 + @xterm/addon-fit 0.10.0 vendored under `app\ui\vendor\` (MIT, offline). The glass
+  is self-contained (in-app gradient + `backdrop-filter` panels) because WebView2 can't be transparent
+  on Windows - identical on Win10/11. Needs the Evergreen WebView2 runtime (present on Win10/11).
+- selftest section 8e asserts the app files exist, the JS<->Python contract markers are present, the
+  launcher wiring is correct, and `py_compile`s the backend; section 1 now excludes `.venv` from the
+  ASCII gate. `.gitignore` ignores `.venv/` + `__pycache__/`.
+- Engineered from a 4-agent research spec (exact pywebview/pywinpty/xterm integration) and hardened by
+  a multi-agent adversarial review. Verified headlessly: backend PTY streams `sonelle.ps1` end-to-end,
+  the UI renders (browser preview), and a live pywebview window opens/renders/closes cleanly.
+
 ## v1.13 — 2026-06-18 (terminal UI: a calm welcome, Claude Code-style)
 - The terminal no longer dumps all 11 commands on every launch. A new `Welcome` function draws a
   single clean rounded card (brand + tagline, your projects pulled live from `PROJECTS.md`, and one

@@ -104,7 +104,8 @@ function ShowHelp {
     @(":heal [short]",        "health-check / heal a project"),
     @(":team <proj> <lanes>", "run up to 5 parallel lanes on one project"),
     @(":status <proj>",       "show each lane's status"),
-    @(":app",                 "open the app: many terminals, one window"),
+    @(":app",                 "open the liquid-glass app (many terminals, one window)"),
+    @(":app-classic",         "open the classic WinForms app (fallback)"),
     @(":dev [prompt]",        ("improve sonelle itself (or  " + $cream + $script:selfShort + ": ..." + $dim + ")")),
     @(":clear",               "clear staged images"),
     @(":help   :q",           "this help / quit")
@@ -158,9 +159,31 @@ function StatusLanes($pj) {
   & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'bin\sonelle_team.ps1') $pj -Status -Hub $hub | Out-Host
 }
 function AppLaunch {
+  # the liquid-glass Python app (pywebview); the terminal runs inside it via a hidden PTY
+  $gui = Join-Path $root 'bin\sonelle_gui.ps1'
+  if (-not (Test-Path $gui)) { Write-Host ("  {0}[!] app launcher not found: {1}{2}" -f $clay, $gui, $R); return }
+  Write-Host ("  {0}-> opening the {1}sonelle app{0} (liquid glass)...{2}" -f $dim, $clay, $R)
+  $pyw = Join-Path $root '.venv\Scripts\pythonw.exe'
+  $py  = Join-Path $root '.venv\Scripts\python.exe'
+  $appPy = Join-Path $root 'app\sonelle_gui.py'
+  $depsOk = $false
+  if ((Test-Path $pyw) -and (Test-Path $py) -and (Test-Path $appPy)) {
+    & $py -c 'import webview, winpty' 2>$null   # pythonw has no stderr; probe first so a half-installed venv can't die silently
+    $depsOk = ($LASTEXITCODE -eq 0)
+  }
+  if ($depsOk) {
+    # deps confirmed - launch the GUI directly, no console flash
+    Start-Process -FilePath $pyw -ArgumentList @($appPy) -WorkingDirectory (Join-Path $root 'app') | Out-Null
+  } else {
+    # missing/partial venv - go through the bootstrap launcher (creates .venv, shows install progress)
+    Start-Process $psExe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $gui) | Out-Null
+  }
+}
+function AppLaunchClassic {
+  # the classic WinForms host (reparents real consoles) - kept as a fallback
   $app = Join-Path $root 'bin\sonelle_app.ps1'
   if (-not (Test-Path $app)) { Write-Host ("  {0}[!] app not found: {1}{2}" -f $clay, $app, $R); return }
-  Write-Host ("  {0}-> opening the {1}sonelle app{0} (many terminals, one window)...{2}" -f $dim, $clay, $R)
+  Write-Host ("  {0}-> opening the classic {1}sonelle app{0} (WinForms tabs)...{2}" -f $dim, $clay, $R)
   Start-Process $psExe -ArgumentList @('-NoProfile', '-Sta', '-ExecutionPolicy', 'Bypass', '-File', $app) | Out-Null
 }
 function DevSelf($prompt, $images) {
@@ -238,6 +261,7 @@ while ($true) {
   elseif ($t -match '^:team\s+(.+)$') { Team $Matches[1]; continue }
   elseif ($t -match '^:status\s*(.*)$') { StatusLanes ($Matches[1].Trim()); continue }
   elseif ($t -eq ':app') { AppLaunch; continue }
+  elseif ($t -eq ':app-classic') { AppLaunchClassic; continue }
   elseif ($t -match '^:dev\b\s*(.*)$') { DevSelf ($Matches[1].Trim()) $script:staged; continue }
   elseif ($t -match '^:attach\s+(.+)$') {
     $ip = $Matches[1].Trim().Trim('"')

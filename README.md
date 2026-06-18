@@ -23,7 +23,14 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
 8. Verify the engine:  `powershell -File tools\selftest.ps1`
 9. Pin to taskbar:  `powershell -File bin\make_launcher.ps1` (the `sonelle` shortcut opens the app by default; `-Terminal` for a single console), then right-click the Desktop `sonelle` shortcut -> Pin to taskbar.
 10. Multi-instance:  `:team myproj bugs=opus,docs=haiku` opens parallel lanes (per-task models); `:status myproj` shows them. The orchestrator (your terminal session) always runs your max model (`opus`/`xhigh`).
-11. The app (many terminals, one window):  type `:app` (or `powershell -Sta -File bin\sonelle_app.ps1`) to open a branded window that hosts multiple sonelle terminals as tabs - `+ new` adds one, the tab's `x` closes it. `bin\make_launcher.ps1` makes the `sonelle` shortcut open this app by default (use `-Terminal` for a single console). No Windows Terminal needed.
+11. The app (liquid glass, many terminals, one window):  type `:app` to open the desktop app - a
+    frameless **Python** (pywebview / WebView2) window with a muted dark-purple glass UI. Each tab is
+    an `xterm.js` terminal; the real PowerShell (`bin\sonelle.ps1`) runs **behind the scenes** in a
+    pseudo-terminal, so what you type goes to a hidden shell and the `claude` TUI works in-app.
+    First run installs a local `.venv` (pywebview + pywinpty) - run `:app` once to watch it set up.
+    Needs Python 3.10+ and the WebView2 runtime (preinstalled on Win10/11). The classic WinForms host
+    is still there via `:app-classic`. `bin\make_launcher.ps1` makes the `sonelle` shortcut open the
+    glass app by default (`-Classic` = WinForms, `-Terminal` = a single bare console).
 12. Improve sonelle itself:  type `:dev` (or address the engine by its own name: `sonelle: <prompt>`) - opens a dev session in the engine, seeded with `docs\DEVELOPING.md`; keep `selftest` green before committing.
 
 ## The three capabilities (honest about what's mechanism vs discipline)
@@ -44,7 +51,9 @@ The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max
 | Path | What |
 |---|---|
 | `bin\sonelle.ps1` | the terminal (Claude-styled launcher; calm welcome card, `:help` on demand; routes to `claude`) |
-| `bin\sonelle_app.ps1` | the app: one window hosting many sonelle terminals as tabs (`:app`) |
+| `app\` | the liquid-glass desktop app: Python (pywebview) + xterm.js front-end; PowerShell runs behind it in a PTY (`:app`) |
+| `bin\sonelle_gui.ps1` | launcher for the glass app: bootstraps `.venv` (pywebview + pywinpty), then runs it with `pythonw` |
+| `bin\sonelle_app.ps1` | the classic WinForms app host (`:app-classic`, `make_launcher -Classic`) |
 | `CLAUDE.md` | the dispatcher — how a session orients + routes |
 | `PROJECTS.md` | the registry (single source of truth; starts empty) |
 | `tools\new_project.ps1` | scaffold a new project (full skeleton + registry row) |

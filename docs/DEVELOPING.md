@@ -63,6 +63,14 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   testable: `-SelfTest` must build the UI + interop and exit 0 WITHOUT showing a window or spawning a
   terminal - selftest section 5c relies on that. UI text stays ASCII; build any glyph at runtime via
   `[char]` (the close mark is `[char]0x00D7`).
+- **The glass app (`app\`, default `:app`):** a Python `pywebview`/WebView2 front-end (`app\sonelle_gui.py`)
+  rendering `app\ui\` with xterm.js tabs over hidden `pywinpty` PTYs running `bin\sonelle.ps1`. The
+  JS<->Python contract is fixed (see `docs\ARCHITECTURE.md`) - if you change a method name on one side,
+  change BOTH sides and the selftest 8e markers. Keep `app\sonelle_gui.py` ASCII-clean too (selftest only
+  ASCII-gates `.ps1`, but stay consistent). Underscore-prefix any data attribute on the `Api` class
+  (pywebview introspects public attrs and will recurse into the WinForms window graph). Glass is in-app
+  CSS only - WebView2 can't be transparent. Vendored xterm under `app\ui\vendor\` (refresh via its NOTICE.md;
+  core 5.5.0 must pair with fit 0.10.0). The launcher `bin\sonelle_gui.ps1` owns venv+deps; `.venv\` is gitignored.
 - **Docs:** keep `README.md` + `docs\ARCHITECTURE.md` honest (mechanism vs discipline), and add a
   `CHANGELOG.md` entry.
 

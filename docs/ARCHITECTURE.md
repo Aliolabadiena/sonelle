@@ -67,6 +67,27 @@ native HWND, so hosting an external console is robust; WPF would need a fragile 
 for the identical result. The lanes feature (above) is for parallel `claude` sessions on ONE project;
 the app is for running several INDEPENDENT terminals (any projects, or `:dev`) side by side.
 selftest builds the whole UI + interop headlessly via `sonelle_app.ps1 -SelfTest` (no window, no spawn).
+This WinForms host is now the **classic fallback** (`:app-classic`); the default `:app` opens the glass app below.
+
+## The glass app (Python front-end - default)
+`app\` is the default desktop app: a frameless **Python** window (`pywebview`, backed by the Edge
+**WebView2** runtime) rendering `app\ui\` (HTML/CSS/JS) with a muted dark-purple **liquid-glass** UI.
+Each tab is an **xterm.js** terminal; behind it, `app\sonelle_gui.py` spawns `powershell -File bin\sonelle.ps1`
+in a **pseudo-terminal** (`pywinpty`) and pumps bytes both ways - so the terminal brain runs hidden and
+the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread per tab.
+- **Contract:** JS->Python via `window.pywebview.api.{new_tab, send_input, resize, close_tab, list_projects,
+  win_minimize, win_toggle_max, win_close}`; Python->JS via fire-and-forget `run_js` calling
+  `window.__ptyOutput(tabId, base64Bytes)` / `window.__ptyExit(tabId, code)`. `tabId` is Python-owned.
+- **Threading:** `webview.start()` on the main thread; js_api methods each run on their own thread
+  (shared session dict under a lock); read-threads push through ONE guard that checks a `_window_open`
+  flag + try/except so a torn-down window can never crash them. On close: terminate+close each PTY then
+  `taskkill /F /T` its pid (ConPTY has no signal tree, so claude/node grandchildren would orphan).
+- **Glass:** WebView2 **cannot** be transparent on Windows, so the glass is self-contained - an in-app
+  gradient + translucent `backdrop-filter` panels - identical on Win10/11 (no OS acrylic dependency).
+- **Launch + deps:** `bin\sonelle_gui.ps1` bootstraps a local `.venv` (`pywebview` + `pywinpty`, pinned in
+  `app\requirements.txt`) on first run, then starts the GUI with `pythonw` (no console). `xterm.js` +
+  `addon-fit` are vendored under `app\ui\vendor\` (MIT, offline). selftest section 8e checks the files,
+  the JS<->Python contract markers, the launcher wiring, and `py_compile`s the backend; section 1 excludes `.venv`.
 
 ## Billing
 The terminal hands prompts to `claude` (Claude Code), which runs on your Claude Pro/Max

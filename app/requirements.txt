@@ -1,0 +1,4 @@
+# sonelle desktop app (Python front-end) dependencies.
+# Installed into a local .venv by bin\sonelle_gui.ps1 on first run.
+pywebview==6.2.1
+pywinpty==3.0.5

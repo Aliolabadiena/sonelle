@@ -16,7 +16,8 @@ function Ok($label, $cond) {
 }
 
 Write-Host "== 1. parse + ASCII (all .ps1) =="
-Get-ChildItem $engine -Recurse -Filter *.ps1 | ForEach-Object {
+# exclude the local .venv (third-party scripts like Activate.ps1 are not ours to ASCII-gate)
+Get-ChildItem $engine -Recurse -Filter *.ps1 | Where-Object { $_.FullName -notmatch '\\\.venv\\' } | ForEach-Object {
   $e = $null; $t = $null
   [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$t, [ref]$e)
   $na = ([System.IO.File]::ReadAllBytes($_.FullName) | Where-Object { $_ -gt 127 }).Count
@@ -111,10 +112,13 @@ Ok "self shortcode from folder name" ($srcTerm -match 'selfShort\s*=\s*\(Split-P
 Ok "self-name routes to engine dev"  ($srcTerm -match '\$short -eq \$script:selfShort')
 Ok "terminal has an :app handler"    ($srcTerm -match "'?:app'?")
 Ok "terminal has AppLaunch function" ($srcTerm -match 'function AppLaunch')
-Ok "AppLaunch opens the app -Sta"    (($srcTerm -match 'sonelle_app\.ps1') -and ($srcTerm -match "'-Sta'"))
+Ok "AppLaunch opens the glass app"   ($srcTerm -match 'sonelle_gui\.ps1')
+Ok "terminal has an :app-classic handler" ($srcTerm -match ':app-classic')
+Ok "AppLaunchClassic opens WinForms -Sta" (($srcTerm -match 'function AppLaunchClassic') -and ($srcTerm -match 'sonelle_app\.ps1') -and ($srcTerm -match "'-Sta'"))
 $srcLnk = Get-Content (Join-Path $engine 'bin\make_launcher.ps1') -Raw
-Ok "make_launcher default opens the app" ($srcLnk -match 'sonelle_app\.ps1')
-Ok "make_launcher has a -Terminal switch" ($srcLnk -match '\[switch\]\$Terminal')
+Ok "make_launcher default opens the glass app" ($srcLnk -match 'sonelle_gui\.ps1')
+Ok "make_launcher -Classic opens WinForms" ($srcLnk -match 'sonelle_app\.ps1')
+Ok "make_launcher has -Terminal + -Classic" (($srcLnk -match '\[switch\]\$Terminal') -and ($srcLnk -match '\[switch\]\$Classic'))
 
 Write-Host "== 8b. terminal welcome + help (UI) =="
 $demoOut = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo
@@ -130,6 +134,43 @@ Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -a
 $rootTodo = @(Get-ChildItem $engine -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue).Count
 $rootLedg = @(Get-ChildItem $engine -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue).Count
 Ok "engine root clean (no hub state)" (($rootTodo -eq 0) -and ($rootLedg -eq 0) -and (-not (Test-Path (Join-Path $engine 'memory'))))
+
+Write-Host "== 8e. python glass app (sonelle_gui) =="
+$appDir = Join-Path $engine 'app'
+$guiPy  = Join-Path $appDir 'sonelle_gui.py'
+foreach ($rel in @(
+  'app\sonelle_gui.py', 'app\requirements.txt', 'app\ui\index.html', 'app\ui\app.js', 'app\ui\app.css',
+  'app\ui\vendor\xterm.js', 'app\ui\vendor\xterm.css', 'app\ui\vendor\addon-fit.js', 'bin\sonelle_gui.ps1')) {
+  Ok ("exists: " + $rel) (Test-Path (Join-Path $engine $rel))
+}
+$srcGui = if (Test-Path $guiPy) { Get-Content $guiPy -Raw } else { '' }
+Ok "backend exposes the api contract" (($srcGui -match 'def new_tab') -and ($srcGui -match 'def send_input') -and ($srcGui -match 'def resize') -and ($srcGui -match 'def close_tab') -and ($srcGui -match 'def list_projects'))
+Ok "backend pushes via __ptyOutput"   ($srcGui -match '__ptyOutput')
+Ok "backend kills the process tree"   ($srcGui -match 'taskkill')
+Ok "backend setwinsize(rows, cols)"   ($srcGui -match 'setwinsize\(rows, cols\)')
+$srcJs = Get-Content (Join-Path $appDir 'ui\app.js') -Raw
+Ok "frontend has output sink + ready gate" (($srcJs -match 'window\.__ptyOutput') -and ($srcJs -match 'pywebviewready'))
+Ok "frontend uses FitAddon.FitAddon"  ($srcJs -match 'new FitAddon\.FitAddon\(\)')
+$srcHtml = Get-Content (Join-Path $appDir 'ui\index.html') -Raw
+Ok "index loads vendored xterm + app.js" (($srcHtml -match 'vendor/xterm\.js') -and ($srcHtml -match 'app\.js'))
+$srcGuiPs = Get-Content (Join-Path $engine 'bin\sonelle_gui.ps1') -Raw
+Ok "launcher installs deps + runs pythonw" (($srcGuiPs -match 'requirements\.txt') -and ($srcGuiPs -match 'pythonw'))
+$pyCmd = Get-Command py -ErrorAction SilentlyContinue
+if (-not $pyCmd) { $pyCmd = Get-Command python -ErrorAction SilentlyContinue }
+if ($pyCmd -and (Test-Path $guiPy)) {
+  $pyArgs = @(); if ($pyCmd.Source -match '\\py\.exe$') { $pyArgs += '-3' }
+  & $pyCmd.Source @pyArgs -m py_compile $guiPy 2>$null
+  Ok "sonelle_gui.py compiles"        ($LASTEXITCODE -eq 0)
+} else {
+  Write-Host "  [skip] no python on PATH for py_compile" -ForegroundColor DarkGray
+}
+$venvPy = Join-Path $engine '.venv\Scripts\python.exe'
+if (Test-Path $venvPy) {
+  & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle_gui.ps1') -NoLaunch | Out-Null
+  Ok "launcher -NoLaunch verifies deps (exit 0)" ($LASTEXITCODE -eq 0)
+} else {
+  Write-Host "  [skip] no .venv for launcher -NoLaunch check" -ForegroundColor DarkGray
+}
 
 Write-Host "== 9. config resolver (hub + memoryDir) =="
 . (Join-Path $PSScriptRoot '_registry.ps1')
