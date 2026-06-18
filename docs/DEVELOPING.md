@@ -83,7 +83,8 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   `.pywebview-drag-region` (NOT Electron's
   `-webkit-app-region`, which WebView2 ignores) with an `app.js` mousedown guard over `.nodrag` controls;
   Ctrl+V in the composer saves the clipboard image to temp (`save_paste_image`) and inserts an `@"path"`
-  token. selftest 8e guards these. **Yolo (skip permission prompts):** `SONELLE_YOLO=1` makes the app spawn
+  token. An always-on **brand loop** (`#brandloop`, a CSS-animated sonelle wave - no asset) sits in the
+  bottom-right of `#stack`, decorative only (`aria-hidden` + `pointer-events:none`). selftest 8e guards these. **Yolo (skip permission prompts):** `SONELLE_YOLO=1` makes the app spawn
   the terminal with `-Yolo` -> `claude --permission-mode bypassPermissions`; `:yolo`/`-Yolo`/the config key
   `models.orchestratorPermissionMode` are the other ways in (all funnel through `$orchPerm` in `sonelle.ps1`).
 - **Docs:** keep `README.md` + `docs\ARCHITECTURE.md` honest (mechanism vs discipline), and add a

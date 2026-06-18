@@ -145,6 +145,37 @@ body{
 }
 .pane .xterm-viewport::-webkit-scrollbar-track{ background:transparent; margin:6px 0; }
 
+/* ---------- always-on brand loop (bottom-right) ---------- */
+/* A small sonelle sound-wave that lives in the bottom-right corner of the terminal area, gently
+   breathing (opacity + a 1px bob) while the wave itself flows. It is on all the time as quiet brand
+   presence. Anchored to #stack (not #app) so it always rides just above the composer regardless of
+   the footer height. Decorative only: pointer-events:none + aria-hidden so it never blocks a click
+   or text selection in the terminal underneath. Pure CSS - no gif asset. */
+.brandloop{
+  position:absolute; right:14px; bottom:10px; z-index:5;
+  width:38px; height:38px; pointer-events:none;
+  opacity:.42; animation:loop-breathe 4.2s ease-in-out infinite;
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,.35));
+}
+.brandloop .loop-mark{ width:100%; height:100%; display:block; }
+.brandloop .loop-mark path{
+  stroke-dasharray:18 10;                       /* segmented wave so the flow is visible */
+  animation:loop-flow 3.6s linear infinite;
+}
+@keyframes loop-breathe{
+  0%,100%{ opacity:.30; transform:translateY(0); }
+  50%    { opacity:.52; transform:translateY(-1px); }
+}
+@keyframes loop-flow{
+  from{ stroke-dashoffset:0; }
+  to  { stroke-dashoffset:-56; }                /* 2 x (dash+gap) -> seamless wrap */
+}
+/* respect a reduced-motion preference: hold it still, still visible */
+@media (prefers-reduced-motion: reduce){
+  .brandloop{ animation:none; }
+  .brandloop .loop-mark path{ animation:none; stroke-dasharray:none; }
+}
+
 /* ---------- welcome (empty state) ---------- */
 .welcome{
   position:absolute; left:50%; top:46%; transform:translate(-50%,-50%);

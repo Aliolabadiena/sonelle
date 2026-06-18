@@ -102,6 +102,11 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   `taskkill /F /T` its pid (ConPTY has no signal tree, so claude/node grandchildren would orphan).
 - **Glass:** WebView2 **cannot** be transparent on Windows, so the glass is self-contained - an in-app
   gradient + translucent `backdrop-filter` panels - identical on Win10/11 (no OS acrylic dependency).
+- **Brand loop:** a small coral sonelle sound-wave (`#brandloop`) lives in the bottom-right of the
+  terminal area and gently loops the whole time (a CSS breathe + a flowing stroke - no gif asset). It
+  is anchored to `#stack` so it always rides just above the composer, and is purely decorative
+  (`aria-hidden` + `pointer-events:none`), so it never blocks a click or text selection in the
+  terminal beneath it; it holds still under `prefers-reduced-motion`.
 - **Launch + deps:** `bin\sonelle_gui.ps1` bootstraps a local `.venv` (`pywebview` + `pywinpty`, pinned in
   `app\requirements.txt`) on first run, then starts the GUI with `pythonw` (no console). The window
   passes `icon=assets\icon\sonelle.ico` to `webview.start()` so the window's `Form.Icon` is the sonelle

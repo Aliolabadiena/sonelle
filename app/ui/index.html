@@ -31,7 +31,17 @@
     </header>
 
     <!-- terminal panes (output only - typing is disabled here; the composer below is the input) -->
-    <main id="stack"></main>
+    <main id="stack">
+      <!-- always-on brand loop: a small sonelle sound-wave that gently breathes + flows in the
+           bottom-right corner as quiet brand presence. Decorative only (aria-hidden +
+           pointer-events:none in app.css) so it never intercepts clicks or text selection in the
+           terminal beneath it; CSS-animated, no gif asset. -->
+      <div id="brandloop" class="brandloop" aria-hidden="true">
+        <svg class="loop-mark" viewBox="0 0 100 100">
+          <path d="M20 50 q7.5 -18 15 0 t15 0 t15 0 t15 0" fill="none" stroke="#FF9B85" stroke-width="7" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </main>
 
     <!-- shown only when no tabs are open -->
     <section id="welcome" class="welcome glass" hidden>

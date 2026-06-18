@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.23 — 2026-06-19 (glass app: an always-on brand loop in the bottom-right)
+- **There's now a living sonelle mark in the bottom-right corner.** A small coral sound-wave sits in
+  the bottom-right of the terminal area and gently loops all the time - it breathes (a soft
+  opacity + 1px bob) while the wave itself flows. Quiet brand presence, on whenever the app is open.
+  It's pure CSS (no gif asset to ship or fail to load), anchored to `#stack` so it always rides just
+  above the composer regardless of the footer height, and decorative only: `aria-hidden` +
+  `pointer-events:none` so it never intercepts a click or text selection in the terminal beneath it.
+  Honors `prefers-reduced-motion` (holds still, stays visible). selftest 8e asserts the element, its
+  svg wave, the `.brandloop` rule, `pointer-events:none`, and the `@keyframes`/`animation` wiring.
+  Verified with a headless render: the wave shows in the corner, above the input.
+
 ## v1.22 — 2026-06-19 (glass app: real app icon, softer glass, scrollbar clears the text)
 - **The brand mark is now the real app icon, not a gradient cube.** Both the titlebar mark and the
   welcome-screen mark were plain lilac gradient squares; they now render the actual sonelle sound-wave
