@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.16 — 2026-06-18 (glass app: one input - the terminal itself)
+- Removed the bottom composer box (and its placeholder). Two input surfaces (a composer + the
+  terminal) was confusing; claude's interactive TUI needs raw keys (arrows, Ctrl+C) in the terminal
+  anyway, so the terminal is now the SINGLE input - type `sotis: fix the build` right at the `>`
+  prompt, exactly like a normal terminal / Claude Code. The active terminal auto-focuses on open.
+- The window is now just the title bar + the terminal pane: nothing else to parse.
+- Verified live (real window: no composer, terminal focused, stderr clean); selftest ALL PASS.
+
 ## v1.15 — 2026-06-18 (glass app: chat feel, not coding feel)
 - The glass app now feels like talking, not coding. `bin\sonelle.ps1` got a `-Bare` switch (no
   welcome card, minimal routing echo - just `> <project>`); the app spawns `sonelle.ps1 -Bare`, so a

@@ -25,7 +25,8 @@
       </div>
     </header>
 
-    <!-- terminal panes mount here (one per tab; only the active one is shown) -->
+    <!-- the terminal IS the single input: type right here (e.g. sotis: fix the build), like a
+         normal terminal / Claude Code. One pane per tab; only the active one is shown. -->
     <main id="stack"></main>
 
     <!-- shown only when no tabs are open -->
@@ -33,16 +34,6 @@
       <div class="w-mark" aria-hidden="true"></div>
       <button id="w-open" class="primary nodrag">open a terminal</button>
     </section>
-
-    <!-- the one composer: type a line, it goes to the terminal running behind the scenes -->
-    <footer id="bar">
-      <div class="cmdbar glass">
-        <span class="prompt" aria-hidden="true"></span>
-        <input id="cmd" type="text" autocomplete="off" autocapitalize="off"
-               spellcheck="false" placeholder="ask a project to do something    e.g.  sotis: fix the build">
-        <button id="send" class="send" title="send" aria-label="send"><span class="g-send"></span></button>
-      </div>
-    </footer>
   </div>
 
   <script src="vendor/xterm.js"></script>

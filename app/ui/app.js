@@ -174,25 +174,11 @@
     try { window.pywebview.api.resize(tabId, entry.term.cols, entry.term.rows); } catch (x) {}
   }
 
-  // ---------- command bar ----------
-  function sendLine() {
-    const inp = $("cmd");
-    const v = inp.value;
-    if (!active) return;
-    if (live) { try { window.pywebview.api.send_input(active, v + "\r"); } catch (x) {} }
-    else { const e = TABS.get(active); if (e) e.term.write(v + "\r\n"); }
-    inp.value = "";
-  }
-
   // ---------- chrome wiring (safe with or without the bridge) ----------
   function wireChrome() {
     const openTab = () => { if (live) createLiveTab(null); else createDemoTab(); };
     $("btn-new").addEventListener("click", openTab);
     $("w-open").addEventListener("click", openTab);
-    $("send").addEventListener("click", sendLine);
-    $("cmd").addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); sendLine(); }
-    });
     $("btn-min").addEventListener("click", () => { if (live) { try { window.pywebview.api.win_minimize(); } catch (x) {} } });
     $("btn-close").addEventListener("click", () => { if (live) { try { window.pywebview.api.win_close(); } catch (x) {} } });
     $("btn-max").addEventListener("click", () => { if (live) { try { window.pywebview.api.win_toggle_max(); } catch (x) {} } });
