@@ -5,9 +5,9 @@
 
   Usage:
     . (Join-Path $PSScriptRoot '_registry.ps1')
-    $projects = Get-LunaProjects $registryPath   # array of {Short,Name,CodePath,Cells}
+    $projects = Get-SonelleProjects $registryPath   # array of {Short,Name,CodePath,Cells}
 #>
-function Get-LunaProjects([string]$RegistryPath) {
+function Get-SonelleProjects([string]$RegistryPath) {
   if (-not (Test-Path $RegistryPath)) { return @() }
   $txt = (Get-Content $RegistryPath -Raw) -replace "`r`n", "`n"
   $out = @()

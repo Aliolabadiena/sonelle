@@ -1,10 +1,10 @@
-# luna engine - keep the repo clean and personal-data-free.
+# sonelle engine - keep the repo clean and personal-data-free.
 # Anything you create/run locally (hub config, brain, per-project state) stays local.
 # NOTE: git treats "pattern  # comment" as a literal filename, so every comment is on its
 # OWN line below. Do NOT put trailing comments on pattern lines.
 
 # your local hub path - machine-specific
-luna.config.json
+sonelle.config.json
 
 # any brain/memory created in a workspace
 memory/

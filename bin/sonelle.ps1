@@ -1,11 +1,11 @@
 <#
-  luna.ps1 - the luna terminal. Claude-styled launcher: reads the grammar
+  sonelle.ps1 - the sonelle terminal. Claude-styled launcher: reads the grammar
   `[address,] <short>: <prompt>`, routes to the right project via PROJECTS.md, and hands
   the prompt to `claude` (Claude Code) - which runs on your Claude subscription.
 
   Usage:
-    powershell -File bin\luna.ps1          start the terminal (REPL)
-    powershell -File bin\luna.ps1 -Demo    print the banner + help, then exit (no REPL)
+    powershell -File bin\sonelle.ps1          start the terminal (REPL)
+    powershell -File bin\sonelle.ps1 -Demo    print the banner + help, then exit (no REPL)
 
   Commands inside:  <short>: <prompt>   :projects   :new   :heal [short]   :help   :q
   Source is pure ASCII; Unicode glyphs are built at runtime via [char] codepoints.
@@ -17,8 +17,8 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $hub  = $root
 $orchModel = 'opus'; $orchEffort = 'xhigh'; $orchPerm = ''   # orchestrator (the session you talk to) is ALWAYS max
-# optional overrides from luna.config.json (hub for routing; models for the orchestrator)
-$cfg = Join-Path $root 'luna.config.json'
+# optional overrides from sonelle.config.json (hub for routing; models for the orchestrator)
+$cfg = Join-Path $root 'sonelle.config.json'
 if (Test-Path $cfg) {
   try {
     $c = Get-Content $cfg -Raw | ConvertFrom-Json
@@ -36,7 +36,7 @@ $psExe = (Get-Process -Id $PID).Path
 $useColor = -not $env:NO_COLOR
 if ($useColor) {
   try {
-    $vt = Add-Type -Name LunaVT -Namespace Win32 -PassThru -ErrorAction Stop -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int h); [DllImport("kernel32.dll")] public static extern bool GetConsoleMode(IntPtr h, out int m); [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, int m);'
+    $vt = Add-Type -Name SonelleVT -Namespace Win32 -PassThru -ErrorAction Stop -MemberDefinition '[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int h); [DllImport("kernel32.dll")] public static extern bool GetConsoleMode(IntPtr h, out int m); [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, int m);'
     $h = $vt::GetStdHandle(-11); $m = 0
     if ($vt::GetConsoleMode($h, [ref]$m)) { [void]$vt::SetConsoleMode($h, ($m -bor 4)) }   # ENABLE_VIRTUAL_TERMINAL_PROCESSING
   } catch {}
@@ -53,7 +53,7 @@ $script:staged = @()   # image paths staged via :attach, consumed by the next ro
 function Banner {
   Clear-Host
   Write-Host ""
-  Write-Host ("  {0}{1}luna{2}   {3}your projects, one orchestrator{2}" -f $clay, $bold, $R, $dim)
+  Write-Host ("  {0}{1}sonelle{2}   {3}your projects, one orchestrator{2}" -f $clay, $bold, $R, $dim)
   Write-Host ("  {0}{1}{2}" -f $clay, $bar, $R)
   Write-Host ("  {0}runs on your Claude subscription via {1}claude{0}.{2}" -f $dim, $cream, $R)
   Write-Host ("  {0}type  {1}<short>: <prompt>{0}   or   {1}:help{2}" -f $dim, $cream, $R)
@@ -74,13 +74,13 @@ function ShowHelp {
 function ShowProjects {
   $pf = Join-Path $hub 'PROJECTS.md'
   if (-not (Test-Path $pf)) { Write-Host ("  {0}no PROJECTS.md at hub: {1}{2}" -f $dim, $hub, $R); return }
-  $projs = Get-LunaProjects $pf
+  $projs = Get-SonelleProjects $pf
   if ($projs.Count -eq 0) { Write-Host ("  {0}registry empty - type :new to create your first project.{1}" -f $dim, $R); return }
   foreach ($p in $projs) { Write-Host ("    {0}{1}{2}  {3}{4}{2}" -f $clay, $p.Short, $R, $dim, $p.Name) }
 }
 function ResolveCode($short) {
   $pf = Join-Path $hub 'PROJECTS.md'
-  $p = (Get-LunaProjects $pf) | Where-Object { $_.Short -eq $short } | Select-Object -First 1
+  $p = (Get-SonelleProjects $pf) | Where-Object { $_.Short -eq $short } | Select-Object -First 1
   if ($p) { return $p.CodePath }
   return $null
 }
@@ -102,11 +102,11 @@ function Team($rest) {
   if ($sp -lt 1) { Write-Host ("  {0}usage: :team <project> <lane1,lane2,...>{1}" -f $dim, $R); return }
   $pj = $rest.Substring(0, $sp)
   $ln = ($rest.Substring($sp + 1).Trim()) -replace '\s+', ','
-  & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'bin\luna_team.ps1') $pj -Lanes $ln -Hub $hub | Out-Host
+  & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'bin\sonelle_team.ps1') $pj -Lanes $ln -Hub $hub | Out-Host
 }
 function StatusLanes($pj) {
   if (-not $pj) { Write-Host ("  {0}usage: :status <project>{1}" -f $dim, $R); return }
-  & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'bin\luna_team.ps1') $pj -Status -Hub $hub | Out-Host
+  & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'bin\sonelle_team.ps1') $pj -Status -Hub $hub | Out-Host
 }
 function Route($short, $prompt, $images) {
   $code = ResolveCode $short
@@ -141,7 +141,7 @@ if ($Demo) { Write-Host ""; Write-Host ("  {0}(demo mode - exiting before REPL){
 Write-Host ""
 
 while ($true) {
-  Write-Host -NoNewline ("{0}luna {1}{2} " -f $clay, $arrow, $R)
+  Write-Host -NoNewline ("{0}sonelle {1}{2} " -f $clay, $arrow, $R)
   $in = Read-Host
   if ($null -eq $in) { break }
   $t = $in.Trim()

@@ -1,6 +1,6 @@
 <#
-  new_project.ps1 - scaffold a new project with the standard luna skeleton.
-  Hub = the luna workspace (parent of this tools/ folder).
+  new_project.ps1 - scaffold a new project with the standard sonelle skeleton.
+  Hub = the sonelle workspace (parent of this tools/ folder).
 
   Usage:
     .\new_project.ps1 -Short <short> -Name "<name>" -Path "<path\to\code>"
@@ -72,8 +72,8 @@ Copy-Item (Join-Path $tpl 'settings.template.json')   (Join-Path $Path '.claude\
 Copy-Item (Join-Path $tpl 'hooks\session_start.ps1')  (Join-Path $hooksDir 'session_start.ps1')   -Force
 Copy-Item (Join-Path $tpl 'hooks\stop.ps1')           (Join-Path $hooksDir 'stop.ps1')            -Force
 Write-Host "[+] $Path\.claude\settings.json (+ hooks)"
-$check = Join-Path $Path 'luna.check.ps1'
-Write-Utf8 $check "# luna.check.ps1 - health check for $Name. Put REAL checks here (tests/build/lint).`n# Exit 0 = healthy, non-zero = doctor / Stop-hook flags it. Replace the placeholder below.`nWrite-Output '[$Short] TODO: add real health checks to luna.check.ps1 (placeholder).'`nexit 0`n"
+$check = Join-Path $Path 'sonelle.check.ps1'
+Write-Utf8 $check "# sonelle.check.ps1 - health check for $Name. Put REAL checks here (tests/build/lint).`n# Exit 0 = healthy, non-zero = doctor / Stop-hook flags it. Replace the placeholder below.`nWrite-Output '[$Short] TODO: add real health checks to sonelle.check.ps1 (placeholder).'`nexit 0`n"
 Write-Host "[+] $check (starter)"
 
 # memory index line (clean append)

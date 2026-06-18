@@ -1,6 +1,6 @@
 # SELF-IMPROVE — getting better after every task, from memory
 
-luna improves by closing a loop through `memory/`: every task that teaches something
+sonelle improves by closing a loop through `memory/`: every task that teaches something
 writes it down; every new task recalls it first. Over time the same mistakes stop
 recurring and the assistant acts more like it already knows the project.
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.8 — 2026-06-18 (named "sonelle" + final icon)
+- NAME: the engine and its private brain-backup were renamed from the working name `luna` to
+  **sonelle** (feminine, distinctive). All folders, file names, file content, the two GitHub repos,
+  the user `statusLine` path, the launcher shortcut, and the hub dispatcher refs were updated; old
+  GitHub URLs redirect.
+- ICON: final mark = a coral sound-wave on a deep-plum rounded tile (`#FF9B85` on `#241A33`),
+  superseding the earlier moon-phases concept. `assets/icon/make_icon.py` redraws it ->
+  `sonelle.ico` (16-256) + `sonelle.png`; vector source `sonelle.svg`.
+- selftest ALL PASS after the rename.
+
 ## v1.7 — 2026-06-18 (usage status line)
 - `tools/statusline.ps1`: a Claude Code statusLine showing usage every session - `model+effort | 5h% |
   7d% | ctx%`, colour-coded green/amber/red by load. Wire via settings.json `statusLine` ->
@@ -9,22 +19,22 @@
 - On-demand subscription audit: the `/usage` slash command (account-level, day/week toggle).
 
 ## v1.6 — 2026-06-18 (permissions: no-ask deploy + autonomous lanes)
-- Lanes take a permission mode: `luna_team` start scripts add `--permission-mode <mode>` (config
-  `models.lanePermissionMode`, engine default `acceptEdits`). Set `bypassPermissions` in luna.config.json
+- Lanes take a permission mode: `sonelle_team` start scripts add `--permission-mode <mode>` (config
+  `models.lanePermissionMode`, engine default `acceptEdits`). Set `bypassPermissions` in sonelle.config.json
   for fully-autonomous workers (never prompt).
 - Orchestrator optional `models.orchestratorPermissionMode` (default unset -> inherits your global default).
 - (User-side, not in repo) allow-rules in `~/.claude/settings.json`: `Bash(ssh *)` / `Bash(scp *)` /
   `Bash(git push*)` so VPS deploy + push never prompt; `skipDangerousModePermissionPrompt` so bypass mode
   isn't gated by the danger dialog.
 - MCP NOTE: Supabase/Canva/Drive/Calendar/Gmail are claude.ai ACCOUNT connectors (not project-scoped),
-  so every luna session inherits them already - nothing to move. Chrome = a browser extension that
-  attaches per-session (a luna session is attachable).
+  so every sonelle session inherits them already - nothing to move. Chrome = a browser extension that
+  attaches per-session (a sonelle session is attachable).
 - selftest asserts lane start scripts carry `--permission-mode`.
 
 ## v1.5 — 2026-06-18 (model + effort policy)
 - ORCHESTRATOR is ALWAYS max: the terminal session you talk to launches `claude` with
   `--model opus --effort xhigh` (a strong boss orchestrates the workers well). Overridable via
-  `luna.config.json` `models.orchestrator` / `orchestratorEffort`, but defaults to max.
+  `sonelle.config.json` `models.orchestrator` / `orchestratorEffort`, but defaults to max.
 - LANES (workers) take per-lane model + effort: `:team proj bugs=opus,triage=haiku:medium,write=opus`.
   Each lane's start script runs `claude --model <m> --effort <e>`. Defaults `laneDefault=opus` /
   `laneEffort=high` (config `models.laneDefault` / `laneEffort`); per-lane `name=model[:effort]` overrides.
@@ -33,35 +43,35 @@
   model lands in the start script.
 
 ## v1.4 — 2026-06-18 (icon + launcher + multi-instance)
-- ICON (concept #47, moon phases, charcoal/lime): vector source `assets/icon/luna.svg` + Pillow
-  generator `assets/icon/make_icon.py` -> multi-size `luna.ico` (16-256) + `luna.png`. Re-themeable
-  (edit colors, re-run). Phases drawn a touch bolder than the picker preview for taskbar legibility.
-- LAUNCHER: `bin/make_launcher.ps1` creates a pinnable `luna.lnk` (Desktop + Start Menu) carrying the
-  icon, opening the luna terminal from ANYWHERE. Target = Windows Terminal if installed, else powershell.exe.
-- MULTI-INSTANCE: `bin/luna_team.ps1` runs up to 5 parallel "lanes" on one project - each a `claude`
-  session scoped to a DISJOINT workstream, coordinating via a shared board `<code>/.luna/lanes/` +
+- ICON (initial concept; the final mark is the sonelle coral wave - see v1.8): vector source
+  `assets/icon/sonelle.svg` + Pillow generator `assets/icon/make_icon.py` -> multi-size `sonelle.ico`
+  (16-256) + `sonelle.png`. Re-themeable (edit colors, re-run).
+- LAUNCHER: `bin/make_launcher.ps1` creates a pinnable `sonelle.lnk` (Desktop + Start Menu) carrying the
+  icon, opening the sonelle terminal from ANYWHERE. Target = Windows Terminal if installed, else powershell.exe.
+- MULTI-INSTANCE: `bin/sonelle_team.ps1` runs up to 5 parallel "lanes" on one project - each a `claude`
+  session scoped to a DISJOINT workstream, coordinating via a shared board `<code>/.sonelle/lanes/` +
   disjoint ownership (NOT shared live memory). WT tabs if `wt`, else separate windows. Added `:team
   <proj> <lanes>` and `:status <proj>` to the terminal. Cap 5; warns at >3 (rate limits); rejects
   duplicate/bad lane names; `-DryRun` writes the board + start scripts without launching.
-- selftest now covers the new scripts (parse/ASCII) + a luna_team dry-run (board + start script + parse).
+- selftest now covers the new scripts (parse/ASCII) + a sonelle_team dry-run (board + start script + parse).
 - NOTE: launcher + lane launching fire in real sessions (structurally verified here). `wt` is not
   installed on this machine -> they use PowerShell windows; install Windows Terminal for tabs.
 
 ## v1.3 — 2026-06-18 (enforcement hooks)
 - **Heal + self-improve are now ENFORCED, not just ritual.** Added Claude Code hooks in
   `.claude/settings.json`: a **SessionStart** hook (recall reminder -> context) and a **Stop** hook
-  (auto-runs the project's `luna.check.ps1` + a "capture a lesson" reminder). Hooks ship in the engine
+  (auto-runs the project's `sonelle.check.ps1` + a "capture a lesson" reminder). Hooks ship in the engine
   and are scaffolded into every new project (`.claude/hooks/{session_start,stop}.ps1` + `settings.json`).
-- `new_project` now also writes a starter `luna.check.ps1` into each project (so the Stop hook + doctor
+- `new_project` now also writes a starter `sonelle.check.ps1` into each project (so the Stop hook + doctor
   have a real health surface to run).
 - selftest verifies hook scripts parse + are ASCII, both `settings.json` files are valid JSON, and a
-  scaffolded project gets `.claude/settings.json` + hooks + `luna.check.ps1`.
+  scaffolded project gets `.claude/settings.json` + hooks + `sonelle.check.ps1`.
 - NOTE: hooks are structurally verified (parse / JSON / scaffold) but fire only inside real Claude Code
   sessions - not triggered in this build session. Conservative by design (always exit 0, Test-Path guards).
 
 ## v1.2 — 2026-06-18 (skeptical-audit fixes)
 - **SECURITY:** `.gitignore` had trailing inline comments (git treats `pattern  # x` as a literal
-  filename), so `luna.config.json` / `memory/` / `*_TODO.txt` were NOT ignored - a `git add -A`
+  filename), so `sonelle.config.json` / `memory/` / `*_TODO.txt` were NOT ignored - a `git add -A`
   could have leaked a hub's brain to the public repo. Comments moved to their own lines; verified
   via `git check-ignore` (now a selftest gate).
 - **check_pointers** silently validated ZERO projects: its `([^\r\n]*)$` row regex didn't match the
@@ -86,13 +96,13 @@
 - Engine vs hub separation: templates are read from the engine, state is written to the hub
   (fixes scaffolding into an external `-Hub`).
 - Terminal: image attach via `:attach <path>` and inline `@<path>`; `:clear`.
-- `tools\selftest.ps1` + `luna.check.ps1`: end-to-end self-test (parse/ASCII/scaffold/
+- `tools\selftest.ps1` + `sonelle.check.ps1`: end-to-end self-test (parse/ASCII/scaffold/
   check_pointers/doctor/duplicate-guard) into a throwaway temp hub. All pass.
 - Fixed `$args` automatic-variable shadowing in the terminal's heal path.
 
 ## v1.0 — 2026-06-18
 - Dispatcher (`CLAUDE.md`) + registry (`PROJECTS.md`) + grammar `[address,] <short>: <prompt>`.
-- Claude-styled terminal `bin\luna.ps1` (routes to `claude`, runs on a Claude subscription).
+- Claude-styled terminal `bin\sonelle.ps1` (routes to `claude`, runs on a Claude subscription).
 - Three superpowers: scaffold (`new_project`), heal (`doctor` + `docs\HEAL.md`),
   self-improve (`log_lesson` + `docs\SELF_IMPROVE.md`).
 - Templates, docs (`HEAL`, `SELF_IMPROVE`, `ARCHITECTURE`). Pure-ASCII PowerShell.

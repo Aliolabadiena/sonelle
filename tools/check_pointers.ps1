@@ -1,5 +1,5 @@
 <#
-  check_pointers.ps1 - validate that the core luna files and every registry pointer
+  check_pointers.ps1 - validate that the core sonelle files and every registry pointer
   resolve on disk. Catches silent renames/deletes. Hub = parent of this tools/ folder.
 
   Usage:  .\check_pointers.ps1 [-Hub <workspace>]
@@ -23,7 +23,7 @@ Check 'CLAUDE.md'           (Join-Path $hub 'CLAUDE.md')
 Check 'PROJECTS.md'         (Join-Path $hub 'PROJECTS.md')
 
 Write-Host "[check] engine files:"
-Check 'bin\luna.ps1'          (Join-Path $engine 'bin\luna.ps1')
+Check 'bin\sonelle.ps1'          (Join-Path $engine 'bin\sonelle.ps1')
 Check 'tools\new_project.ps1' (Join-Path $engine 'tools\new_project.ps1')
 Check 'tools\doctor.ps1'      (Join-Path $engine 'tools\doctor.ps1')
 Check 'tools\log_lesson.ps1'  (Join-Path $engine 'tools\log_lesson.ps1')
@@ -34,7 +34,7 @@ $pf = Join-Path $hub 'PROJECTS.md'
 if (-not (Test-Path $pf)) {
   Write-Host ("  [MISS] PROJECTS.md not found at hub -> {0}" -f $pf) -ForegroundColor Red; $script:miss++
 } else {
-  $projects = Get-LunaProjects $pf
+  $projects = Get-SonelleProjects $pf
   if ($projects.Count -eq 0) { Write-Host "  (registry empty - nothing to check)" }
   foreach ($p in $projects) {
     if ($p.CodePath -and $p.CodePath -notmatch '^[-(]') { Check ("$($p.Short) code path") $p.CodePath }

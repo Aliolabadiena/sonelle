@@ -1,12 +1,12 @@
-# luna — workspace dispatcher (READ FIRST, every session)
+# sonelle — workspace dispatcher (READ FIRST, every session)
 
-luna is a reusable engine for running many projects through one orchestrator with
+sonelle is a reusable engine for running many projects through one orchestrator with
 zero-hallucination onboarding. This file is pure POINTERS — live state lives in the
 files it points to, refreshed after every task. Never guess state from memory; read
 the sources first.
 
 ## Grammar
-`[address,] <shortcode>: <prompt>`  — e.g. `luna, myproj: fix the build`
+`[address,] <shortcode>: <prompt>`  — e.g. `sonelle, myproj: fix the build`
 (You may address the assistant by name; it still replies starting with your canary if you set one.)
 
 ## Dispatch — do this on every message
@@ -31,7 +31,7 @@ the sources first.
 
 ## Enforcement (hooks)
 `.claude/settings.json` wires a **SessionStart** hook (recall reminder) and a **Stop** hook (auto-runs
-the project's `luna.check.ps1` + a capture reminder) so the heal/self-improve loop runs via the harness,
+the project's `sonelle.check.ps1` + a capture reminder) so the heal/self-improve loop runs via the harness,
 not just goodwill. Ships in the engine and is scaffolded into every new project by `new_project.ps1`.
 
 ## End-of-task ritual (mandatory, every task)
@@ -39,20 +39,20 @@ not just goodwill. Ships in the engine and is scaffolded into every new project 
    and exact RESUME instructions if unfinished).
 2. **SELF-IMPROVE**: capture any lesson / gotcha / feedback into `memory/` (`log_lesson.ps1`).
 3. **Validate**: `tools\check_pointers.ps1` — every registry pointer must still resolve.
-4. If you keep an off-engine brain backup, sync/commit it (that's your data, not luna).
+4. If you keep an off-engine brain backup, sync/commit it (that's your data, not sonelle).
 Never leave knowledge only in chat — chat vanishes, files remain.
 
 ## The terminal
-`bin\luna.ps1` is the luna terminal (Claude-styled). It parses the grammar above, routes to
+`bin\sonelle.ps1` is the sonelle terminal (Claude-styled). It parses the grammar above, routes to
 the right project via `PROJECTS.md`, and hands the prompt to `claude` (your Claude
-subscription). Attach images with `:attach <path>` or inline `@<path>`. `bin\luna.ps1 -Demo`
+subscription). Attach images with `:attach <path>` or inline `@<path>`. `bin\sonelle.ps1 -Demo`
 shows the banner without entering the REPL. Verify the whole engine anytime with
-`tools\selftest.ps1` (or `luna.check.ps1`).
+`tools\selftest.ps1` (or `sonelle.check.ps1`).
 
 ## Engine vs hub
 Engine assets (`bin/ tools/ templates/ docs/`) are read relative to the scripts. The hub
 (`CLAUDE.md` + `PROJECTS.md` + `memory/` + per-project state) is where work lands — default
-the engine folder, or any `-Hub <path>` / `luna.config.json`. `new_project.ps1` reads
+the engine folder, or any `-Hub <path>` / `sonelle.config.json`. `new_project.ps1` reads
 templates from the engine and writes state to the hub, so one engine can drive many hubs.
 
 ## House rule

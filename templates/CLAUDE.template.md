@@ -20,7 +20,7 @@
 
 ## Before starting (recall)
 Skim `memory/MEMORY.md` and open any relevant topic file; verify memory claims against current
-code before relying on them. (luna self-improve = recall before, capture after.)
+code before relying on them. (sonelle self-improve = recall before, capture after.)
 
 ## Work cycle
 - Collect: only record dictated items into the TODO; don't start work mid-collection.

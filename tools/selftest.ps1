@@ -29,10 +29,10 @@ foreach ($jf in @((Join-Path $engine '.claude\settings.json'), (Join-Path $engin
 }
 $slj = '{"model":{"display_name":"Opus"},"rate_limits":{"five_hour":{"used_percentage":50}},"cost":{"total_cost_usd":0}}'
 $slOut = ($slj | & $ps -NoProfile -File (Join-Path $engine 'tools\statusline.ps1')) -replace "$([char]27)\[[0-9;]*m", ''
-Ok "statusline renders usage" ($slOut -match 'luna.*5h 50%')
+Ok "statusline renders usage" ($slOut -match 'sonelle.*5h 50%')
 
 Write-Host "== 2. scaffold into a temp hub =="
-$tmp = Join-Path $env:TEMP 'luna_selftest'
+$tmp = Join-Path $env:TEMP 'sonelle_selftest'
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 Copy-Item (Join-Path $engine 'CLAUDE.md')   (Join-Path $tmp 'CLAUDE.md')   -Force
@@ -49,7 +49,7 @@ $ph = (Select-String -Path (Join-Path $tmp 'ST_TODO.txt'), (Join-Path $codePath 
 Ok "no unfilled placeholders"      ($ph -eq 0)
 Ok "project .claude/settings.json created" (Test-Path (Join-Path $codePath '.claude\settings.json'))
 Ok "project Stop+SessionStart hooks created" ((Test-Path (Join-Path $codePath '.claude\hooks\stop.ps1')) -and (Test-Path (Join-Path $codePath '.claude\hooks\session_start.ps1')))
-Ok "project luna.check.ps1 created" (Test-Path (Join-Path $codePath 'luna.check.ps1'))
+Ok "project sonelle.check.ps1 created" (Test-Path (Join-Path $codePath 'sonelle.check.ps1'))
 $vj = $true; try { [void](Get-Content (Join-Path $codePath '.claude\settings.json') -Raw | ConvertFrom-Json) } catch { $vj = $false }
 Ok "project settings.json is valid JSON" $vj
 
@@ -66,14 +66,14 @@ Write-Host "== 5. duplicate guard =="
 Ok "duplicate rejected (exit 1)"   ($LASTEXITCODE -eq 1)
 
 Write-Host "== 5b. multi-instance dry-run =="
-& $ps -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\luna_team.ps1') st -Lanes a=haiku,b -Hub $tmp -DryRun | Out-Null
-Ok "luna_team dry-run exit 0"        ($LASTEXITCODE -eq 0)
-Ok "lane board written"             (Test-Path (Join-Path $codePath '.luna\lanes\a.md'))
-Ok "lane start script written"      (Test-Path (Join-Path $codePath '.luna\lanes\a.start.ps1'))
-$le=$null;$lt=$null;[void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $codePath '.luna\lanes\a.start.ps1'),[ref]$lt,[ref]$le)
+& $ps -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle_team.ps1') st -Lanes a=haiku,b -Hub $tmp -DryRun | Out-Null
+Ok "sonelle_team dry-run exit 0"        ($LASTEXITCODE -eq 0)
+Ok "lane board written"             (Test-Path (Join-Path $codePath '.sonelle\lanes\a.md'))
+Ok "lane start script written"      (Test-Path (Join-Path $codePath '.sonelle\lanes\a.start.ps1'))
+$le=$null;$lt=$null;[void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $codePath '.sonelle\lanes\a.start.ps1'),[ref]$lt,[ref]$le)
 Ok "lane start script parses"       ($le.Count -eq 0)
-Ok "lane per-model in start script" ((Get-Content (Join-Path $codePath '.luna\lanes\a.start.ps1') -Raw) -match '--model haiku')
-Ok "lane permission-mode in start script" ((Get-Content (Join-Path $codePath '.luna\lanes\a.start.ps1') -Raw) -match '--permission-mode')
+Ok "lane per-model in start script" ((Get-Content (Join-Path $codePath '.sonelle\lanes\a.start.ps1') -Raw) -match '--model haiku')
+Ok "lane permission-mode in start script" ((Get-Content (Join-Path $codePath '.sonelle\lanes\a.start.ps1') -Raw) -match '--permission-mode')
 
 Write-Host "== 6. check_pointers DETECTS a broken pointer (negative test) =="
 Remove-Item $codePath -Recurse -Force
@@ -82,7 +82,7 @@ Ok "check_pointers exit 1 on a missing code path" ($LASTEXITCODE -eq 1)
 
 Write-Host "== 7. .gitignore ignores the private paths =="
 if (Get-Command git -ErrorAction SilentlyContinue) {
-  foreach ($f in @('luna.config.json', 'memory/x.md', 'FOO_TODO.txt')) {
+  foreach ($f in @('sonelle.config.json', 'memory/x.md', 'FOO_TODO.txt')) {
     Ok "gitignored: $f" ([bool](git -C $engine check-ignore $f))
   }
 } else { Write-Host "  [skip] git not on PATH" -ForegroundColor DarkGray }

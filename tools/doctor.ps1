@@ -6,7 +6,7 @@
     .\doctor.ps1            check the whole workspace + all projects
     .\doctor.ps1 myproj     focus one project
 
-  Per-project hook: if <code path>\luna.check.ps1 exists, doctor runs it (exit 0 = healthy).
+  Per-project hook: if <code path>\sonelle.check.ps1 exists, doctor runs it (exit 0 = healthy).
   Put a project's real checks there (tests, analyze, build smoke, etc.).
 
   Exit: 0 = healthy, 1 = at least one FAIL.
@@ -49,7 +49,7 @@ $any = $false
 if (-not (Test-Path $pf)) {
   Result "PROJECTS.md exists" $false "-> $pf"
 } else {
-  foreach ($p in (Get-LunaProjects $pf)) {
+  foreach ($p in (Get-SonelleProjects $pf)) {
     if ($Short -and $p.Short -ne $Short) { continue }
     $any = $true
     $code = $p.CodePath
@@ -57,13 +57,13 @@ if (-not (Test-Path $pf)) {
     if ($code -and $code -notmatch '^[-(]') {
       Result "    code path exists" (Test-Path $code) "-> $code"
       $checked++
-      $hook = Join-Path $code 'luna.check.ps1'
+      $hook = Join-Path $code 'sonelle.check.ps1'
       if (Test-Path $hook) {
         & $ps -ExecutionPolicy Bypass -File $hook | Out-Host
-        Result "    project check (luna.check.ps1)" ($LASTEXITCODE -eq 0) "(exit $LASTEXITCODE)"
+        Result "    project check (sonelle.check.ps1)" ($LASTEXITCODE -eq 0) "(exit $LASTEXITCODE)"
         $checked++
       } else {
-        Write-Host "    [info] no luna.check.ps1 (add one to define this project's health checks)" -ForegroundColor DarkGray
+        Write-Host "    [info] no sonelle.check.ps1 (add one to define this project's health checks)" -ForegroundColor DarkGray
       }
     }
   }
@@ -72,5 +72,5 @@ if (-not $any) { Write-Host "  (no matching projects)" -ForegroundColor DarkGray
 
 Write-Host ""
 if ($fails -gt 0) { Write-Host ("[doctor] {0} FAIL(s) - heal: diagnose each, fix, re-run (docs\HEAL.md)." -f $fails) -ForegroundColor Red; exit 1 }
-elseif ($checked -eq 0) { Write-Host "[doctor] NOTHING CHECKED (empty registry / no code paths / no luna.check.ps1) - NOT a real all-clear." -ForegroundColor Yellow; exit 0 }
+elseif ($checked -eq 0) { Write-Host "[doctor] NOTHING CHECKED (empty registry / no code paths / no sonelle.check.ps1) - NOT a real all-clear." -ForegroundColor Yellow; exit 0 }
 else { Write-Host ("[doctor] HEALTHY ({0} check(s), 0 fails)." -f $checked) -ForegroundColor Green; exit 0 }
