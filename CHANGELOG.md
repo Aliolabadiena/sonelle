@@ -73,6 +73,9 @@
   `requirements.txt` (P1). xterm scrollback is now a clamped, `localStorage`-configurable constant
   instead of a hard-coded 5000 per tab (P2). The PTY base64 decode is a single `Uint8Array.from(atob...)`
   pass instead of a per-character loop (P3). selftest covers all three.
+- **A build stamp (A4).** The terminal now reads the top version header from `CHANGELOG.md` (the source
+  of truth - there are no version tags) and shows it in the welcome footer and `:help`, so any session
+  or log records exactly which engine build it ran against. selftest asserts the welcome carries it.
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a

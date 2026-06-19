@@ -210,6 +210,10 @@ $demoStr  = (($demoOut -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
 Ok "terminal -Demo exit 0"             ($demoExit -eq 0)
 Ok "welcome shows brand + tagline"     (($demoStr -match 'sonelle') -and ($demoStr -match 'your projects, one orchestrator'))
 Ok "welcome no longer dumps all commands" (-not ($demoStr -match ':projects'))
+# A4: the welcome carries a build stamp derived from CHANGELOG's top version header.
+$verExp = (((Get-Content (Join-Path $engine 'CHANGELOG.md') | Where-Object { $_ -match '^##\s+v[0-9]' } | Select-Object -First 1) -replace '^##\s+(v\S+).*', '$1')).Trim()
+Ok "welcome shows the build version (A4)" (($verExp.Length -gt 0) -and ($demoStr -match [regex]::Escape($verExp)))
+Ok "terminal derives version from CHANGELOG"  (($srcTerm -match 'function SonelleVersion') -and ($srcTerm -match 'CHANGELOG\.md'))
 $bareOut = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo -Bare
 $bareStr = (($bareOut -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
 Ok "bare mode suppresses the welcome" (-not ($bareStr -match 'orchestrator'))

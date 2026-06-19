@@ -64,6 +64,14 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 $script:staged = @()   # image paths staged via :attach, consumed by the next routed prompt
 $script:selfShort = (Split-Path $root -Leaf).ToLower()   # the engine's own name -> routes to self-development (:dev)
 $script:bare = [bool]$Bare   # chat-feel mode for the app: suppress welcome + trim routing echo
+# A4: the build stamp = the top version header in CHANGELOG.md (the source of truth; no version tags),
+# so any session/log can record exactly which engine build it ran against.
+function SonelleVersion {
+  $cl = Join-Path $root 'CHANGELOG.md'
+  if (Test-Path $cl) { foreach ($l in (Get-Content $cl -TotalCount 40)) { if ($l -match '^##\s+(v[0-9][^ ]*)') { return $Matches[1] } } }
+  return ''
+}
+$script:version = SonelleVersion
 
 function ProjectShorts {
   $pf = Join-Path $hub 'PROJECTS.md'
@@ -100,11 +108,13 @@ function Welcome {
   }
   Row ("type       " + $eg + ": fix the build") ($dim + "type       " + $R + $cream + $eg + ": fix the build" + $R)
   Write-Host ("  " + $clay + $gBL + ($gH * $iw) + $gBR + $R)
-  Write-Host ("  " + $dim + "runs on your Claude subscription  " + $dot + "  @path attaches an image  " + $dot + "  :help" + $R)
+  $ver = if ($script:version) { "  " + $dot + "  " + $script:version } else { "" }
+  Write-Host ("  " + $dim + "runs on your Claude subscription  " + $dot + "  @path attaches an image  " + $dot + "  :help" + $ver + $R)
   Write-Host ""
 }
 function ShowHelp {
-  Write-Host ("  " + $bold + "commands" + $R)
+  $hver = if ($script:version) { "  " + $dim + $script:version + $R } else { "" }
+  Write-Host ("  " + $bold + "commands" + $R + $hver)
   Write-Host ""
   $rows = @(
     @("<short>: <prompt>",    ("run a prompt in a project  (e.g. " + $cream + "sotis: fix the build" + $dim + ")")),
