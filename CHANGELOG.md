@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.42 - 2026-06-19 (a new project is self-contained by default - it can never pollute the engine)
+Standing up a new project surfaced a real trap: `new_project.ps1` resolved its hub differently from every
+other tool. With no `-Hub`, it defaulted to the ENGINE folder, so running it bare dumped a project's TODO/
+ledger/memory/registry-row into `sonelle\` itself - while `check_pointers`/`doctor` read the *configured*
+hub. That split is how state ended up in two places and the wrong registry got read.
+- **Self-contained by default.** The hub now defaults to the project's OWN `Path`, not the engine. A bare
+  `new_project <short> "<name>" "<path>"` puts everything inside `<path>`: its CLAUDE.md, TODO, ledger,
+  `memory\`, and its own seeded `PROJECTS.md` (carrying the new row). Nothing lands in the engine. An
+  explicit `-Hub <workspace>` still registers into a shared hub (the terminal `:new` / `:adopt` path).
+- **Auto-seeded registry.** A self-contained hub has no `PROJECTS.md` yet, so the scaffold seeds a minimal
+  one - transactionally (tracked and rolled back on failure like every other created file).
+- **Refuses the engine root.** `new_project` now hard-errors if the resolved hub IS the engine folder
+  (script-level enforcement of invariant #4, belt to the existing PreToolUse guard) - so the brain can
+  never accumulate project state, however the script is invoked.
+- selftest **2c** is new: runs `new_project` with NO `-Hub` and asserts every state file lands in the
+  project (not the engine), the registry self-seeds, `check_pointers` is green on the project-as-hub, and
+  that `-Hub <engine>` is refused. 362 checks, all green.
+
 ## v1.41 - 2026-06-19 (hardening pass: code-path safety, loud config failures, CI, honest test count)
 A skeptical external review flagged a cluster of sharp edges; this closes the load-bearing ones. No new
 features - the engine just gets harder to misuse, and the gate gets honest.

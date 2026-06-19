@@ -82,6 +82,30 @@ Ok "default scaffold (no -Mcp) omits .mcp.json" (-not (Test-Path (Join-Path $cod
 $mcpValid = $false; try { $mj = Get-Content (Join-Path $mcpPath '.mcp.json') -Raw | ConvertFrom-Json; $mcpValid = [bool]$mj.mcpServers } catch {}
 Ok ".mcp.json is valid JSON with an mcpServers block" $mcpValid
 
+Write-Host "== 2c. self-contained default (no -Hub) + engine-root refusal (invariant #4) =="
+# Default behavior: with NO -Hub, the project's OWN folder is its hub - all state lands inside it,
+# nothing in the engine. This is what stops the split-brain bug (new_project writing to the engine
+# while the tools read a different hub).
+$scProj = Join-Path $tmp 'selfcontained'
+& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') sc "Self Contained" $scProj | Out-Null
+Ok "self-contained new_project exit 0"          ($LASTEXITCODE -eq 0)
+Ok "self-contained seeds its OWN PROJECTS.md"   (Test-Path (Join-Path $scProj 'PROJECTS.md'))
+Ok "self-contained registry row lands in the project" ((Test-Path (Join-Path $scProj 'PROJECTS.md')) -and ((Get-Content (Join-Path $scProj 'PROJECTS.md') -Raw) -match '(?m)^\|\s*sc\s*\|'))
+Ok "self-contained TODO lands in the project"   (Test-Path (Join-Path $scProj 'SC_TODO.txt'))
+Ok "self-contained ledger lands in the project" (Test-Path (Join-Path $scProj '_sc_run_STATUS.md'))
+Ok "self-contained memory lands in the project" (Test-Path (Join-Path $scProj 'memory\project_sc.md'))
+Ok "self-contained CLAUDE.md + check land in the project" ((Test-Path (Join-Path $scProj 'CLAUDE.md')) -and (Test-Path (Join-Path $scProj 'sonelle.check.ps1')))
+Ok "self-contained wrote NOTHING to the engine (no SC_TODO at engine root)" (-not (Test-Path (Join-Path $engine 'SC_TODO.txt')))
+Ok "self-contained added NO row to the engine registry" (-not ((Get-Content (Join-Path $engine 'PROJECTS.md') -Raw) -match '(?m)^\|\s*sc\s*\|'))
+# a self-contained project is health-checkable by pointing -Hub at its own folder
+& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $scProj | Out-Null
+Ok "check_pointers green on the self-contained hub" ($LASTEXITCODE -eq 0)
+# refusal: scaffolding INTO the engine folder is blocked at the script level (belt to the guard hook)
+& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') re "Refuse Engine" (Join-Path $tmp 'recode') -Hub $engine | Out-Null
+Ok "new_project refuses -Hub == engine (exit 1)"   ($LASTEXITCODE -eq 1)
+Ok "engine registry untouched by the refused run"  (-not ((Get-Content (Join-Path $engine 'PROJECTS.md') -Raw) -match '(?m)^\|\s*re\s*\|'))
+Ok "engine root still clean after refusal (no RE_TODO)" (-not (Test-Path (Join-Path $engine 'RE_TODO.txt')))
+
 Write-Host "== 3. check_pointers on temp hub =="
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $tmp | Out-Null
 Ok "check_pointers exit 0"         ($LASTEXITCODE -eq 0)

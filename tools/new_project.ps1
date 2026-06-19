@@ -25,7 +25,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $engine     = Split-Path $PSScriptRoot -Parent           # engine assets (templates) always live here
-$hub        = if ($Hub) { $Hub } else { $engine }        # workspace where registry/state/memory live
+$hub        = if ($Hub) { $Hub } else { $Path }          # default: the project is its OWN hub (self-contained); state lands in the project folder, never in the engine
 $tpl        = Join-Path $engine 'templates'
 $memDir     = Join-Path $hub 'memory'
 $projects   = Join-Path $hub 'PROJECTS.md'
@@ -37,13 +37,32 @@ function Fill($t) {
   return $t.Replace('{{SHORT}}', $Short).Replace('{{SHORT_UPPER}}', $shortUpper).Replace('{{NAME}}', $Name).Replace('{{PATH}}', $Path).Replace('{{DATE}}', $date)
 }
 
+# A self-contained project carries its OWN registry. When the resolved hub has no PROJECTS.md yet
+# (the default - the hub IS the project folder) seed this minimal one so the new row has a home.
+$registryHeader = @'
+# Projects registry - single source of truth
+
+> This workspace carries its own registry. The sonelle dispatcher reads it to route a request.
+> Add rows ONLY via new_project.ps1 - do not hand-edit the row format (the parser is strict).
+
+## Registry
+
+| Shortcode | Project | Code path | Git | State sources (read FIRST) | Keys / notes |
+|---|---|---|---|---|---|
+'@
+
 if ($Short -notmatch '^[a-z0-9_]+$') { Write-Host "[X] Shortcode must be a-z 0-9 _ only (got '$Short')." -ForegroundColor Red; exit 1 }
 if (@('general') -contains $Short) { Write-Host "[X] '$Short' is a reserved sonelle command (the no-project scratch lane), not a project shortcode." -ForegroundColor Red; exit 1 }
 if (-not (Test-Path $tpl))      { Write-Host "[X] templates folder not found: $tpl" -ForegroundColor Red; exit 1 }
-if (-not (Test-Path $projects)) { Write-Host "[X] registry not found: $projects" -ForegroundColor Red; exit 1 }
+# invariant #4: NEVER scaffold hub state into the engine folder itself - that splits state from where
+# the tools read it (the exact bug the self-contained default prevents). A project is its own hub; for
+# a shared hub pass an explicit -Hub <workspace> that is not the engine.
+if (([System.IO.Path]::GetFullPath($hub)).TrimEnd('\') -ieq ([System.IO.Path]::GetFullPath($engine)).TrimEnd('\')) {
+  Write-Host "[X] refusing to scaffold into the engine folder ($engine). A project is its own hub - give a project Path (self-contained) or an explicit -Hub <workspace>." -ForegroundColor Red; exit 1
+}
 
-# duplicate guard
-$registry = [System.IO.File]::ReadAllText($projects)
+# duplicate guard (a self-contained hub has no registry yet - tolerate a missing PROJECTS.md)
+$registry = if (Test-Path $projects) { [System.IO.File]::ReadAllText($projects) } else { '' }
 if ($registry -match ('(?m)^\|\s*' + [regex]::Escape($Short) + '\s*\|')) {
   Write-Host "[!] Shortcode '$Short' already in PROJECTS.md - stopping (nothing changed)." -ForegroundColor Yellow; exit 1
 }
@@ -55,9 +74,14 @@ $created    = New-Object System.Collections.Generic.List[string]
 $memIndex   = Join-Path $memDir 'MEMORY.md'
 $memDirNew  = -not (Test-Path $memDir)
 $memIdxPrev = if (Test-Path $memIndex) { [System.IO.File]::ReadAllText($memIndex) } else { $null }
-$projPrev   = [System.IO.File]::ReadAllText($projects)   # registry exists (guarded above)
+$projExisted = Test-Path $projects
+$projPrev    = if ($projExisted) { [System.IO.File]::ReadAllText($projects) } else { $null }
 
 try {
+# self-contained default: ensure the hub dir exists + seed its registry if it has none, so the project
+# carries its own PROJECTS.md. (An explicit -Hub to an existing workspace keeps that workspace's registry.)
+if (-not (Test-Path $hub)) { New-Item -ItemType Directory -Path $hub -Force | Out-Null; $created.Add($hub) }
+if (-not $projExisted)     { Write-Utf8 $projects $registryHeader; $created.Add($projects) }
 # ensure memory dir + index
 if ($memDirNew) { New-Item -ItemType Directory -Path $memDir -Force | Out-Null; $created.Add($memDir) }
 if ($null -eq $memIdxPrev) { Write-Utf8 $memIndex "# Memory index"; $created.Add($memIndex) }
@@ -147,8 +171,9 @@ Write-Utf8 $projects ($exReg + "`n" + $row + "`n")
 Write-Host "[+] PROJECTS.md registry row added"
 } catch {
   Write-Host "[X] scaffold failed: $($_.Exception.Message) - rolling back (no orphans)." -ForegroundColor Red
-  # restore the two append-targets to their pre-run state (registry always existed; index may not have)
-  try { Write-Utf8 $projects $projPrev } catch {}
+  # restore the append-targets to their pre-run state (each may be brand-new this run - then the
+  # reverse-delete below removes it instead of restoring it).
+  if ($projExisted) { try { Write-Utf8 $projects $projPrev } catch {} }
   if ($null -ne $memIdxPrev) { try { Write-Utf8 $memIndex $memIdxPrev } catch {} }
   elseif (Test-Path $memIndex) { Remove-Item $memIndex -Force -ErrorAction SilentlyContinue }
   # delete everything we created (reverse = deepest/newest first); -Recurse handles dirs we made
