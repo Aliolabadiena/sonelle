@@ -63,8 +63,13 @@ if (-not (Test-Path $pf)) {
       $hook = Join-Path $code 'sonelle.check.ps1'
       if (Test-Path $hook) {
         & $ps -ExecutionPolicy Bypass -File $hook | Out-Host
-        Result "    project check (sonelle.check.ps1)" ($LASTEXITCODE -eq 0) "(exit $LASTEXITCODE)"
-        $checked++
+        $rc = $LASTEXITCODE
+        if ($rc -eq 2) {
+          Write-Host "    [warn] sonelle.check.ps1 present but NOT configured (placeholder) - add real checks" -ForegroundColor Yellow
+        } else {
+          Result "    project check (sonelle.check.ps1)" ($rc -eq 0) "(exit $rc)"
+          $checked++
+        }
       } else {
         Write-Host "    [info] no sonelle.check.ps1 (add one to define this project's health checks)" -ForegroundColor DarkGray
       }

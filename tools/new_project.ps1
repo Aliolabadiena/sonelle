@@ -73,8 +73,31 @@ Copy-Item (Join-Path $tpl 'hooks\session_start.ps1')  (Join-Path $hooksDir 'sess
 Copy-Item (Join-Path $tpl 'hooks\stop.ps1')           (Join-Path $hooksDir 'stop.ps1')            -Force
 Write-Host "[+] $Path\.claude\settings.json (+ hooks)"
 $check = Join-Path $Path 'sonelle.check.ps1'
-Write-Utf8 $check "# sonelle.check.ps1 - health check for $Name. Put REAL checks here (tests/build/lint).`n# Exit 0 = healthy, non-zero = doctor / Stop-hook flags it. Replace the placeholder below.`nWrite-Output '[$Short] TODO: add real health checks to sonelle.check.ps1 (placeholder).'`nexit 0`n"
-Write-Host "[+] $check (starter)"
+$checkBody = @'
+# sonelle.check.ps1 - health check for {{NAME}}. Auto-detects a common test/build command.
+# Exit 0 = healthy, 1 = failing, 2 = NOT configured (no checks found - replace this with REAL checks).
+$ErrorActionPreference = 'Stop'
+$here = Split-Path -Parent $MyInvocation.MyCommand.Path
+Push-Location $here
+try {
+  if (Test-Path (Join-Path $here 'package.json')) {
+    $pkg = Get-Content (Join-Path $here 'package.json') -Raw | ConvertFrom-Json
+    if ($pkg.scripts -and $pkg.scripts.test) { npm test; exit $LASTEXITCODE }
+  }
+  if ((Test-Path (Join-Path $here 'pyproject.toml')) -or (Test-Path (Join-Path $here 'pytest.ini'))) {
+    python -m pytest -q; exit $LASTEXITCODE
+  }
+  if (Get-ChildItem $here -Filter *.csproj -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1) {
+    dotnet test; exit $LASTEXITCODE
+  }
+  if (Test-Path (Join-Path $here 'Cargo.toml')) { cargo test;    exit $LASTEXITCODE }
+  if (Test-Path (Join-Path $here 'go.mod'))     { go test ./...; exit $LASTEXITCODE }
+  Write-Output '[{{SHORT}}] sonelle.check.ps1 is a placeholder - no test command detected. Add real checks.'
+  exit 2
+} finally { Pop-Location }
+'@
+Write-Utf8 $check (Fill $checkBody)
+Write-Host "[+] $check (auto-detecting starter)"
 
 # memory index line (clean append)
 $idxLine = "- [$Name ($Short)](project_$Short.md) - new project ($date); state {{U}}_TODO.txt + ledger".Replace('{{U}}', $shortUpper)

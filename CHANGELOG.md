@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.32 — 2026-06-19 (engine hardening: honest heal, real behavioral tests, less drift)
+- **No more green-placeholder lie (H1+H2).** A brand-new project's `sonelle.check.ps1` is no longer a
+  hollow `exit 0`; `new_project.ps1` now scaffolds an **auto-detector** that finds the project's real
+  test command (`npm test` / `pytest` / `dotnet test` / `cargo test` / `go test`) and runs it - and
+  when it finds none it exits **2 = NOT configured** instead of faking health. `doctor.ps1` understands
+  exit 2 and reports `[warn] ... NOT configured (placeholder) - add real checks` instead of counting it
+  as a PASS. So "HEALTHY" now means something was actually checked. selftest sections 2 + 4 cover both.
+
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a
   modern neural voice that runs LOCALLY (ONNX): free, no API key, fully offline. The voice MODEL ships

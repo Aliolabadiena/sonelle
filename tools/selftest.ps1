@@ -51,6 +51,8 @@ Ok "no unfilled placeholders"      ($ph -eq 0)
 Ok "project .claude/settings.json created" (Test-Path (Join-Path $codePath '.claude\settings.json'))
 Ok "project Stop+SessionStart hooks created" ((Test-Path (Join-Path $codePath '.claude\hooks\stop.ps1')) -and (Test-Path (Join-Path $codePath '.claude\hooks\session_start.ps1')))
 Ok "project sonelle.check.ps1 created" (Test-Path (Join-Path $codePath 'sonelle.check.ps1'))
+$chkTxt = Get-Content (Join-Path $codePath 'sonelle.check.ps1') -Raw
+Ok "default check auto-detects + marks unconfigured" (($chkTxt -match 'pytest|npm test|dotnet test') -and ($chkTxt -match 'exit 2'))
 $vj = $true; try { [void](Get-Content (Join-Path $codePath '.claude\settings.json') -Raw | ConvertFrom-Json) } catch { $vj = $false }
 Ok "project settings.json is valid JSON" $vj
 
@@ -59,8 +61,9 @@ Write-Host "== 3. check_pointers on temp hub =="
 Ok "check_pointers exit 0"         ($LASTEXITCODE -eq 0)
 
 Write-Host "== 4. doctor on temp hub =="
-& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'doctor.ps1') -Hub $tmp | Out-Null
+$docOut = & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'doctor.ps1') -Hub $tmp
 Ok "doctor healthy (exit 0)"       ($LASTEXITCODE -eq 0)
+Ok "doctor flags unconfigured check (not a fake all-clear)" ((($docOut -join "`n")) -match 'NOT configured')
 
 Write-Host "== 5. duplicate guard =="
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') st "Dup" $codePath -Hub $tmp | Out-Null
