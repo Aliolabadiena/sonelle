@@ -43,12 +43,16 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
 
 ## The three capabilities (honest about what's mechanism vs discipline)
 - **Scaffold** (real mechanism) — new projects in one command, consistently structured (`tools\new_project.ps1`).
-- **Heal** (detector + guided fix) — `tools\doctor.ps1` DETECTS problems; the diagnose->fix->verify
-  loop is Claude-driven. A **Stop hook** (`.claude/settings.json`) auto-runs each project's
-  `sonelle.check.ps1` after every task. With no `sonelle.check.ps1` it's just "code path exists" (`docs\HEAL.md`).
-- **Self-improve** (capture + hook-enforced loop) — `tools\log_lesson.ps1` writes lessons; a
-  **SessionStart hook** reminds to recall before, a **Stop hook** reminds to capture after — so the
-  loop is enforced by the harness, not just discipline (`docs\SELF_IMPROVE.md`). Two stores: personal /
+- **Heal** (real checks + detector + guided fix) — new projects ship an auto-detecting
+  `sonelle.check.ps1` (npm/pytest/dotnet/cargo/go) that exits `2 = NOT configured` rather than faking
+  health, and `tools\doctor.ps1` reports that honestly (plus orphaned state with no registry row). So a
+  fresh project no longer reports HEALTHY while checking nothing. The diagnose->fix->verify loop is
+  Claude-driven; a **Stop hook** (`.claude/settings.json`) auto-runs each project's check after every
+  task (`docs\HEAL.md`).
+- **Self-improve** (capture + recall as mechanism) — `tools\log_lesson.ps1` writes lessons; the
+  **SessionStart hook surfaces the memory index INTO context** (not just a reminder to read it), and a
+  **Stop hook** prompts capture after — so the loop runs via the harness, not just discipline
+  (`docs\SELF_IMPROVE.md`). Two stores: personal /
   per-project lessons -> gitignored hub `memory/`; **generic, reusable** lessons (`-Shared`) ship IN
   the engine at `knowledge/` (public, ASCII), so a fresh clone already knows them. Hooks ship in
   `.claude/` and are scaffolded into every new project.

@@ -76,6 +76,10 @@
 - **A build stamp (A4).** The terminal now reads the top version header from `CHANGELOG.md` (the source
   of truth - there are no version tags) and shows it in the welcome footer and `:help`, so any session
   or log records exactly which engine build it ran against. selftest asserts the welcome carries it.
+- **Honest framing (H4).** With heal and recall now real mechanism (H1-H3), `CLAUDE.md` and `README.md`
+  were tightened to say so: HEAL now lists unconfigured + orphan detection and the real default check;
+  SELF-IMPROVE says recall is surfaced into context, not merely reminded. No more overselling
+  discipline as mechanism.
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a

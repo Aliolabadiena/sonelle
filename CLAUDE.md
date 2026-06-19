@@ -22,12 +22,15 @@ the sources first.
 ## The three superpowers
 - **SCAFFOLD** — `tools\new_project.ps1 <short> "<name>" "<path>"` creates a project with the
   full skeleton (TODO + ledger + project CLAUDE.md + memory file + registry row).
-- **HEAL** — `tools\doctor.ps1 [<short>]` detects problems (broken pointers, dirty git,
-  failing project checks). To *heal*: run doctor -> diagnose each failure -> fix -> re-run
+- **HEAL** — `tools\doctor.ps1 [<short>]` detects problems (broken pointers, dirty git, failing
+  project checks, *unconfigured* placeholder checks, and orphaned state with no registry row). New
+  projects ship a real auto-detecting `sonelle.check.ps1` (npm/pytest/dotnet/cargo/go), so "HEALTHY"
+  means something was actually checked. To *heal*: run doctor -> diagnose each failure -> fix -> re-run
   until green. Full routine: `docs\HEAL.md`.
-- **SELF-IMPROVE** — after EVERY task, reflect and write what was learned (gotchas, user
-  feedback, fixes, dead-ends) into `memory/` so the next session recalls it. Recall relevant
-  memory BEFORE starting. Quick capture: `tools\log_lesson.ps1`. Full loop: `docs\SELF_IMPROVE.md`.
+- **SELF-IMPROVE** — after EVERY task, reflect and write what was learned (gotchas, user feedback,
+  fixes, dead-ends) into `memory/`. Recall is mechanism, not just hope: the **SessionStart hook
+  surfaces the memory index into context** before you start. Quick capture: `tools\log_lesson.ps1`.
+  Full loop: `docs\SELF_IMPROVE.md`.
 
 ## Enforcement (hooks)
 `.claude/settings.json` wires a **SessionStart** hook (recall reminder) and a **Stop** hook (auto-runs
