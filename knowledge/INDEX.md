@@ -20,3 +20,4 @@ gitignored hub `memory/` (and your Claude auto-memory). Rule of thumb:
 - [powershell-commit-heredoc](powershell-commit-heredoc.md) - PS 5.1 `git commit -m @'...'@` with slashes/braces fails; commit via `git commit -F <tempfile>`.
 - [powershell-pure-ascii](powershell-pure-ascii.md) - PS 5.1 misreads non-ASCII in a no-BOM .ps1; build glyphs at runtime from [char] codepoints.
 - [powershell-case-insensitive-vars](powershell-case-insensitive-vars.md) - $Hub and $hub are ONE variable; reassigning a same-name-different-case working var clobbers a parameter override.
+- [selftest-grep-assertion-self-collision](selftest-grep-assertion-self-collision.md) - source-grep assertions can match comments / their own wording; anchor on a unique code-only token and watch negative matches.
