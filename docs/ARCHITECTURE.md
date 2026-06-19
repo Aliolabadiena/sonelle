@@ -166,10 +166,11 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   (pure-ASCII `.ps1`) and invariant #4 (no hub state / `new_project` / plain `log_lesson` at the engine
   root) and blocks force-push; the project guard blocks force-push and is yours to extend. **Slash
   commands** (`.claude\commands\`: `/selftest /heal /ship /ritual`) turn the rituals into one keystroke.
-  And `bin\sonelle.ps1` appends a one-line **altitude directive** to every session via
-  `--append-system-prompt`, so claude auto-delegates hard / multi-file tasks to subagents (the Task tool)
-  but does small ones directly - the deep approach applies itself only when a task warrants it. selftest
-  8h (+ 5d) cover all of it.
+  And `bin\sonelle.ps1` appends a one-line **operating policy** to every project/engine session via
+  `--append-system-prompt`, so claude decides the workflow from the task itself: delegate hard / multi-file
+  work to subagents, verify a change against the right check, heal a failure, and run the end-of-task ritual
+  when done - scaling down to nothing on a one-liner. The `general:` lane gets a minimal no-state variant.
+  selftest 8h (+ 5d) cover all of it.
 - **Onboarding primer, :adopt, and the general lane (v1.37):** each glass-app tab runs `-Bare`, which now
   greets you with a short no-claude primer (how to make a project, adopt an existing one, run a task,
   connect claude) instead of a blank prompt; `help`/`?` shows the commands without ever calling claude.

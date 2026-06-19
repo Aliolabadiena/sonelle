@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.38 — 2026-06-19 (the injected directive becomes a proactive operating policy: claude self-drives the workflow)
+- **You state the goal; claude decides which workflow to use.** The one-line directive sonelle injects into
+  every project/engine session (`--append-system-prompt`) grew from just the altitude rule into a full
+  OPERATING POLICY (`$operatingPolicy`). Without being told, claude now: delegates hard / multi-file work to
+  subagents; VERIFIES a change by running the right check (the engine selftest or a project
+  `sonelle.check.ps1`) before calling it done; HEALS a failing check (root-cause -> fix -> re-run until
+  green); and runs the end-of-task ritual (update TODO/ledger, capture a lesson) when it finishes - while
+  scaling the ceremony down so a one-line change or a plain question gets none. The `/selftest /heal /ship
+  /ritual` commands still exist to run a routine as a unit; the policy just means you rarely have to name one.
+- **The general lane stays minimal.** `general:` gets its own `$generalDirective` (delegate only if truly
+  large; create/modify NO project files or state) instead of the project policy - a one-off has nothing to
+  verify, heal, or ritualize.
+- **selftest:** 8h now asserts the policy is proactive (verify + heal + ritual + "you decide which workflow")
+  and that the general lane uses the separate no-state directive; behavioral 5d/5f still confirm the flag is
+  attached and that general routes to the neutral scratch dir. All green.
+
 ## v1.37 — 2026-06-19 (onboarding primer + :adopt an existing project + the general scratch lane)
 - **The app terminal opens with a primer, not a blank prompt.** Each glass-app tab runs the terminal in
   `-Bare` mode, which used to show nothing. It now prints a tiny NO-CLAUDE primer (`BareIntro`): make a

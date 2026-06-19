@@ -71,12 +71,14 @@ function ClaudeSupports($flag) {
   }
   return ([bool]($script:claudeHelp -match [regex]::Escape($flag)))
 }
-# Inherent altitude directive: sonelle appends this to EVERY session it launches (engine-dev + project
-# routes) via claude's --append-system-prompt. It SELF-GATES - claude takes the deep, subagent-delegating
-# path only when a task is genuinely hard, and skips it for small ones (best results on the hard tasks, no
-# wasted effort on the easy ones). One line (no newlines / cmd metacharacters) so it passes through any
-# launcher unmangled.
-$script:delegationDirective = 'Altitude - match your effort to the task: for a large or multi-file change, like a refactor or a cross-cutting edit that first needs you to understand how several files interact, delegate the breadth-first exploration to subagents via the Task tool and keep your own context for the synthesis and the edit; for a small focused change just do it directly and do not spawn subagents or over-plan a one-liner.'
+# Inherent OPERATING POLICY: sonelle appends this to every project/engine session it launches via claude's
+# --append-system-prompt, so claude PROACTIVELY decides which of our workflows to apply (delegate to
+# subagents, verify, heal, run the end-of-task ritual) from the task alone - the user states the goal, not
+# the tool. It self-gates and self-scales: deep on hard/multi-file work, direct on small, no ceremony on a
+# one-liner. One line (no newlines / cmd metacharacters) so it survives any launcher unmangled. The general
+# (no-project) lane gets its own minimal directive instead, since there is no project state to maintain.
+$script:operatingPolicy = "Operating policy - you decide WHICH of our workflows to use and WHEN; I describe the goal, I do not name the tool, so act on your own judgment instead of waiting for me to say run-this or use-that. Match effort to the task: for a large or multi-file change, which first needs you to understand how several files interact, delegate the breadth-first exploration to subagents via the Task tool and keep your own context for the synthesis and the edit; for a small focused change just do it directly. After any code change VERIFY it yourself before you call it done by running the right health check - the engine selftest, or a project sonelle.check.ps1 - and do not wait to be asked; if it fails, HEAL it: find the root cause, fix it, and re-run until green. When you finish a real task do the end-of-task ritual on your own - update the project TODO and ledger and capture any reusable lesson. The slash commands selftest, heal, ship and ritual bundle these routines if you want to run one as a unit. Scale the ceremony to the task - never over-process a one-line change or a plain question."
+$script:generalDirective = "This is a one-off task with NO project and no saved state. Answer or do it directly, and reach for subagents via the Task tool only if it is genuinely large. Do not create or modify any project files, TODO, ledger, or memory, and do not run the project rituals - there is nothing here to maintain."
 $psExe = (Get-Process -Id $PID).Path
 # (_registry.ps1 is already dot-sourced above for Get-SonelleConfig - Get-SonelleProjects comes from it too.)
 
@@ -336,8 +338,8 @@ function DevSelf($prompt, $images) {
   $cargs = @('--model', $orchModel, '--effort', $orchEffort)
   # framing + the inherent altitude directive ride the system prompt when claude supports it; otherwise
   # fold them into the prompt (older builds) so behavior degrades gracefully, never breaks.
-  if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', ($framing + "`n`n" + $script:delegationDirective)); $promptArg = $ask }
-  else { $promptArg = $framing + "`n`n" + $script:delegationDirective + "`n`nTask: " + $ask }
+  if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', ($framing + "`n`n" + $script:operatingPolicy)); $promptArg = $ask }
+  else { $promptArg = $framing + "`n`n" + $script:operatingPolicy + "`n`nTask: " + $ask }
   if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
   Push-Location $root
   try { & claude @cargs $promptArg } finally { Pop-Location }
@@ -374,8 +376,9 @@ function General($prompt, $images) {
     Write-Host ("    " + $dim + ($finalPrompt -replace "`n", " / ") + $R)
   }
   $cargs = @('--model', $orchModel, '--effort', $orchEffort)
-  if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', $script:delegationDirective) }
-  else { $finalPrompt = $script:delegationDirective + "`n`n" + $finalPrompt }
+  # a one-off lane: the minimal no-state directive, NOT the full project operating policy
+  if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', $script:generalDirective) }
+  else { $finalPrompt = $script:generalDirective + "`n`n" + $finalPrompt }
   if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
   Push-Location $scratch
   try { & claude @cargs $finalPrompt } finally { Pop-Location }
@@ -412,9 +415,9 @@ function Route($short, $prompt, $images) {
     Write-Host ("    " + $dim + ($finalPrompt -replace "`n", " / ") + $R)
   }
   $cargs = @('--model', $orchModel, '--effort', $orchEffort)
-  # the inherent altitude directive rides the system prompt (self-gates: deep on hard tasks, direct on easy)
-  if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', $script:delegationDirective) }
-  else { $finalPrompt = $script:delegationDirective + "`n`n" + $finalPrompt }
+  # the inherent operating policy rides the system prompt: claude decides which workflow to apply, proactively
+  if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', $script:operatingPolicy) }
+  else { $finalPrompt = $script:operatingPolicy + "`n`n" + $finalPrompt }
   if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
   if ($code -notmatch '^[-(]' -and (Test-Path $code)) { Push-Location $code } else { Push-Location $root }
   try { & claude @cargs $finalPrompt } finally { Pop-Location }

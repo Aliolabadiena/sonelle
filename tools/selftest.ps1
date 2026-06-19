@@ -331,9 +331,11 @@ Ok "engine settings.json wires PreToolUse -> guard" (($engSet -match 'PreToolUse
 foreach ($c in @('selftest', 'heal', 'ship', 'ritual')) { Ok ("engine /$c command exists") (Test-Path (Join-Path $engine ('.claude\commands\' + $c + '.md'))) }
 Ok "/ship gates on selftest before committing" ((Get-Content (Join-Path $engine '.claude\commands\ship.md') -Raw) -match 'selftest')
 Ok "terminal probes claude for --append-system-prompt support" (($srcTerm -match 'function ClaudeSupports') -and ($srcTerm -match 'claude --help'))
-Ok "terminal defines the inherent altitude/subagent directive" (($srcTerm -match 'delegationDirective') -and ($srcTerm -match 'delegate the breadth-first exploration to subagents'))
+Ok "terminal defines the inherent operating policy (proactive, self-deciding)" (($srcTerm -match 'operatingPolicy') -and ($srcTerm -match 'delegate the breadth-first exploration to subagents') -and ($srcTerm -match 'you decide WHICH of our workflows'))
+Ok "policy makes claude proactively verify + heal + run the ritual unasked" (($srcTerm -match 'VERIFY it yourself') -and ($srcTerm -match 'HEAL it') -and ($srcTerm -match 'end-of-task ritual'))
+Ok "the general lane uses a minimal no-state directive, not the project policy" (($srcTerm -match 'function General') -and ($srcTerm -match 'generalDirective') -and ($srcTerm -match 'nothing here to maintain'))
 Ok "DevSelf framing rides --append-system-prompt, with a fold-in fallback" (($srcTerm -match '\$framing') -and ($srcTerm -match '--append-system-prompt') -and ($srcTerm -match 'ClaudeSupports'))
-Ok "both DevSelf and Route append the directive" (([regex]::Matches($srcTerm, 'delegationDirective')).Count -ge 3)
+Ok "both DevSelf and Route append the operating policy" (([regex]::Matches($srcTerm, 'operatingPolicy')).Count -ge 3)
 
 Write-Host "== 8e. python glass app (sonelle_gui) =="
 $appDir = Join-Path $engine 'app'

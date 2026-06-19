@@ -152,11 +152,14 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   root) plus blocks force-push; the PROJECT template guard blocks force-push and is a stub to add your own
   rules. **Slash commands** (`.claude\commands\`: `/selftest /heal /ship /ritual`) codify the rituals -
   engine versions drive `selftest`/`doctor`/the commit gate, scaffolded versions drive `sonelle.check.ps1`
-  + the project's TODO/ledger. **Inherent altitude directive:** `bin\sonelle.ps1` appends a one-line,
-  self-gating directive (`$delegationDirective`) to EVERY session via `--append-system-prompt` - delegate
-  breadth-first exploration to subagents (the Task tool) on a hard / multi-file task, just-do-it on a small
-  one - so the deep approach auto-applies only when a task warrants it (best results on the hard ones, no
-  wasted effort on the easy ones). DevSelf also moves its engine framing into `--append-system-prompt` (the
+  + the project's TODO/ledger. **Inherent operating policy (v1.36, broadened v1.38):** `bin\sonelle.ps1`
+  appends a one-line policy (`$operatingPolicy`) to EVERY project/engine session via `--append-system-prompt`
+  so claude PROACTIVELY picks the workflow from the task alone (the user states the goal, not the tool):
+  delegate breadth-first exploration to subagents on a hard / multi-file task and do small ones directly;
+  VERIFY after a change by running the right check (selftest or `sonelle.check.ps1`); HEAL on failure; run the
+  end-of-task ritual when done - while scaling down so a one-liner gets no ceremony. The `general:` lane gets
+  a minimal `$generalDirective` instead (no project state to maintain). DevSelf also moves its engine framing
+  into `--append-system-prompt` (the
   system prompt survives compaction better than a user-turn seed). Both gate on a cached
   `ClaudeSupports '--append-system-prompt'` probe and fall back to folding the text into the prompt on an
   older `claude`. Guarded by selftest 8h (guard exists + behavioral block/allow incl. the non-ASCII case +
