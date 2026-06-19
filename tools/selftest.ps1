@@ -66,6 +66,12 @@ Write-Host "== 4. doctor on temp hub =="
 $docOut = & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'doctor.ps1') -Hub $tmp
 Ok "doctor healthy (exit 0)"       ($LASTEXITCODE -eq 0)
 Ok "doctor flags unconfigured check (not a fake all-clear)" ((($docOut -join "`n")) -match 'NOT configured')
+# R2: doctor flags orphaned state (a TODO with no registry row) as a non-fatal warning
+[System.IO.File]::WriteAllText((Join-Path $tmp 'ZZ_TODO.txt'), 'orphan')
+$docOrph = & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'doctor.ps1') -Hub $tmp
+Ok "doctor flags an orphan state file (R2)" ((($docOrph -join "`n")) -match 'orphan state: ZZ_TODO')
+Ok "orphan is a warning, not a failure (exit 0)" ($LASTEXITCODE -eq 0)
+Remove-Item (Join-Path $tmp 'ZZ_TODO.txt') -Force
 
 Write-Host "== 5. duplicate guard =="
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') st "Dup" $codePath -Hub $tmp | Out-Null

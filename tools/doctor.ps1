@@ -78,6 +78,35 @@ if (-not (Test-Path $pf)) {
 }
 if (-not $any) { Write-Host "  (no matching projects)" -ForegroundColor DarkGray }
 
+# State consistency (whole-hub only): the REVERSE of check_pointers - state files (TODO / ledger /
+# memory) whose <short> has NO registry row, and registry rows missing their conventional TODO file.
+# Orphans are WARNINGS, not failures (you may be mid-cleanup); they just shouldn't pass silently.
+if (-not $Short -and (Test-Path $pf)) {
+  Section "state consistency"
+  $regShorts = @((Get-SonelleProjects $pf) | ForEach-Object { $_.Short })
+  $orphans = 0
+  foreach ($f in (Get-ChildItem $hub -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue)) {
+    $s = ($f.BaseName -replace '_TODO$', '').ToLower()
+    if ($regShorts -notcontains $s) { Write-Host ("  [warn] orphan state: {0} (no '{1}' row in PROJECTS.md)" -f $f.Name, $s) -ForegroundColor Yellow; $orphans++ }
+  }
+  foreach ($f in (Get-ChildItem $hub -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue)) {
+    $s = (($f.BaseName -replace '^_', '') -replace '_run_STATUS$', '').ToLower()
+    if ($regShorts -notcontains $s) { Write-Host ("  [warn] orphan ledger: {0} (no '{1}' row)" -f $f.Name, $s) -ForegroundColor Yellow; $orphans++ }
+  }
+  if (Test-Path $memDir) {
+    foreach ($f in (Get-ChildItem $memDir -Filter 'project_*.md' -File -ErrorAction SilentlyContinue)) {
+      $s = ($f.BaseName -replace '^project_', '').ToLower()
+      if ($regShorts -notcontains $s) { Write-Host ("  [warn] orphan memory: {0} (no '{1}' row)" -f $f.Name, $s) -ForegroundColor Yellow; $orphans++ }
+    }
+  }
+  foreach ($s in $regShorts) {
+    $todo = Join-Path $hub (($s.ToUpper()) + '_TODO.txt')
+    if (-not (Test-Path $todo)) { Write-Host ("  [warn] row '{0}' has no TODO state file -> {1}" -f $s, $todo) -ForegroundColor Yellow; $orphans++ }
+  }
+  if ($orphans -eq 0) { Write-Host "  [PASS] registry and state files agree (no orphans)" -ForegroundColor Green }
+  else { Write-Host ("  [info] {0} orphan warning(s) above - clean them up or register them (non-fatal)." -f $orphans) -ForegroundColor DarkGray }
+}
+
 Write-Host ""
 if ($fails -gt 0) { Write-Host ("[doctor] {0} FAIL(s) - heal: diagnose each, fix, re-run (docs\HEAL.md)." -f $fails) -ForegroundColor Red; exit 1 }
 elseif ($checked -eq 0) { Write-Host "[doctor] NOTHING CHECKED (empty registry / no code paths / no sonelle.check.ps1) - NOT a real all-clear." -ForegroundColor Yellow; exit 0 }

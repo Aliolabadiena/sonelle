@@ -44,6 +44,11 @@
   file/dir it creates and snapshots the two append-targets, and on ANY failure it rolls everything back:
   either the whole project lands or nothing does. selftest section 5e forces a mid-scaffold failure and
   asserts no TODO/ledger/registry-row/index-line is left behind.
+- **`doctor` now catches orphaned state (R2).** `check_pointers` already verifies registry -> files;
+  doctor now does the reverse, flagging `*_TODO.txt` / `_*_run_STATUS.md` / `memory\project_*.md` whose
+  `<short>` has no registry row (a leftover from a deleted project), and registry rows missing their
+  TODO state file. These are non-fatal warnings (you may be mid-cleanup) so a real all-clear still
+  exits 0. selftest section 4 plants an orphan TODO and asserts doctor warns about it without failing.
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a
