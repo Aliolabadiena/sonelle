@@ -86,6 +86,18 @@ $le=$null;$lt=$null;[void][System.Management.Automation.Language.Parser]::ParseF
 Ok "lane start script parses"       ($le.Count -eq 0)
 Ok "lane per-model in start script" ((Get-Content (Join-Path $codePath '.sonelle\lanes\a.start.ps1') -Raw) -match '--model haiku')
 Ok "lane permission-mode in start script" ((Get-Content (Join-Path $codePath '.sonelle\lanes\a.start.ps1') -Raw) -match '--permission-mode')
+# R3: -Verify catches overlapping ownership before a launch can clobber files.
+$laneA = Join-Path $codePath '.sonelle\lanes\a.md'
+$laneB = Join-Path $codePath '.sonelle\lanes\b.md'
+((Get-Content $laneA -Raw) -replace '(?m)^owns:.*$', 'owns: src/, docs/api.md') | Set-Content $laneA
+((Get-Content $laneB -Raw) -replace '(?m)^owns:.*$', 'owns: src/components/, README.md') | Set-Content $laneB
+$verOut = & $ps -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle_team.ps1') st -Verify -Hub $tmp
+Ok "lane -Verify flags overlapping ownership (R3)" ((($verOut -join "`n")) -match 'CONFLICT')
+Ok "lane -Verify exits 1 on conflict"      ($LASTEXITCODE -eq 1)
+((Get-Content $laneA -Raw) -replace '(?m)^owns:.*$', 'owns: src/, docs/api.md') | Set-Content $laneA
+((Get-Content $laneB -Raw) -replace '(?m)^owns:.*$', 'owns: tests/, README.md') | Set-Content $laneB
+$verOk = & $ps -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle_team.ps1') st -Verify -Hub $tmp
+Ok "lane -Verify passes when ownership is disjoint" (($LASTEXITCODE -eq 0) -and ((($verOk -join "`n")) -match 'no ownership overlap'))
 
 Write-Host "== 5c. app (multi-terminal shell) =="
 $appPath = Join-Path $engine 'bin\sonelle_app.ps1'

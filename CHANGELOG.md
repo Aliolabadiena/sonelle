@@ -49,6 +49,12 @@
   `<short>` has no registry row (a leftover from a deleted project), and registry rows missing their
   TODO state file. These are non-fatal warnings (you may be mid-cleanup) so a real all-clear still
   exits 0. selftest section 4 plants an orphan TODO and asserts doctor warns about it without failing.
+- **Lanes can be checked for overlap before they collide (R3).** Parallel lanes coordinate purely by an
+  honor-system `owns:` declaration + disjoint file ownership - the riskiest feature when a project has no
+  git merge safety. `sonelle_team.ps1 <project> -Verify` now parses every lane's `owns:` line, normalizes
+  the paths/globs, and reports any two lanes that claim the same file or an ancestor directory of it,
+  exiting 1 so it can gate a launch. selftest section 5b asserts it flags an overlap and passes when
+  ownership is disjoint.
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a
