@@ -11,7 +11,10 @@ function Get-SonelleProjects([string]$RegistryPath) {
   if (-not (Test-Path $RegistryPath)) { return @() }
   $txt = (Get-Content $RegistryPath -Raw) -replace "`r`n", "`n"
   $out = @()
-  foreach ($m in [regex]::Matches($txt, '(?m)^\|\s*([a-z0-9_]+)\s*\|(.*)$')) {
+  # [ \t]* (not \s*): \s matches newlines, so a malformed row with no closing pipe would "borrow" the
+  # next line and be parsed as a bogus project. Keep each match on its own line (matches the line-based
+  # Python parser in app\sonelle_gui.py - selftest section 9a asserts the two agree).
+  foreach ($m in [regex]::Matches($txt, '(?m)^\|[ \t]*([a-z0-9_]+)[ \t]*\|(.*)$')) {
     $short = $m.Groups[1].Value
     if ($short -eq 'shortcode') { continue }
     $cells = @($m.Groups[2].Value.Split('|') | ForEach-Object { $_.Trim() })

@@ -58,6 +58,18 @@ Ok "default check auto-detects + marks unconfigured" (($chkTxt -match 'pytest|np
 $vj = $true; try { [void](Get-Content (Join-Path $codePath '.claude\settings.json') -Raw | ConvertFrom-Json) } catch { $vj = $false }
 Ok "project settings.json is valid JSON" $vj
 
+# T2: golden snapshot - the template SET and the scaffold MANIFEST must stay stable, so an accidental
+# template/scaffold change that would alter every new project trips this test (a conscious change updates it).
+$tplDir  = Join-Path $engine 'templates'
+$tplGot  = @(Get-ChildItem $tplDir -Recurse -File | ForEach-Object { $_.FullName.Substring($tplDir.Length + 1).Replace('\', '/') } | Sort-Object)
+$tplWant = @('CLAUDE.template.md', 'TODO.template.txt', 'hooks/session_start.ps1', 'hooks/stop.ps1', 'lesson.template.md', 'project_memory.template.md', 'run_STATUS.template.md', 'settings.template.json') | Sort-Object
+Ok "template set is exactly the known golden (T2)" (($tplGot -join '|') -eq ($tplWant -join '|'))
+$manifestOk = $true
+foreach ($f in @((Join-Path $tmp 'ST_TODO.txt'), (Join-Path $tmp '_st_run_STATUS.md'), (Join-Path $codePath 'CLAUDE.md'), (Join-Path $codePath 'sonelle.check.ps1'), (Join-Path $codePath '.claude\settings.json'), (Join-Path $codePath '.claude\hooks\session_start.ps1'), (Join-Path $codePath '.claude\hooks\stop.ps1'), (Join-Path $tmp 'memory\project_st.md'), (Join-Path $tmp 'memory\MEMORY.md'))) {
+  if (-not (Test-Path $f)) { $manifestOk = $false }
+}
+Ok "scaffold produces the full golden manifest (T2)" $manifestOk
+
 Write-Host "== 3. check_pointers on temp hub =="
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $tmp | Out-Null
 Ok "check_pointers exit 0"         ($LASTEXITCODE -eq 0)
@@ -367,7 +379,7 @@ if (Test-Path $venvPy) {
 # Q2: nobody adds a THIRD parser. Grep every .ps1/.py (minus .venv) for the registry-row regex signature;
 # the only PS file allowed to carry it is _registry.ps1, and the only Python file is sonelle_gui.py.
 $scanFiles = @(Get-ChildItem $engine -Recurse -Include *.ps1, *.py | Where-Object { $_.FullName -notmatch '\\\.venv\\' })
-$psParserHits = @(Select-String -Path $scanFiles.FullName -Pattern '\^\\\|\\s\*\(\[a-z0-9_' -ErrorAction SilentlyContinue | Where-Object { $_.Path -notmatch 'selftest\.ps1' })
+$psParserHits = @(Select-String -Path $scanFiles.FullName -Pattern '\^\\\|.*\(\[a-z0-9_' -ErrorAction SilentlyContinue | Where-Object { $_.Path -notmatch 'selftest\.ps1' })
 $psUnsanctioned = @($psParserHits | Where-Object { $_.Path -notmatch '_registry\.ps1' })
 Ok "the sanctioned PS registry parser exists" (@($psParserHits | Where-Object { $_.Path -match '_registry\.ps1' }).Count -ge 1)
 Ok "no unsanctioned PS registry parser (Q2)" ($psUnsanctioned.Count -eq 0)
@@ -379,6 +391,30 @@ Ok "sonelle.ps1 has a -Hub param that wins over config" (($srcTerm -match '\[str
 $hubDemo = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo -Hub $tmp
 $hubStr  = (($hubDemo -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
 Ok "terminal -Hub points the welcome at the override hub" ($hubStr -match '(?m)\bst\b')
+
+Write-Host "== 9c. registry parser is robust to junk (T3) =="
+# Feed Get-SonelleProjects malformed rows: it must neither throw nor return junk, and must trim cells.
+$fuzzReg = Join-Path $env:TEMP 'sonelle_fuzz_PROJECTS.md'
+$fuzzLines = @(
+  '# Projects', '',
+  '| Shortcode | Project | Code path |',          # capital header -> skipped
+  '|---|---|---|',                                 # separator -> skipped
+  '| good | Good Proj | C:\code\good |',           # valid
+  '| bad ',                                        # missing cells / no closing pipe -> skipped
+  '|   | Empty Short | C:\x |',                    # empty short -> skipped
+  '| spaced |   Trimmed   |   C:\s\path   |',      # extra spaces -> trimmed
+  'not a table row at all',                        # prose -> skipped
+  '| piped | P | C:\a|b\c |',                      # pipe inside path -> must not throw
+  '| UPPER | caps short | C:\u |')                 # uppercase short -> skipped by [a-z0-9_]
+[System.IO.File]::WriteAllText($fuzzReg, ($fuzzLines -join "`r`n"))
+$threw = $false; $fz = @()
+try { $fz = Get-SonelleProjects $fuzzReg } catch { $threw = $true }
+Ok "parser does not throw on malformed rows (T3)" (-not $threw)
+$fzShorts = @($fz | ForEach-Object { $_.Short })
+Ok "parser keeps only valid lowercase shorts" (($fzShorts -contains 'good') -and ($fzShorts -contains 'spaced') -and ($fzShorts -contains 'piped') -and (-not ($fzShorts -contains 'upper')) -and (-not ($fzShorts -contains 'shortcode')) -and (-not ($fzShorts -contains 'bad')))
+$spacedRow = $fz | Where-Object { $_.Short -eq 'spaced' } | Select-Object -First 1
+Ok "parser trims cells" (($spacedRow.Name -eq 'Trimmed') -and ($spacedRow.CodePath -eq 'C:\s\path'))
+Remove-Item $fuzzReg -Force -ErrorAction SilentlyContinue
 
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 

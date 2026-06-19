@@ -61,6 +61,13 @@
   controls and shutdown - so a harder unattended session is diagnosable instead of mute. The behaviour
   is unchanged (still swallows); it just records why. selftest section 8e asserts the logger exists and
   is used. (The narrator's own except blocks are left untouched.)
+- **Two new test layers - and a real bug they found (T2+T3).** A golden snapshot (T2) pins the exact
+  template set and the full scaffold manifest, so an accidental template change that would alter every
+  new project trips the build. A registry-parser fuzz (T3) feeds `Get-SonelleProjects` malformed rows
+  (missing cells, empty/uppercase shorts, pipes in paths, stray CR) and asserts it neither throws nor
+  returns junk. T3 immediately caught a real bug: the parser's `\s*` matched newlines, so a malformed
+  row with no closing pipe "borrowed" the next line and became a bogus project (and silently diverged
+  from the line-based Python parser). Fixed to `[ \t]*` so each match stays on its own line.
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a
