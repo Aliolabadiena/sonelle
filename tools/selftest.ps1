@@ -439,6 +439,8 @@ $srcNarr = if (Test-Path $narrPy) { Get-Content $narrPy -Raw } else { '' }
 Ok "narrator builds hooks settings, gated on --settings support" (($srcNarr -match 'def setup') -and ($srcNarr -match '_claude_supports_settings') -and ($srcNarr -match '--settings'))
 Ok "narrator splits each event into display + speak (dual rendering)" (($srcNarr -match 'class TabNarrator') -and ($srcNarr -match 'def build_line') -and ($srcNarr -match 'display, speak, kind, important = item') -and ($srcNarr -match '_VOICE_CATS'))
 Ok "narrator has 4 reporting styles (warm/terse/hacker/bubbly)" (($srcNarr -match '_STYLES') -and ($srcNarr -match '"warm"') -and ($srcNarr -match '"terse"') -and ($srcNarr -match '"hacker"') -and ($srcNarr -match '"bubbly"') -and ($srcNarr -match 'def _milestone'))
+Ok "narrator lines carry direction (file/command subject) + variety pools" (($srcNarr -match 'def _subject') -and ($srcNarr -match 'def _render') -and ($srcNarr -match '\{s\}') -and ($srcNarr -match '"d":') -and ($srcNarr -match '"s":') -and ($srcNarr -match '_OPEN') -and ($srcNarr -match '_REACT'))
+Ok "narrator speaks first-person with a name sign-on, not 'sonelle is ...'" (($srcNarr -match 'def _decorate') -and ($srcNarr -match 'here-- ') -and (-not ($srcNarr -match 'sonelle is ')))
 Ok "speak text never vocalizes emoticons/kaomoji" (($srcNarr -match 'def _strip_emoticons') -and ($srcNarr -match 's = _strip_emoticons\(s\)'))
 Ok "spoken openers announce the session when 2+ talk (item 9)" (($srcNarr -match 'def set_multi') -and ($srcNarr -match 'session %d,'))
 Ok "narrator maps the claude hook events"  (($srcNarr -match 'PreToolUse') -and ($srcNarr -match 'PostToolUse') -and ($srcNarr -match 'Notification') -and ($srcNarr -match 'Stop') -and ($srcNarr -match 'def events_file_for'))
@@ -470,6 +472,45 @@ if ($pyCmd -and (Test-Path $narrPy)) {
   $pyArgs = @(); if ($pyCmd.Source -match '\\py\.exe$') { $pyArgs += '-3' }
   & $pyCmd.Source @pyArgs -m py_compile $narrPy $ttsPy 2>$null
   Ok "narrator.py + tts.py compile"       ($LASTEXITCODE -eq 0)
+  # behavioral: the reworked phrasing names the file/count (DIRECTION), collapses a repeat of the
+  # same thing but re-announces a new one, varies its openers, and never speaks an emoticon tag.
+  $probe = @'
+import sys
+sys.path.insert(0, sys.argv[1])
+import narrator as N
+cfg = {"style": "warm", "name": "sonelle"}
+o = N.build_line({}, {"hook_event_name": "PreToolUse", "tool_name": "Edit",
+                      "tool_input": {"file_path": "C:/x/narrator.py"}}, cfg)
+assert o and ("narrator.py" in o[0] or "narrator.py" in o[1]), ("no direction", o)
+st = {}
+a = N.build_line(st, {"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "a.py"}}, cfg)
+b = N.build_line(st, {"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "a.py"}}, cfg)
+c = N.build_line(st, {"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "b.py"}}, cfg)
+assert a and (b is None) and c, ("dedup", a, b, c)
+g = N.build_line({}, {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_response": "1666 passing"}, cfg)
+assert g and ("1666" in g[0]) and ("1666" in g[1]) and g[2] == "voice" and g[3] is True, ("milestone", g)
+seen = set()
+LONG = "rework the narrator phrasing engine so the spoken reports carry direction and emotion " * 2  # >140 so the start opener fires
+for i in range(40):
+    r = N.build_line({}, {"hook_event_name": "UserPromptSubmit", "prompt": LONG}, cfg)
+    if r:
+        seen.add(r[1])
+assert len(seen) >= 3, ("not varied", len(seen))
+for stl in ("warm", "terse", "hacker", "bubbly"):
+    for ev in ({"hook_event_name": "PreToolUse", "tool_name": "Edit", "tool_input": {"file_path": "x.py"}},
+               {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_response": "9 passing"},
+               {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_response": "9 failed"}):
+        r = N.build_line({}, ev, {"style": stl})
+        if r:
+            for tag in (":)", "<3", ":o", ":D", ":/", ":*", ":(", "!!"):
+                assert tag not in r[1], ("emoticon in speech", stl, r[1])
+print("NARRATOR_OK")
+'@
+  $probeFile = Join-Path $env:TEMP 'sonelle_narrator_probe.py'
+  Set-Content -Path $probeFile -Value $probe -Encoding ASCII
+  $probeOut = & $pyCmd.Source @pyArgs $probeFile (Join-Path $engine 'app') 2>&1
+  Ok "narrator: direction + dedup + milestone + variety (behavioral)" (($LASTEXITCODE -eq 0) -and ($probeOut -match 'NARRATOR_OK'))
+  Remove-Item $probeFile -ErrorAction SilentlyContinue
 } else {
   Write-Host "  [skip] no python on PATH for py_compile" -ForegroundColor DarkGray
 }

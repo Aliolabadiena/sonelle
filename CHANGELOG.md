@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.40 - 2026-06-19 (the voice narrator gets direction + emotion - it stops sounding like a robot)
+The reporter felt repetitive and flat: the box showed one bland word ("reading", "editing") and the
+spoken line was the same thing with an extra word ("sonelle is reading the code") - no sense of WHAT she
+was doing and no energy. Reworked the phrasing engine in `app\narrator.py` so every line is COMPOSED, not
+picked from a tiny fixed table.
+- **Direction (it names what she's on).** New `_subject` pulls the real thing out of each hook event - the
+  file basename (read/edit), the bash command ("selftest" / "the tests"), the grep pattern, the Task
+  description, the web query - and slots it into the phrase. So the box now says "reading narrator.py" /
+  "testing selftest" / "reworking app.js" instead of a bare verb, and the de-dup is keyed on
+  category+subject (`last_key`), so switching files RE-announces while a run of the same file still
+  collapses (that's the play-by-play you actually want).
+- **Emotion + variety (it stops looping).** Spoken lines are now **first person with go** - composed from a
+  varied opener (`_OPEN`: "ok,", "alright,", "right,", ...), a phrase drawn from a sizable per-category
+  pool, and a **reaction on a result** (`_REACT`: green -> "nice!" / "let's go.", error -> "let me look." /
+  "on it.") - e.g. "all green, 1666 passing, nice!" instead of "the tests came back green, 1666 passing".
+  A custom assistant name is spoken as a sign-on on the bookends only ("Mara here-- on it"), not jammed
+  into every line. All four reporting styles (warm/terse/hacker/bubbly) got their own opener/reaction
+  energy; speech stays emoticon-free, the report box keeps its cute ASCII tags.
+- **Contract unchanged.** Still `build_line -> (display, speak, kind, important)` and `__narrate(tabId,
+  display, kind, mime, b64)` - no JS/backend changes, the richness is all in the phrasing. selftest 8f
+  gains a behavioral probe (direction names the file/count, dedup collapses a repeat but not a new file,
+  openers vary, no emoticon ever reaches speech) plus static checks for `_subject`/`_render`/`_OPEN`/
+  `_REACT` and the first-person sign-on.
+
 ## v1.39 - 2026-06-19 (graded autonomy, a skills brain, cost + repo-map, opt-in MCP - from an ecosystem research pass)
 First wave of improvements drawn from a deep research pass over the Claude Code ecosystem and competing
 AI coding tools (what high-value capabilities sonelle was missing). All in this one repo, pure-ASCII

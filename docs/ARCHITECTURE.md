@@ -184,10 +184,15 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   `makeTabEl`; the mascot's mute button mirrors it), so you mute the boring research sessions and keep
   the important ones talking. When a tab's voice is on, sonelle **reports in the box under the mascot**
   (NOT the terminal - see "Reporting" above) in two colours: **pink** when she's talking to YOU and
-  **soft white** for the play-by-play. Each event is **dual-rendered**: a short, cute `display` line
-  (with an ASCII tag like `:)` / `<3`) for the report box and a fuller, natural, THIRD-person `speak`
-  line for TTS (`build_line` returns `(display, speak, kind, important)`; `_clean_speech`/`_strip_emoticons`
-  keep emoticons out of speech). The data source is **Claude Code hooks**, not screen scraping: the app
+  **soft white** for the play-by-play. Each event is **dual-rendered** with **direction + variety**:
+  `build_line` COMPOSES `(display, speak, kind, important)` instead of reading a fixed table - `_subject`
+  pulls what she's on right now (the file basename, the bash command, the grep pattern, the task) into the
+  phrase, so the short cute `display` line NAMES it ("reading narrator.py <3", ASCII tag kept) and the
+  `speak` line is **first-person with energy** (a varied opener + a phrase from a pool + a reaction on a
+  result, e.g. "all green, 1666 passing, nice!"). De-dup is keyed on category+subject so a new file
+  re-announces but a repeat collapses; a custom name is spoken as a sign-on on the bookends.
+  `_clean_speech`/`_strip_emoticons` keep emoticons out of speech. The data source is **Claude Code
+  hooks**, not screen scraping: the app
   launches `claude` with `--settings <generated file>` so its `PreToolUse`/`PostToolUse`/`Notification`/
   `Stop`/`UserPromptSubmit` events are appended (by `app\narrate_hook.ps1`, via the per-tab env var
   `SONELLE_NARRATE_FILE`) to a per-tab JSONL file. A per-tab `TabNarrator` (`app\narrator.py`) tails it,

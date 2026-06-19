@@ -5,10 +5,13 @@ Data source = Claude Code HOOKS, not screen-scraping. When the glass app launche
 adds `--settings <generated file>`; that file (written by setup() here) wires app\narrator\
 narrate_hook.ps1 to claude's PreToolUse / PostToolUse / Notification / Stop / UserPromptSubmit
 events. Each event is appended as one JSON line to a per-tab events file. A TabNarrator tails that
-file, turns events into humanised THIRD-PERSON status lines ("sonelle is reading the code...",
-"ouch - she ran into 7 problems.", "tests came back green - 1666 passing.", "she's idle now."),
-rate-limits them to the important beats, and - when the tab's voice toggle is on - speaks each via
-tts.synth and pushes (text + audio) to the UI, which renders the line in bold pink.
+file and turns events into humanised, FIRST-PERSON lines that name what she's actually on - the
+file, the command, the task - so they have DIRECTION ("ok, digging into narrator.py", "running
+selftest to see if it holds", "all green, 1666 passing, nice!", "that's me done") rather than a
+flat "she is reading the code". Each line is built by composition (a varied opener + a phrase from
+a sizable pool + a reaction on results) so it never loops like a robot, rate-limited to the
+important beats; when the tab's voice toggle is on it speaks each via tts.synth and pushes
+(report-box text + audio) to the UI.
 
 Safety: if `claude` doesn't advertise `--settings`, setup() reports disabled and the app NEVER
 passes the flag - so a working app can't be broken by this feature; narration just stays dormant.
@@ -51,117 +54,232 @@ _READ = {"read", "glob", "grep", "ls", "notebookread"}
 _EDIT = {"edit", "write", "multiedit", "notebookedit", "update", "create", "applypatch"}
 _WEB = {"webfetch", "websearch"}
 
-# TWO renderings per event (the reporter "style split"):
-#   - DISPLAY -> the little report box under the gif: SHORT and to the point, but alive with a cute
-#     ASCII tag (:*, <3, :), :o). Pure ASCII so the .py stays ASCII-clean.
-#   - SPEAK   -> tts: a touch fuller, natural, THIRD person ("sonelle is reading the code"), and NEVER
-#     contains an emoticon (the report-box tags are stripped from speech by _clean_speech anyway).
-# Each category is a list of [display, speak] pairs so she doesn't loop like a robot. The DISPLAY name
-# "sonelle" in a speak line is swapped for the configured assistant name at emit time (see _named).
+# Lines are COMPOSED, not enumerated, so they have variety + direction without a giant table:
+#   subject  -> what she's on right now: the file basename (read/edit), the command (bash), the
+#               grep pattern, the task (see _subject); slotted into a phrase via the "{s}" token, or a
+#               per-category fallback noun (_GENERIC) when there's nothing concrete.
+#   DISPLAY  -> the little report box under the gif: SHORT but it NAMES the thing ("reading
+#               narrator.py <3") and keeps a cute ASCII tag (:*, <3, :), :o). Pure ASCII.
+#   SPEAK    -> tts: FIRST PERSON with energy - a varied opener (_OPEN) + the phrase + a reaction on
+#               results (_REACT), e.g. "ok, digging into narrator.py" / "all green, 1666 passing,
+#               nice!". Never an emoticon (the report tags are display-only; _clean_speech also guards).
+# Each category gives a POOL of display phrases ("d") and speak phrases ("s") so she never loops. The
+# assistant name (when set) is spoken as a sign-on on the bookends only (start / idle), not every line.
 #
 # Four reporting STYLES (the settings panel picks one via narrator.style): warm (default), terse,
-# hacker, bubbly. Each is a full variant of the phrase set. PINK categories (start/waiting/idle/green/
-# error/answer) talk TO you; WHITE ones (reading/editing/...) are the quiet play-by-play.
+# hacker, bubbly. Each is a full variant of the phrase set + its own opener/reaction energy. PINK
+# categories (start/waiting/idle/green/error/answer) talk TO you; WHITE ones are the play-by-play.
+
+# opener fragments prefixed to a SPOKEN line for energy/variety (some empty = no opener that time).
+_OPEN = {
+    "warm":   ["ok, ", "alright, ", "right, ", "ok-- ", "", "", "cool, "],
+    "terse":  [""],
+    "hacker": ["", "", "ok, "],
+    "bubbly": ["ooh, ", "okay, ", "yay, ", "alright, ", "right, ", "okok, "],
+}
+
+# a little reaction tacked onto a spoken test RESULT (the "emotion" on the milestone).
+_REACT = {
+    "warm":   {"green": ["nice!", "lovely.", "let's go.", "happy with that."],
+               "error": ["let me look.", "on it.", "i'll dig in.", "okay, fixable."]},
+    "terse":  {"green": [""], "error": [""]},
+    "hacker": {"green": ["clean.", "green."], "error": ["patching.", "on it."]},
+    "bubbly": {"green": ["woo!", "yesss!", "amazing!"], "error": ["eep!", "we got this!", "no worries, on it!"]},
+}
+
+# fallback noun for "{s}" when there's no concrete subject (only used by phrases that contain {s}).
+_GENERIC = {
+    "reading": "the code", "editing": "the file", "researching": "that", "running": "the command",
+    "testing": "the tests", "helper": "this", "working": "it", "start": "it",
+}
+# Each style maps a category -> {"d": [display phrases], "s": [speak phrases]}. "{s}" is the subject
+# slot (file/command/...); "{n}" is a count (green/error). Pools are several deep so she varies.
 _STYLES = {
     "warm": {
-        "start":      [["on it <3", "sonelle is on it now"], ["got it :)", "sonelle is getting started"]],
-        "reading":    [["reading <3", "sonelle is reading through the code"],
-                       ["looking around :)", "sonelle is getting her bearings"]],
-        "editing":    [["editing :)", "sonelle is editing the code"],
-                       ["tweaking it <3", "sonelle is rewriting a bit of this"]],
-        "researching":[["looking it up :o", "sonelle is researching this online"]],
-        "running":    [["running it :)", "sonelle is running a command"]],
-        "testing":    [["testing :o", "sonelle is running the tests"]],
-        "committing": [["committing :)", "sonelle is writing the commit"]],
-        "pushing":    [["shipping it <3", "sonelle is pushing it up to the repo"]],
-        "helper":     [["little helper :o", "sonelle is spinning up a sidekick"]],
-        "working":    [["working <3", "sonelle is working on it"]],
-        "waiting":    [["has a question :o", "sonelle has a question for you"]],
-        "idle":       [["all done <3", "sonelle is all done now"]],
+        "reading":    {"d": ["reading {s} <3", "in {s} :)", "skimming {s}", "peeking at {s} :o"],
+                       "s": ["reading through {s}", "digging into {s}", "having a look at {s}",
+                             "getting my head around {s}"]},
+        "editing":    {"d": ["editing {s} :)", "reworking {s} <3", "tweaking {s}", "on {s} :*"],
+                       "s": ["reworking {s}", "editing {s}", "rewriting a bit of {s}",
+                             "making some changes in {s}"]},
+        "researching":{"d": ["looking up {s} :o", "researching {s}"],
+                       "s": ["looking into {s} online", "researching {s}", "digging around online for {s}"]},
+        "running":    {"d": ["running {s} :)", "kicking off {s}"],
+                       "s": ["running {s}", "kicking off {s}", "firing off {s}"]},
+        "testing":    {"d": ["testing {s} :o", "running the tests :o"],
+                       "s": ["running the tests", "kicking off the tests", "running {s} to see if it holds"]},
+        "committing": {"d": ["committing :)", "writing the commit <3"],
+                       "s": ["committing this", "writing up the commit", "saving this down"]},
+        "pushing":    {"d": ["shipping it <3", "pushing up :)"],
+                       "s": ["pushing this up", "shipping it to the repo", "sending it up"]},
+        "helper":     {"d": ["got a helper :o", "sidekick on {s}"],
+                       "s": ["bringing in a helper for {s}", "spinning up a sidekick",
+                             "handing {s} off to a helper"]},
+        "working":    {"d": ["working <3", "on it :)"],
+                       "s": ["working on {s}", "getting into {s}", "on {s} now"]},
+        "waiting":    {"d": ["got a q for you :o", "need you :o"],
+                       "s": ["i've got a question for you", "i need a quick steer from you",
+                             "can you take a look when you get a sec"]},
+        "idle":       {"d": ["all done <3", "wrapped up :)", "that's me :)"],
+                       "s": ["all done", "that's me done", "wrapped up, all set"]},
+        "start":      {"d": ["on it <3", "got it :)", "starting in :)"],
+                       "s": ["on it now", "starting in on {s}", "getting going on {s}", "on it"]},
+        "green":      {"d": ["all green, {n} :)", "{n} passing <3", "green! {n} :)"],
+                       "s": ["tests are green, {n} passing", "all green, {n} passing",
+                             "{n} tests passing, all green"]},
+        "error":      {"d": ["{n} failing :o", "uh oh, {n} :(", "{n} to fix :/"],
+                       "s": ["we've got {n} failing", "{n} tests came back failing", "{n} failing, not yet"]},
     },
     "terse": {
-        "start":      [["start", "sonelle started"]],
-        "reading":    [["reading", "sonelle is reading the code"]],
-        "editing":    [["editing", "sonelle is editing"]],
-        "researching":[["research", "sonelle is researching"]],
-        "running":    [["running", "sonelle is running a command"]],
-        "testing":    [["testing", "sonelle is running tests"]],
-        "committing": [["commit", "sonelle is committing"]],
-        "pushing":    [["push", "sonelle is pushing"]],
-        "helper":     [["helper", "sonelle launched a helper"]],
-        "working":    [["working", "sonelle is working"]],
-        "waiting":    [["question", "sonelle has a question"]],
-        "idle":       [["done", "sonelle is done"]],
+        "reading":    {"d": ["read {s}"], "s": ["reading {s}"]},
+        "editing":    {"d": ["edit {s}"], "s": ["editing {s}"]},
+        "researching":{"d": ["research"], "s": ["researching {s}"]},
+        "running":    {"d": ["run {s}"], "s": ["running {s}"]},
+        "testing":    {"d": ["test"], "s": ["running tests"]},
+        "committing": {"d": ["commit"], "s": ["committing"]},
+        "pushing":    {"d": ["push"], "s": ["pushing"]},
+        "helper":     {"d": ["helper"], "s": ["launched a helper"]},
+        "working":    {"d": ["working"], "s": ["working"]},
+        "waiting":    {"d": ["question"], "s": ["i have a question"]},
+        "idle":       {"d": ["done"], "s": ["done"]},
+        "start":      {"d": ["start"], "s": ["starting"]},
+        "green":      {"d": ["{n} pass"], "s": ["{n} passing"]},
+        "error":      {"d": ["{n} fail"], "s": ["{n} failing"]},
     },
     "hacker": {
-        "start":      [["> init", "sonelle is spinning up"]],
-        "reading":    [["> read src", "sonelle is scanning the source"]],
-        "editing":    [["> patch", "sonelle is patching the code"]],
-        "researching":[["> recon", "sonelle is running recon"]],
-        "running":    [["> exec", "sonelle is executing a command"]],
-        "testing":    [["> run tests", "sonelle is running the test suite"]],
-        "committing": [["> commit", "sonelle is committing the work"]],
-        "pushing":    [["> push", "sonelle is pushing to the remote"]],
-        "helper":     [["> fork agent", "sonelle forked a sub-agent"]],
-        "working":    [["> busy", "sonelle is working the problem"]],
-        "waiting":    [["> awaiting input", "sonelle needs your input"]],
-        "idle":       [["> idle", "sonelle is idle"]],
+        "reading":    {"d": ["> read {s}"], "s": ["scanning {s}", "reading {s}"]},
+        "editing":    {"d": ["> patch {s}"], "s": ["patching {s}", "rewriting {s}"]},
+        "researching":{"d": ["> recon"], "s": ["running recon on {s}", "digging for {s}"]},
+        "running":    {"d": ["> exec {s}"], "s": ["executing {s}", "running {s}"]},
+        "testing":    {"d": ["> test"], "s": ["running the test suite", "firing the tests"]},
+        "committing": {"d": ["> commit"], "s": ["committing the work"]},
+        "pushing":    {"d": ["> push"], "s": ["pushing to the remote"]},
+        "helper":     {"d": ["> fork"], "s": ["forking a sub-agent", "spinning up an agent"]},
+        "working":    {"d": ["> busy"], "s": ["working the problem"]},
+        "waiting":    {"d": ["> input?"], "s": ["i need your input"]},
+        "idle":       {"d": ["> idle"], "s": ["idle, standing by"]},
+        "start":      {"d": ["> init"], "s": ["spinning up on {s}", "booting into {s}"]},
+        "green":      {"d": ["> PASS {n}"], "s": ["all {n} green", "{n} passing"]},
+        "error":      {"d": ["> FAIL {n}"], "s": ["{n} failing", "{n} red"]},
     },
     "bubbly": {
-        "start":      [["yay, on it!! <3", "sonelle is super on it now"]],
-        "reading":    [["reading!! :D", "sonelle is reading all the code"]],
-        "editing":    [["editing!! <3", "sonelle is happily editing away"]],
-        "researching":[["googling!! :o", "sonelle is looking this all up"]],
-        "running":    [["running!! :D", "sonelle is running a command"]],
-        "testing":    [["testing!! :o", "sonelle is running the tests, fingers crossed"]],
-        "committing": [["saving!! <3", "sonelle is committing this"]],
-        "pushing":    [["shipping!! :D", "sonelle is shipping it up, woo"]],
-        "helper":     [["helper!! :o", "sonelle called in a little helper"]],
-        "working":    [["working!! <3", "sonelle is working on it"]],
-        "waiting":    [["psst, question!! :o", "sonelle has a quick question for you"]],
-        "idle":       [["all done!! <3", "sonelle is all wrapped up, yay"]],
+        "reading":    {"d": ["reading {s}!! :D"], "s": ["reading through {s}", "soaking up {s}"]},
+        "editing":    {"d": ["editing {s}!! <3"], "s": ["happily reworking {s}", "editing {s}"]},
+        "researching":{"d": ["googling!! :o"], "s": ["looking up {s}", "researching {s}"]},
+        "running":    {"d": ["running {s}!! :D"], "s": ["running {s}", "kicking off {s}"]},
+        "testing":    {"d": ["testing!! :o"], "s": ["running the tests, fingers crossed", "running {s}"]},
+        "committing": {"d": ["saving!! <3"], "s": ["committing this", "saving it all down"]},
+        "pushing":    {"d": ["shipping!! :D"], "s": ["shipping it up", "pushing it live"]},
+        "helper":     {"d": ["helper!! :o"], "s": ["calling in a little helper", "spinning up a buddy for {s}"]},
+        "working":    {"d": ["working!! <3"], "s": ["working on {s}", "getting into {s}"]},
+        "waiting":    {"d": ["psst, q!! :o"], "s": ["i've got a quick question for you",
+                                                    "ooh, can you take a look"]},
+        "idle":       {"d": ["all done!! <3"], "s": ["all wrapped up", "all done, yay"]},
+        "start":      {"d": ["yay, on it!! <3"], "s": ["on it", "starting in on {s}", "getting going on {s}"]},
+        "green":      {"d": ["all green!! {n} :D"], "s": ["all {n} passing", "the tests are green, {n} passing"]},
+        "error":      {"d": ["oh no!! {n} :o"], "s": ["{n} are failing", "we've got {n} to fix"]},
     },
 }
 _DEFAULT_STYLE = "warm"
-
-# count-based milestones (test pass/fail) - [display_template, speak_template], one per style. "%s"
-# is the count. DISPLAY is short + tagged; SPEAK is natural, third person, no emoticon.
-_MILESTONES = {
-    "warm":   {"green": ["tests green :)", "the tests came back green, %s passing"],
-               "error": ["uh oh :o", "the tests came back failing, %s to fix"]},
-    "terse":  {"green": ["%s passing", "tests pass, %s green"],
-               "error": ["%s failing", "tests failing, %s broken"]},
-    "hacker": {"green": ["> tests PASS", "all tests passed, %s green"],
-               "error": ["> tests FAIL", "tests failed, %s failing"]},
-    "bubbly": {"green": ["all green!! :D", "the tests are all green, %s passing, yay"],
-               "error": ["oh no!! :o", "the tests are failing, %s to fix"]},
-}
-
 
 def _styleset(style):
     return _STYLES.get(style) or _STYLES[_DEFAULT_STYLE]
 
 
-def _pick(style, cat):
-    """Return a [display, speak] pair for this style+category, or None."""
-    pool = _styleset(style).get(cat) or _STYLES[_DEFAULT_STYLE].get(cat)
-    if not pool:
+def _short(s, n=40):
+    """Squash any text into a short, single-line, pure-ASCII subject fit to drop into a phrase."""
+    import re
+    s = str(s or "")
+    s = "".join(ch if 32 <= ord(ch) < 127 else " " for ch in s)   # printable ASCII only
+    s = re.sub(r"\s+", " ", s).strip().strip("'\"`")
+    if len(s) > n:
+        s = s[:n].rstrip() + "..."
+    return s
+
+
+def _subject(tool, ti):
+    """The thing she's on right now, as a short label: the file (read/edit), the grep pattern, the
+    command (bash), the task (Task), the query (web). "" when there's nothing concrete to name."""
+    t = (tool or "").lower()
+    ti = ti or {}
+
+    def _base(p):
+        p = str(p or "").replace("\\", "/").rstrip("/")
+        return _short(os.path.basename(p), 28)
+
+    if t in ("read", "notebookread", "ls"):
+        return _base(ti.get("file_path") or ti.get("path") or ti.get("notebook_path") or "")
+    if t in ("edit", "write", "multiedit", "notebookedit", "update", "create", "applypatch"):
+        return _base(ti.get("file_path") or ti.get("path") or ti.get("notebook_path") or "")
+    if t == "grep":
+        return _short(ti.get("pattern") or "", 28)
+    if t == "glob":
+        return _short(ti.get("pattern") or "", 28)
+    if t in _WEB:
+        return _short(ti.get("query") or ti.get("url") or "", 36)
+    if t == "task":
+        return _short(ti.get("description") or ti.get("prompt") or "", 36)
+    if t == "bash":
+        return _bash_subject(ti.get("command") or "")
+    return ""
+
+
+def _fill(t, s, n):
+    """Slot the subject ({s}) and count ({n}) into a phrase template."""
+    t = str(t)
+    if "{s}" in t:
+        t = t.replace("{s}", s)
+    if "{n}" in t:
+        t = t.replace("{n}", "" if n is None else str(n))
+    return t
+
+
+def _squash(s):
+    while "  " in s:
+        s = s.replace("  ", " ")
+    return s.strip()
+
+
+def _render(style, cat, subject, n=None):
+    """Compose (display, speak) for one category: pick a display + speak phrase from the pool, fill
+    the subject/count, add a spoken opener for energy, and a reaction on a test result."""
+    spec = _styleset(style).get(cat) or _STYLES[_DEFAULT_STYLE].get(cat)
+    if not spec:
         return None
+    s = subject or _GENERIC.get(cat, "")
     try:
-        return list(random.choice(pool))
+        disp = random.choice(spec["d"])
+        say = random.choice(spec["s"])
     except Exception:
-        return list(pool[0])
+        disp, say = spec["d"][0], spec["s"][0]
+    display = _squash(_fill(disp, s, n))
+    speak = _fill(say, s, n)
+    opens = _OPEN.get(style) or _OPEN[_DEFAULT_STYLE]
+    if opens:
+        speak = random.choice(opens) + speak
+    if cat in ("green", "error"):
+        rs = (_REACT.get(style) or _REACT[_DEFAULT_STYLE]).get(cat) or [""]
+        r = random.choice(rs)
+        if r:
+            sep = " " if speak[-1:] in ".!?," else ", "   # don't run the reaction into the clause
+            speak = speak + sep + r
+    return [display, _squash(speak)]
 
 
 def _milestone(style, cat, n):
-    """Return a [display, speak] pair for a count-based milestone (green/error)."""
-    m = (_MILESTONES.get(style) or _MILESTONES[_DEFAULT_STYLE]).get(cat)
-    if not m:
-        m = _MILESTONES[_DEFAULT_STYLE][cat]
-    try:
-        return [m[0] % n if "%s" in m[0] else m[0], m[1] % n if "%s" in m[1] else m[1]]
-    except Exception:
-        return [str(cat), str(cat)]
+    """A count-based milestone (green/error) - just a subject-less _render."""
+    return _render(style, cat, "", n)
+
+
+def _decorate(out, cat, nm, important):
+    """Finish a rendered (display, speak) pair: add the assistant-name sign-on on the bookends
+    (start / idle) only, and attach the pink/white kind + the importance flag."""
+    if not out:
+        return None
+    display, speak = out[0], out[1]
+    if nm and cat in ("start", "idle"):
+        speak = "%s here-- %s" % (nm, speak)
+    return (display, speak, _kind(cat), important)
 
 
 def _strip_emoticons(s):
@@ -201,6 +319,27 @@ def _bash_category(cmd):
     if "git" in c and "push" in c:
         return "pushing"
     return "running"
+
+
+def _bash_subject(cmd):
+    """A short friendly name for the command she's running ("selftest", "the tests", or the program
+    name) - the direction for a bash line. "" for pushes (the phrase already says "the repo")."""
+    c = str(cmd or "").strip()
+    if not c:
+        return ""
+    low = c.lower()
+    if "selftest" in low:
+        return "selftest"
+    if any(k in low for k in ("pytest", "jest", "vitest", "unittest", "npm test",
+                              "npm run test", "go test", "cargo test", "dotnet test", "rspec")):
+        return "the tests"
+    if "git" in low and "commit" in low:
+        return "the commit"
+    if "git" in low and "push" in low:
+        return ""
+    parts = c.split()
+    tok = parts[0] if parts else ""
+    return _short(os.path.basename(tok.replace("\\", "/")), 24)
 
 
 def _pre_category(tool, ti):
@@ -245,26 +384,22 @@ def _post_line(tool, resp):
 def build_line(state, ev, cfg=None):
     """Map one hook event -> (display, speak, kind, important) or None.
 
-    DISPLAY = the short report-box line (with a cute ASCII tag); SPEAK = the natural spoken line
-    (third person, no emoticon). `kind` is 'voice' (pink: sonelle texting you) or 'status' (white:
-    the play-by-play). `cfg` carries the reporting `style` + assistant `name`; `state` carries the
-    ambient de-dup memory."""
+    DISPLAY = the short report-box line (cute ASCII tag, names the file/command); SPEAK = the
+    first-person spoken line with the same direction + a bit of energy (opener + reaction). `kind`
+    is 'voice' (pink: she's texting you) or 'status' (white: the play-by-play). `cfg` carries the
+    reporting `style` + assistant `name`; `state` carries the ambient de-dup memory, keyed on
+    category+subject so switching files re-announces but a run of the SAME file collapses."""
     cfg = cfg or {}
     style = cfg.get("style") or _DEFAULT_STYLE
     nm = cfg.get("name") or "sonelle"
-    nm = nm if (nm and nm != "sonelle") else None      # only substitute a non-default name
-
-    def _pair(p, cat, important):
-        display, speak = p[0], p[1]
-        if nm:
-            speak = speak.replace("sonelle", nm)       # speak as the chosen assistant name
-        return (display, speak, _kind(cat), important)
+    nm = nm if (nm and nm != "sonelle") else None      # a custom name -> spoken as a sign-on
 
     ename = ev.get("hook_event_name") or ev.get("hookEventName") or ""
     tool = ev.get("tool_name") or ev.get("toolName") or ""
     ti = ev.get("tool_input") or ev.get("toolInput") or {}
 
     cat = None
+    subj = ""
     if ename == "UserPromptSubmit":
         p = ev.get("prompt") or ev.get("user_prompt") or ""
         state["last_prompt"] = p
@@ -273,6 +408,7 @@ def build_line(state, ev, cfg=None):
         if len(p.strip()) <= 140 or p.strip().endswith("?"):
             return None
         cat = "start"
+        subj = _short(p, 48)                           # a snippet of the task = direction on the opener
     elif ename == "Stop":
         # Claude Code hands us her final reply in last_assistant_message. When it's short, REPORT IT -
         # this is how she answers simple/targeted questions; the box shows it and (voice on) speaks it.
@@ -281,6 +417,7 @@ def build_line(state, ev, cfg=None):
         cap = 400 if prompt.endswith("?") else 260
         if msg and len(msg) <= cap:
             state["last_cat"] = "answer"
+            state["last_key"] = "answer"
             state["last_cat_ts"] = time.monotonic()
             return (msg, msg, "voice", True)           # her own words -> box display + speech
         cat = "idle"
@@ -290,14 +427,16 @@ def build_line(state, ev, cfg=None):
         return None  # too granular to narrate
     elif ename == "PreToolUse":
         cat = _pre_category(tool, ti)
+        subj = _subject(tool, ti)                      # the file/command/task she's on -> direction
     elif ename == "PostToolUse":
         pr = _post_line(tool, ev.get("tool_response") or ev.get("toolResponse"))
         if not pr:
             return None
         cat, n = pr
         state["last_cat"] = cat
+        state["last_key"] = cat
         state["last_cat_ts"] = time.monotonic()
-        return _pair(_milestone(style, cat, n), cat, True)
+        return _decorate(_milestone(style, cat, n), cat, nm, True)
     else:
         return None
 
@@ -306,17 +445,20 @@ def build_line(state, ev, cfg=None):
     important = cat in _IMPORTANT
 
     now = time.monotonic()
+    key = cat + "|" + (subj or "")
     if not important:
-        # collapse a run of the same ambient activity (don't say "reading" twenty times)
-        if cat == state.get("last_cat") and (now - state.get("last_cat_ts", 0.0)) < AMBIENT_REPEAT:
+        # collapse a run of the SAME activity on the SAME thing (don't say "reading x" twenty times),
+        # but a new file/command (a new key) re-announces - that's the direction the report carries.
+        if key == state.get("last_key") and (now - state.get("last_cat_ts", 0.0)) < AMBIENT_REPEAT:
             return None
 
-    pair = _pick(style, cat)
-    if not pair:
+    out = _render(style, cat, subj, None)
+    if not out:
         return None
     state["last_cat"] = cat
+    state["last_key"] = key
     state["last_cat_ts"] = now
-    return _pair(pair, cat, important)
+    return _decorate(out, cat, nm, important)
 
 
 # ---------------------------------------------------------------------------------------------

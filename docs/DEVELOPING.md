@@ -106,10 +106,15 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   publishes `SONELLE_NARRATE_SETTINGS` (only after probing that `claude` supports `--settings`, so a bad
   flag can never break a working app), `sonelle.ps1` attaches `--settings`, and `narrate_hook.ps1` appends
   each event to the per-tab `SONELLE_NARRATE_FILE`; `TabNarrator` tails it and **dual-renders** each event
-  into `(display, speak, kind, important)` - a short cute `display` line for the REPORT BOX and a fuller,
-  natural, THIRD-person `speak` line for TTS (`_clean_speech`/`_strip_emoticons` keep emoticons out of
-  speech), choosing the phrase set for the configured **reporting style** (`_STYLES`: warm/terse/hacker/
-  bubbly). **Do NOT write narration into the terminal** - claude's alt-screen TUI repaints over it (that
+  into `(display, speak, kind, important)`. Lines are **composed** (`_render`), not enumerated, so they have
+  **direction + variety**: `_subject` pulls what she's on (file basename / bash command / grep pattern /
+  task) into a `{s}` slot, the `display` is a short tagged report-box line that NAMES it ("reading
+  narrator.py <3"), and the `speak` is a FIRST-PERSON TTS line with energy - a varied opener (`_OPEN`) +
+  a phrase from a pool + a reaction on a result (`_REACT`), e.g. "all green, 1666 passing, nice!". The
+  ambient de-dup is keyed on category+subject (`last_key`), so switching files re-announces but a run of
+  the SAME file collapses; the assistant name (if set) is spoken as a sign-on on the bookends (start/idle)
+  via `_decorate`. `_clean_speech`/`_strip_emoticons` keep emoticons out of speech, and the **reporting
+  style** (`_STYLES`: warm/terse/hacker/bubbly) picks the phrase set + opener/reaction energy. **Do NOT write narration into the terminal** - claude's alt-screen TUI repaints over it (that
   was the report bug); it goes to the DOM report box (`reportLine`/`renderReport`, pink `.rline.voice` /
   white `.rline.status`) and audio plays through ONE global serialized queue (`enqueueAudio`/`pumpAudio`).
   **Voice engine** is **Kokoro** (local neural, `app\tts.py` `_synth_kokoro`). The model is **VENDORED in
