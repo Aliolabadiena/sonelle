@@ -2,3 +2,9 @@
 # Installed into a local .venv by bin\sonelle_gui.ps1 on first run.
 pywebview==6.2.1
 pywinpty==3.0.5
+# Voice narrator TTS - the CLOUD fallback voice (Microsoft neural, free, no API key). The PRIMARY
+# voice is now local Kokoro (app\requirements-voice.txt, installed best-effort); this is what speaks
+# if Kokoro isn't installed/can't fetch its model, before the offline Windows SAPI last resort - so
+# it's not a hard dep. Keep it fresh: older edge-tts pins 403 when Microsoft rotates the Sec-MS-GEC
+# token (7.0.0 was broken; 7.2.8 works). Bump it if the neural voice ever stops.
+edge-tts>=7.2.8

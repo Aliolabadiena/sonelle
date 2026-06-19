@@ -22,6 +22,8 @@
       </div>
       <div id="tabs" class="tabs nodrag"></div>
       <button id="btn-new" class="nodrag iconbtn" title="new terminal (Ctrl+T)" aria-label="new terminal">+</button>
+      <!-- voice narration is now a PER-TAB toggle: each tab pill carries its own speaker (built in
+           app.js makeTabEl), so you mute the boring research tabs and keep the important ones talking. -->
       <div class="spacer"></div>
       <div class="wctrls nodrag">
         <button id="btn-min" class="wbtn" title="minimize" aria-label="minimize"><span class="g-min"></span></button>
@@ -53,13 +55,12 @@
       </div>
     </footer>
 
-    <!-- always-on brand loop: the animated sonelle "mascot" gif, anchored to #app. It sits LOW in the
-         bottom-right corner, dropped into the command bar so it overlays the send-button corner. The
-         terminal grid reserves an 88px bottom band (in app.css) so its text STOPS ABOVE the gif and is
-         never drawn behind it - it stops before the gif, not under it. It is OPAQUE (a solid backing
-         fills the gif's transparent top) so nothing shows through where it sits over the bar.
-         Decorative only (aria-hidden + pointer-events:none), so clicks pass through to the send button
-         beneath it (send still works) and it never steals a text selection; the gif animates itself. -->
+    <!-- brand loop: the animated sonelle "mascot" gif, anchored to #app. It STARTS LOW in the
+         bottom-right corner (in its own clean band; app.css reserves space so terminal text/bar stop
+         before it) but is now GRAB-AND-DROP: app.js (wireBrandloopDrag) lets you drag it anywhere in
+         the window, and it remembers where you leave it (localStorage) across launches. It is OPAQUE
+         (a solid backing fills the gif's transparent top). draggable="false" stops the browser's own
+         image-drag so our custom drag is the only one. -->
     <img id="brandloop" class="brandloop" src="brandloop.gif" alt="" aria-hidden="true" draggable="false">
   </div>
 

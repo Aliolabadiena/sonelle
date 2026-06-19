@@ -176,7 +176,8 @@ Ok "index loads the WebGL addon"      ($srcHtml -match 'vendor/addon-webgl\.js')
 Ok "the women's-name pool is gone"    ((-not (Test-Path (Join-Path $appDir 'ui\names.js'))) -and (-not ($srcHtml -match 'names\.js')))
 Ok "titlebar is a pywebview drag region" ($srcHtml -match 'pywebview-drag-region')
 Ok "brand marks render the app icon (svg, not gradient cubes)" (($srcHtml -match '<svg class="mark"') -and ($srcHtml -match '<svg class="w-mark"') -and ($srcHtml -match 'stroke="#FF9B85"') -and (-not ($srcCss -match '\.brand \.mark\{[^}]*linear-gradient')) -and (-not ($srcCss -match '\.welcome \.w-mark\{[^}]*linear-gradient')))
-Ok "brand loop gif is an opaque, decorative bottom-right mark" (($srcHtml -match 'id="brandloop"') -and ($srcHtml -match 'src="brandloop\.gif"') -and ($srcHtml -match 'aria-hidden="true"') -and (Test-Path (Join-Path $appDir 'ui\brandloop.gif')) -and ($srcCss -match '\.brandloop\{') -and ($srcCss -match 'pointer-events:none') -and ($srcCss -match '\.brandloop\{[^}]*background:#07091f'))
+Ok "brand loop gif is a transparent-fill, soft bordered card" (($srcHtml -match 'id="brandloop"') -and ($srcHtml -match 'src="brandloop\.gif"') -and (Test-Path (Join-Path $appDir 'ui\brandloop.gif')) -and ($srcCss -match '\.brandloop\{') -and ($srcCss -match '\.brandloop\{[^}]*background:transparent') -and ($srcCss -match '\.brandloop\{[^}]*border-radius') -and ($srcCss -match '\.brandloop\{[^}]*pointer-events:auto'))
+Ok "brand loop drags with throw/bounce + drifts home" (($srcJs -match 'function wireBrandloopDrag') -and ($srcJs -match 'function throwLoop') -and ($srcJs -match 'RESTITUTION') -and ($srcJs -match 'function returnLoopHome') -and ($srcJs -match 'function scheduleLoopReturn'))
 # the gif sits LOW (small bottom, over the send-button corner) and the pane reserves a big bottom band
 # so the terminal grid stops ABOVE it (text stops before the gif, never drawn/hidden under it). It is
 # also pulled IN off the right edge (right > scrollbar lane) so the scrollbar is never under it.
@@ -207,6 +208,61 @@ if (Test-Path $venvPy) {
 } else {
   Write-Host "  [skip] no .venv for launcher -NoLaunch check" -ForegroundColor DarkGray
 }
+
+Write-Host "== 8f. voice narrator =="
+$narrPy = Join-Path $engine 'app\narrator.py'
+$ttsPy  = Join-Path $engine 'app\tts.py'
+$hookPs = Join-Path $engine 'app\narrate_hook.ps1'
+foreach ($rel in @('app\narrator.py', 'app\tts.py', 'app\narrate_hook.ps1')) {
+  Ok ("exists: " + $rel) (Test-Path (Join-Path $engine $rel))
+}
+$srcHook = if (Test-Path $hookPs) { Get-Content $hookPs -Raw } else { '' }
+Ok "hook appends events to SONELLE_NARRATE_FILE" (($srcHook -match 'SONELLE_NARRATE_FILE') -and ($srcHook -match 'Add-Content') -and ($srcHook -match 'exit 0'))
+$srcNarr = if (Test-Path $narrPy) { Get-Content $narrPy -Raw } else { '' }
+Ok "narrator builds hooks settings, gated on --settings support" (($srcNarr -match 'def setup') -and ($srcNarr -match '_claude_supports_settings') -and ($srcNarr -match '--settings'))
+Ok "narrator writes first-person texting lines, tagged voice/status" (($srcNarr -match 'class TabNarrator') -and ($srcNarr -match 'def build_line') -and ($srcNarr -match '_PHRASES') -and ($srcNarr -match '_VOICE_CATS'))
+Ok "narrator maps the claude hook events"  (($srcNarr -match 'PreToolUse') -and ($srcNarr -match 'PostToolUse') -and ($srcNarr -match 'Notification') -and ($srcNarr -match 'Stop') -and ($srcNarr -match 'def events_file_for'))
+Ok "narrator speaks short answers (last_assistant_message)" (($srcNarr -match 'last_assistant_message') -and ($srcNarr -match 'def _clean_speech'))
+$srcTts = if (Test-Path $ttsPy) { Get-Content $ttsPy -Raw } else { '' }
+Ok "tts has kokoro (local neural) + edge + sapi engines" (($srcTts -match 'def synth') -and ($srcTts -match '_synth_kokoro') -and ($srcTts -match '_synth_edge') -and ($srcTts -match '_synth_sapi'))
+Ok "tts loads the kokoro model bundled in the repo (no download)" (($srcTts -match 'def _kokoro_files') -and ($srcTts -match 'kokoro-v1\.0\.int8\.onnx') -and (-not ($srcTts -match 'urllib')) -and (-not ($srcTts -match 'def _download')))
+Ok "kokoro voice model is vendored in the repo" ((Test-Path (Join-Path $engine 'app\voice\kokoro-v1.0.int8.onnx')) -and (Test-Path (Join-Path $engine 'app\voice\voices-v1.0.bin')))
+Ok "backend imports + wires the narrator" (($srcGui -match 'import narrator') -and ($srcGui -match 'def set_narration') -and ($srcGui -match 'def _narrate_emit') -and ($srcGui -match '__narrate'))
+Ok "backend passes the voice/status kind to __narrate" ($srcGui -match '__narrate\(%s,%s,%s,%s,%s\)')
+Ok "backend sets the per-tab events env"  ($srcGui -match 'SONELLE_NARRATE_FILE')
+Ok "backend runs narrator.setup + publishes settings" (($srcGui -match 'narrator\.setup') -and ($srcGui -match 'SONELLE_NARRATE_SETTINGS'))
+Ok "terminal attaches --settings on the narrate env" (($srcTerm -match 'SONELLE_NARRATE_SETTINGS') -and ($srcTerm -match "'--settings'"))
+Ok "frontend has the narrate sink + per-tab voice toggle" (($srcJs -match 'window\.__narrate') -and ($srcJs -match 'function toggleTabVoice') -and ($srcJs -match 'function updateTabVoiceEl') -and ($srcJs -match 'set_narration'))
+Ok "voice toggle is per-tab (speaker on each pill)" (($srcJs -match 'spk\.className = "spk"') -and ($srcCss -match '\.tab \.spk\{') -and (-not ($srcHtml -match 'id="btn-voice"')))
+Ok "narration types into the terminal: pink voice / white status" (($srcJs -match 'function typeNarration') -and ($srcJs -match 'PINK_SGR') -and ($srcJs -match '255;121;198') -and ($srcJs -match 'STATUS_SGR') -and (-not ($srcCss -match '\.narration \.line\{')))
+Ok "narration is serialized against pty output (no interleave)" (($srcJs -match 'function writeOrHold') -and ($srcJs -match 'holdback') -and ($srcJs -match 'function runNarrQueue'))
+# the bug fixes shipped in this round
+Ok "pusher survives the shutdown poison pill" ($srcGui -match 'poisoned')
+Ok "ctrl+c respects a composer selection" ($srcJs -match 'inp\.selectionStart')
+Ok "ctrl+t opens a new terminal"          ($srcJs -match 'key === "t"')
+Ok "read-only pane wheel scrolls scrollback" (($srcJs -match '"wheel"') -and ($srcJs -match 'scrollLines') -and ($srcJs -match 'capture: true'))
+Ok "requirements pin edge-tts"            ((Get-Content (Join-Path $engine 'app\requirements.txt') -Raw) -match 'edge-tts')
+Ok "kokoro voice req exists + launcher installs it" ((Test-Path (Join-Path $engine 'app\requirements-voice.txt')) -and ((Get-Content (Join-Path $engine 'app\requirements-voice.txt') -Raw) -match 'kokoro-onnx') -and ($srcGuiPs -match 'requirements-voice'))
+if ($pyCmd -and (Test-Path $narrPy)) {
+  $pyArgs = @(); if ($pyCmd.Source -match '\\py\.exe$') { $pyArgs += '-3' }
+  & $pyCmd.Source @pyArgs -m py_compile $narrPy $ttsPy 2>$null
+  Ok "narrator.py + tts.py compile"       ($LASTEXITCODE -eq 0)
+} else {
+  Write-Host "  [skip] no python on PATH for py_compile" -ForegroundColor DarkGray
+}
+
+Write-Host "== 8g. shared knowledge base =="
+$kbIdx = Join-Path $engine 'knowledge\INDEX.md'
+Ok "knowledge/INDEX.md exists"          (Test-Path $kbIdx)
+foreach ($rel in @('knowledge\powershell-commit-heredoc.md', 'knowledge\powershell-pure-ascii.md')) {
+  Ok ("seed lesson: " + $rel)           (Test-Path (Join-Path $engine $rel))
+}
+$srcKbIdx = if (Test-Path $kbIdx) { Get-Content $kbIdx -Raw } else { '' }
+Ok "index links its seed lessons"       (($srcKbIdx -match 'powershell-commit-heredoc') -and ($srcKbIdx -match 'powershell-pure-ascii'))
+$srcLog = Get-Content (Join-Path $engine 'tools\log_lesson.ps1') -Raw
+Ok "log_lesson -Shared targets knowledge/" (($srcLog -match '\[switch\]\$Shared') -and ($srcLog -match "Join-Path .* 'knowledge'"))
+$srcSs = Get-Content (Join-Path $engine '.claude\hooks\session_start.ps1') -Raw
+Ok "SessionStart recalls the knowledge base" ($srcSs -match 'knowledge/INDEX\.md')
 
 Write-Host "== 9. config resolver (hub + memoryDir) =="
 . (Join-Path $PSScriptRoot '_registry.ps1')

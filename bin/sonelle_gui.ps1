@@ -52,5 +52,28 @@ if ($LASTEXITCODE -ne 0) {
 
 if ($NoLaunch) { Write-Host 'sonelle: app dependencies OK.'; exit 0 }
 
+# Best-effort: install the high-quality LOCAL neural voice (Kokoro) for the narrator. This is
+# OPTIONAL and must NEVER be fatal - if it can't install, the narrator falls back to edge-tts and
+# then the Windows SAPI voice, so the app still launches. Only attempt it when it isn't already
+# importable (so a working install isn't reinstalled on every launch). Skipped under -NoLaunch above
+# so the selftest deps check stays fast.
+$voiceReq = Join-Path $root 'app\requirements-voice.txt'
+if (Test-Path $voiceReq) {
+  # Probe under 'Continue' EAP: a FAILED import (kokoro not installed yet) writes a traceback to
+  # stderr, and under the script's 'Stop' EAP PS 5.1 would escalate that to a terminating error and
+  # abort the launch. Localize it so the probe can only ever set $LASTEXITCODE.
+  $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  & $py -c 'import kokoro_onnx' 1>$null 2>$null
+  $haveKokoro = ($LASTEXITCODE -eq 0)
+  $ErrorActionPreference = $eap
+  if (-not $haveKokoro) {
+    # Install in the BACKGROUND (detached) so the window opens NOW - the narrator just falls back to
+    # edge-tts / SAPI until the runtime lands, then uses Kokoro automatically. Never blocks the launch.
+    # NOTE: only the small kokoro-onnx RUNTIME installs here - the voice MODEL is vendored in app\voice\.
+    Write-Host 'sonelle: installing the Kokoro voice runtime in the background - optional, one time...'
+    try { Start-Process -FilePath $py -ArgumentList @('-m','pip','install','--quiet','-r',$voiceReq) -WindowStyle Hidden | Out-Null } catch {}
+  }
+}
+
 # launch the GUI detached, no console window (pythonw). The app owns the hidden PTYs.
 Start-Process -FilePath $pyw -ArgumentList @($appPy) -WorkingDirectory (Join-Path $root 'app') | Out-Null

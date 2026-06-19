@@ -1,5 +1,61 @@
 # Changelog
 
+## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
+- **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a
+  modern neural voice that runs LOCALLY (ONNX): free, no API key, fully offline. The voice MODEL ships
+  IN the engine at `app\voice\` (the ~88 MB int8 build + voice pack, small enough to live in plain git)
+  - **no download**, it's there on clone. Only the small `kokoro-onnx` runtime installs via pip
+  (best-effort, `app\requirements-voice.txt`). `edge-tts` (cloud neural) then Windows **SAPI** stay on
+  as automatic fallbacks, so she always talks. Default voice `af_heart` at 0.95 speed.
+- **She texts you - in the terminal itself.** Narration is no longer a floating banner; it's typed
+  straight into the terminal, word-by-word, like she's messaging you live. Two voices on screen:
+  **pink** (a `> ` caret, the bypass-permissions magenta) is sonelle talking TO you - openers,
+  check-ins, milestones, her answers; **soft white** is the quiet play-by-play of what she's doing.
+  The wording is now warm **first person** ("ok, on it.", "running the tests...", "all green - 1666
+  passing!") instead of robotic third person. Her lines are serialized against claude's own output
+  (a brief hold-back) so the two never interleave mid-line.
+- **Voice is now per-tab.** Each tab pill carries its own speaker toggle, so you mute the boring
+  research sessions and keep the important ones talking. (The single titlebar toggle is gone.)
+- **The brand loop has physics.** The mascot gif is a transparent-fill, soft bordered card you can
+  drag anywhere; release it mid-motion and it FLINGS and BOUNCES off the window edges until friction
+  stops it, then 30s later it drifts back home on two straight, eased, axis-aligned moves.
+- **Recoloured to the gif.** The whole glass panel shifted from lilac/magenta to the brand loop's
+  **blue / indigo / purple** (sampled straight from the gif), incl. the xterm theme + scrollbar.
+- **A shared knowledge base (`knowledge\`).** Generic, cross-project lessons now ship IN the engine
+  (public, ASCII, zero personal data) so a fresh clone already knows them - distinct from personal /
+  per-project memory, which stays in the gitignored hub `memory\`. `tools\log_lesson.ps1 -Shared`
+  captures a generic lesson here (linked from `knowledge\INDEX.md`); the SessionStart hook recalls it.
+- selftest `8e`/`8f`/`8g` extended for all of it: the bundled Kokoro model (no download), the inline
+  pink/white narration, the per-tab speaker, the transparent gif + throw/bounce/drift-home, the
+  `voice`/`status` kind on `window.__narrate`, and the shared knowledge base + `-Shared` capture.
+
+## v1.30 — 2026-06-19 (glass app: sonelle gets a voice)
+- **A per-tab voice narrator: when on, sonelle speaks her progress out loud in third person, and the
+  reports show in bold pink.** New titlebar speaker toggle (per active tab). When a tab's voice is on,
+  she narrates the important beats - *"sonelle is reading the code... sonelle is editing the scripts...
+  she kicks off the test suite... tests came back green - 1666 passing... ouch, she ran into 7 problems...
+  she's pushing the commit up... she's all done, and idle now."* - rate-limited so it's the headline
+  beats, not every keystroke. Each line also renders as a **bold-pink** overlay at the top of the pane
+  (the same magenta as claude's "bypass permissions on" badge) while her normal output stays white.
+  - **Robust data source = Claude Code hooks, not screen-scraping.** The app launches `claude` with
+    `--settings <generated file>` so its `PreToolUse`/`PostToolUse`/`Notification`/`Stop`/
+    `UserPromptSubmit` events append (via `app\narrate_hook.ps1`) to a per-tab JSONL file. A per-tab
+    Python narrator (`app\narrator.py`) tails that file, maps events to humanised lines, and (voice on)
+    speaks them. **Safety:** the app first probes that `claude` actually supports `--settings`; if not,
+    the flag is never passed, so an older/absent claude can't be broken - narration just stays dormant.
+  - **TTS** (`app\tts.py`): `edge-tts` neural voices (free, no API key; default `en-US-AriaNeural`,
+    set `narrator.voice/rate/pitch/engine` in `sonelle.config.json`) with a built-in Windows **SAPI**
+    offline fallback, so she still talks with no connection. Audio plays in the WebView2 page.
+  - **Off by default & escapable:** voice is per-tab and starts off; set `narrator.enabled:false` (or
+    `SONELLE_NARRATE=0`) to disable the whole feature. `edge-tts>=7.2.8` (7.0.0 pinned 403 on the
+    Microsoft handshake). selftest gains a `8f. voice narrator` section.
+- **Three bug fixes from a full app/brain audit:** (1) the GUI's output-pusher thread could crash on a
+  poison-pill drained mid-batch during shutdown - now it finishes the batch and stops cleanly; (2)
+  Ctrl+C in the composer with text selected interrupted the agent instead of copying - it now respects
+  an input-box selection (which `window.getSelection()` doesn't see) and only sends the interrupt when
+  nothing is selected; (3) the `+` button advertised "Ctrl+T" but no handler existed - Ctrl+T now opens
+  a new terminal.
+
 ## v1.29 — 2026-06-19 (glass app: the brand loop gets its own clean corner)
 - **The mascot gif now sits in a clean empty corner with nothing drawn under it, and clears the
   scrollbar.** Two refinements over v1.28: (1) the whole command-bar **panel** now stops before the

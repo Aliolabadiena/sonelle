@@ -26,7 +26,10 @@ you ── "myproj: do X" ──> sonelle.ps1 (terminal)
 - **Heal** (`tools\doctor.ps1` + `docs\HEAL.md`) — doctor DETECTS; the fix loop is Claude-driven (manual).
   A project's checks live in `<code path>\sonelle.check.ps1`; absent it, "heal" = "code path exists".
 - **Self-improve** (`tools\log_lesson.ps1` + `docs\SELF_IMPROVE.md`) — capture tool; the recall/reflect
-  loop is a discipline, not engine-enforced.
+  loop is a discipline, not engine-enforced. Two stores: **personal / per-project** lessons go to the
+  gitignored hub `memory\` (default), while **generic, cross-project** lessons ship IN the engine at
+  `knowledge\` (`log_lesson.ps1 -Shared`, indexed by `knowledge\INDEX.md`) - public, ASCII, no personal
+  data - so a fresh clone already carries them. The SessionStart hook recalls both.
 
 ## CLAUDE.md load behavior (important)
 Claude Code auto-loads `CLAUDE.md` from the working directory up to the project/git root - NOT from an
@@ -87,9 +90,11 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
 - **Tab names:** each terminal tab is labelled with a plain incrementing number (`1`, `2`, `3`, ...) in
   the order it was opened. `nextTabName()` in `app.js` bumps a monotonic `tabSeq` counter, so closing a
   tab never renumbers the rest. A project-named tab keeps the project name.
-- **Contract:** JS->Python via `window.pywebview.api.{new_tab, send_input, resize, close_tab, list_projects,
-  save_paste_image, win_minimize, win_toggle_max, win_close}`; Python->JS via fire-and-forget `run_js` calling
-  `window.__ptyOutput(tabId, base64Bytes)` / `window.__ptyExit(tabId, code)`. `tabId` is Python-owned.
+- **Contract:** JS->Python via `window.pywebview.api.{new_tab, send_input, resize, close_tab, set_narration,
+  list_projects, save_paste_image, win_minimize, win_toggle_max, win_close}`; Python->JS via fire-and-forget
+  `run_js` calling `window.__ptyOutput(tabId, base64Bytes)` / `window.__ptyExit(tabId, code)` /
+  `window.__narrate(tabId, text, kind, mime, audioB64)` (`kind` = `"voice"` pink / `"status"` white).
+  `tabId` is Python-owned.
 - **Window move:** the frameless window drags from the title bar via pywebview's `.pywebview-drag-region`
   class (WebView2 ignores Electron's `-webkit-app-region`); an `app.js` mousedown guard cancels the drag
   over `.nodrag` controls so buttons/tabs/the input still click. The taskbar/window icon is `sonelle.ico`
@@ -102,20 +107,24 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   `taskkill /F /T` its pid (ConPTY has no signal tree, so claude/node grandchildren would orphan).
 - **Glass:** WebView2 **cannot** be transparent on Windows, so the glass is self-contained - an in-app
   gradient + translucent `backdrop-filter` panels - identical on Win10/11 (no OS acrylic dependency).
-- **Brand loop:** the looping sonelle mascot gif (`#brandloop`, `app\ui\brandloop.gif`) sits LOW in the
+- **Brand loop:** the looping sonelle mascot gif (`#brandloop`, `app\ui\brandloop.gif`) STARTS LOW in the
   bottom-right corner, anchored to `#app` (`height:134px; bottom:8px`), in a clean empty space of its
-  own with NOTHING drawn beneath it. It is pulled in off the right edge (`right:30px`) so it clears the
+  own with NOTHING drawn beneath it - but it now has **physics** (`pointer-events:auto`, `cursor:grab`):
+  `wireBrandloopDrag` in `app.js` lets you drag it anywhere; release it mid-motion and `throwLoop`
+  flings it with inertia + friction, BOUNCING off the window edges until it stops, then 30s later
+  `returnLoopHome` drifts it back to the home corner on two straight, eased, axis-aligned moves. The
+  `right`/`bottom` here is only its HOME corner; once moved it switches to absolute `left`/`top`. At
+  its home corner it is pulled in off the right edge (`right:30px`) so it clears the
   terminal scrollbar's lane (the scrollbar rides ~15..22px in). Nothing runs under it on any side:
   vertically the pane reserves an 88px bottom band (`.pane` `padding-bottom`), and because `FitAddon`
   subtracts that padding when it sizes the grid, the terminal text stops ABOVE the gif's top (before
   it, not hidden behind it); horizontally the whole command-bar PANEL stops before it - `#bar` reserves
   a right band (`padding-right`) so the glass `.cmdbar` (input + send button) parks to the LEFT of the
-  gif rather than the panel running under its corner. So its foot sits over the bare page background
-  beside the shrunk bar and its body over the pane's empty band. It stays OPAQUE - a solid `#07091f`
-  backing (matching the gif's own floor) fills the gif's transparent top so it reads as one solid
-  framed block. It is purely decorative (`aria-hidden` + `pointer-events:none`, `z-index` above the
-  pane + bar), so clicks pass through to the send button (send still works) and it never steals a
-  selection; the gif self-animates at half speed (200ms/frame).
+  gif rather than the panel running under its corner. It's a **transparent-fill, soft bordered card**
+  (a hairline border + `border-radius` + shadow, `background:transparent` so the gif's own transparent
+  top shows through instead of a dark block). `z-index` lifts it above the pane + bar;
+  `draggable="false"` disables the browser's own image-drag so our custom drag is the only one. The gif
+  self-animates at half speed (200ms/frame).
 - **Launch + deps:** `bin\sonelle_gui.ps1` bootstraps a local `.venv` (`pywebview` + `pywinpty`, pinned in
   `app\requirements.txt`) on first run, then starts the GUI with `pythonw` (no console). The window
   passes `icon=assets\icon\sonelle.ico` to `webview.start()` so the window's `Form.Icon` is the sonelle
@@ -130,6 +139,31 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   and the glass app spawns the terminal with `-Yolo`, which runs `claude --permission-mode bypassPermissions`
   so it never asks. In any terminal you can also toggle it live with `:yolo` (or `:yolo on|off`), or set it
   permanently via `sonelle.config.json` -> `models.orchestratorPermissionMode: "bypassPermissions"`.
+- **Voice narrator (per-tab):** each tab pill carries its OWN speaker toggle (built in `app.js`
+  `makeTabEl`), so you mute the boring research sessions and keep the important ones talking. When a
+  tab's voice is on, sonelle **texts you straight into the terminal** - lines typed word-by-word, in
+  warm FIRST person, in two colours: **pink** (a `> ` caret, the "bypass permissions on" magenta) when
+  she's talking to YOU ("ok, on it.", "all green - 1666 passing!", "all done - i'm idle now.") and
+  **soft white** for the play-by-play ("reading through the code...", "running the tests..."). The
+  inline lines are written as terminal SGR (`typeNarration`) and **serialized against claude's own
+  output** (a brief hold-back, `writeOrHold`/`runNarrQueue`) so the two never interleave mid-line. The
+  data source is **Claude Code hooks**, not screen scraping: the app launches `claude` with
+  `--settings <generated file>` so its `PreToolUse`/`PostToolUse`/`Notification`/`Stop`/
+  `UserPromptSubmit` events are appended (by `app\narrate_hook.ps1`, via the per-tab env var
+  `SONELLE_NARRATE_FILE`) to a per-tab JSONL file. A per-tab narrator (`app\narrator.py`) tails it,
+  maps each event to a rate-limited line tagged `voice`/`status`, and - voice on - synthesizes speech
+  (`app\tts.py`) and pushes `(text, kind, audio)` to the UI via `window.__narrate`; audio plays in the
+  WebView2 page. **Voice engine:** the primary is **Kokoro** - a modern neural voice that runs LOCALLY
+  (ONNX, free/no-key, fully offline). The voice MODEL is **vendored in the repo** at `app\voice\` (the
+  ~88 MB int8 build + voice pack, small enough for plain git) - **no download**, it ships with sonelle;
+  only the small `kokoro-onnx` runtime installs via pip (best-effort, `app\requirements-voice.txt`).
+  `edge-tts` (cloud neural) then Windows **SAPI** (offline) are automatic fallbacks, so she always
+  talks. Default voice `af_heart` at 0.95 speed (`narrator.voice`/`speed`). **Safety gate:**
+  `narrator.setup()` first probes that `claude` advertises `--settings` (`claude --help`); only then does
+  it publish `SONELLE_NARRATE_SETTINGS` for `bin\sonelle.ps1` to attach `--settings`. So an older/absent
+  claude is never handed an unknown flag - narration just stays dormant and the app is unaffected. Off by
+  default; `sonelle.config.json` -> `narrator` sets `enabled`, `voice`, `speed`, `rate`, `pitch`, `engine`.
+  JS<->Python adds one method (`set_narration`) and one push (`__narrate`, now carrying `kind`).
 
 ## Billing
 The terminal hands prompts to `claude` (Claude Code), which runs on your Claude Pro/Max

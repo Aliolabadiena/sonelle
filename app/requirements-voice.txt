@@ -1,0 +1,7 @@
+# The RUNTIME for sonelle's local neural voice (Kokoro, ONNX). Installed best-effort by
+# bin\sonelle_gui.ps1 - if it fails to install, the narrator just falls back to edge-tts (cloud
+# neural) and then the Windows SAPI voice, so the app still works.
+# NOTE: the voice MODEL itself is NOT a pip package and is NOT downloaded - it is VENDORED in the
+# repo at app\voice\ (the ~88 MB int8 build + voice pack), so the voice ships with sonelle.
+kokoro-onnx>=0.4.9
+misaki[en]>=0.9.4     # English grapheme->phoneme for Kokoro (so no system espeak-ng is required)

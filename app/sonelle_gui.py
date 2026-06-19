@@ -30,6 +30,13 @@ os.environ.setdefault("PYWINPTY_BLOCK", "1")
 import webview
 from winpty import PtyProcess
 
+# Optional voice narrator (app\narrator.py + app\tts.py). Wrapped so any problem in it degrades
+# gracefully to "no narration" rather than breaking the app.
+try:
+    import narrator
+except Exception:
+    narrator = None
+
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 ENGINE = os.path.dirname(APP_DIR)
 UI_INDEX = os.path.join(APP_DIR, "ui", "index.html")
@@ -79,6 +86,38 @@ class SessionManager:
         self._q = queue.Queue()
         self._pusher = threading.Thread(target=self._push_loop, daemon=True)
         self._pusher.start()
+        self._narr = {}                                      # tab_id -> narrator.TabNarrator
+        self._narr_info = {"enabled": False, "voice_cfg": {}}  # set from narrator.setup() in main()
+
+    def set_narration_setup(self, info):
+        self._narr_info = info or {"enabled": False, "voice_cfg": {}}
+
+    # the narrator worker threads call this to push a humanised line (+ optional audio) to the UI.
+    # kind is "voice" (pink: sonelle texting you) or "status" (white: the play-by-play); the front
+    # end types it straight into the terminal in that colour.
+    def _narrate_emit(self, tab_id, text, kind, mime, b64):
+        self._emit("window.__narrate(%s,%s,%s,%s,%s)" % (
+            json.dumps(tab_id), json.dumps(text), json.dumps(kind or "status"),
+            json.dumps(mime) if mime else "null",
+            json.dumps(b64) if b64 else "null"))
+
+    def set_narration(self, tab_id, on):
+        tn = self._narr.get(tab_id)
+        if not tn:
+            return {"ok": True, "available": False, "on": False}
+        try:
+            tn.set_voice(bool(on))
+        except Exception:
+            pass
+        return {"ok": True, "available": True, "on": bool(on)}
+
+    def _close_narr(self, tab_id):
+        tn = self._narr.pop(tab_id, None)
+        if tn:
+            try:
+                tn.close()
+            except Exception:
+                pass
 
     # --- the single choke-point that actually calls into WebView2 (race-safe) ---
     def _emit(self, script):
@@ -98,27 +137,33 @@ class SessionManager:
             if item is None:
                 break                          # poison pill on shutdown
             batch = [item]
+            poisoned = False
             try:
                 while True:
-                    batch.append(self._q.get_nowait())
+                    nxt = self._q.get_nowait()
+                    if nxt is None:            # poison pill drained mid-batch: finish this batch, then stop
+                        poisoned = True
+                        break
+                    batch.append(nxt)
             except queue.Empty:
                 pass
-            if not self._window_open:
-                continue
-            i, n = 0, len(batch)
-            while i < n:
-                kind, tab, payload = batch[i]
-                if kind == "out":
-                    parts = [payload]
-                    j = i + 1
-                    while j < n and batch[j][0] == "out" and batch[j][1] == tab:
-                        parts.append(batch[j][2]); j += 1
-                    b64 = base64.b64encode("".join(parts).encode("utf-8", "replace")).decode("ascii")
-                    self._emit("window.__ptyOutput('%s','%s')" % (tab, b64))
-                    i = j
-                else:  # "exit"
-                    self._emit("window.__ptyExit('%s',%s)" % (tab, payload))
-                    i += 1
+            if self._window_open:
+                i, n = 0, len(batch)
+                while i < n:
+                    kind, tab, payload = batch[i]
+                    if kind == "out":
+                        parts = [payload]
+                        j = i + 1
+                        while j < n and batch[j][0] == "out" and batch[j][1] == tab:
+                            parts.append(batch[j][2]); j += 1
+                        b64 = base64.b64encode("".join(parts).encode("utf-8", "replace")).decode("ascii")
+                        self._emit("window.__ptyOutput('%s','%s')" % (tab, b64))
+                        i = j
+                    else:  # "exit"
+                        self._emit("window.__ptyExit('%s',%s)" % (tab, payload))
+                        i += 1
+            if poisoned:
+                break
 
     def new_tab(self, project=None, cols=80, rows=24):
         try:
@@ -128,6 +173,22 @@ class SessionManager:
             cols, rows = 80, 24
         if not os.path.isfile(SONELLE_PS1):
             return {"ok": False, "error": "sonelle.ps1 not found at %s" % SONELLE_PS1}
+        # Allocate the tab id BEFORE spawning so we can name this tab's narration events file and put
+        # it in the child's environment - claude (launched by the child) must see SONELLE_NARRATE_FILE
+        # when it fires its hooks. SONELLE_NARRATE_SETTINGS is already in os.environ (set in main()).
+        with self._g:
+            self._n += 1
+            tab_id = "t%d" % self._n
+        env = os.environ.copy()
+        events_file = None
+        if self._narr_info.get("enabled") and narrator is not None:
+            try:
+                events_file = narrator.events_file_for(tab_id)
+                os.makedirs(os.path.dirname(events_file), exist_ok=True)
+                open(events_file, "w").close()    # fresh file so the tail starts clean
+                env["SONELLE_NARRATE_FILE"] = events_file
+            except Exception:
+                events_file = None
         ps_args = [PS, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", SONELLE_PS1, "-Bare"]
         # SONELLE_YOLO=1 -> launch the terminal in -Yolo so claude skips permission prompts. (sonelle.ps1
         # also reads the env var directly, but passing the flag keeps the spawned contract explicit.)
@@ -138,20 +199,26 @@ class SessionManager:
                 ps_args,
                 dimensions=(rows, cols),     # (rows, cols); -Bare = no welcome, chat-feel
                 cwd=ENGINE,
-                env=os.environ.copy(),
+                env=env,
             )
         except Exception as e:
             return {"ok": False, "error": str(e)}
+        sess = Session(tab_id, proc)
         with self._g:
-            self._n += 1
-            tab_id = "t%d" % self._n
-            sess = Session(tab_id, proc)
             self._sessions[tab_id] = sess
+        if events_file is not None:
+            try:
+                tn = narrator.TabNarrator(tab_id, events_file, self._narrate_emit,
+                                          self._narr_info.get("voice_cfg") or {})
+                tn.start()
+                self._narr[tab_id] = tn
+            except Exception:
+                pass
         t = threading.Thread(target=self._pump, args=(sess,), daemon=True)
         sess.thread = t
         t.start()
         return {"ok": True, "tabId": tab_id, "title": (project or "sonelle"),
-                "cols": cols, "rows": rows}
+                "cols": cols, "rows": rows, "narration": bool(events_file is not None)}
 
     def _pump(self, sess):
         # Blocking read loop. read() returns decoded str with VT/ANSI intact; we just enqueue it
@@ -207,6 +274,7 @@ class SessionManager:
         return None
 
     def close_tab(self, tab_id):
+        self._close_narr(tab_id)
         with self._g:
             sess = self._sessions.pop(tab_id, None)
         if sess:
@@ -243,6 +311,13 @@ class SessionManager:
         with self._g:
             sessions = list(self._sessions.values())
             self._sessions.clear()
+            narrs = list(self._narr.values())
+            self._narr.clear()
+        for tn in narrs:
+            try:
+                tn.close()
+            except Exception:
+                pass
         for sess in sessions:
             self._kill(sess)
         try:
@@ -357,6 +432,10 @@ class Api:
     def close_tab(self, tabId):
         return self._sm.close_tab(tabId)
 
+    def set_narration(self, tabId, on):
+        # turn a tab's voice narrator on/off (the titlebar speaker toggle)
+        return self._sm.set_narration(tabId, on)
+
     def list_projects(self):
         return list_projects()
 
@@ -413,6 +492,21 @@ def main():
     _set_taskbar_identity()
     debug = bool(os.environ.get("SONELLE_DEBUG"))
     api = Api()
+    # Voice narrator: write the hooks settings file and, ONLY if `claude` supports `--settings`,
+    # publish its path so bin\sonelle.ps1 attaches it. If unsupported the flag is never passed, so
+    # narration simply stays dormant and the app is unaffected.
+    if narrator is not None:
+        try:
+            info = narrator.setup(ENGINE)
+            api._sm.set_narration_setup(info)
+            if info.get("enabled") and info.get("settings_path"):
+                os.environ["SONELLE_NARRATE_SETTINGS"] = info["settings_path"]
+                if debug:
+                    sys.stderr.write("sonelle: voice narrator enabled\n")
+            elif debug:
+                sys.stderr.write("sonelle: voice narrator inactive (claude --settings not detected)\n")
+        except Exception:
+            pass
     win = webview.create_window(
         "sonelle",
         UI_INDEX,                       # entry file -> internal HTTP server (relative assets work)

@@ -14,16 +14,37 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // Palette tuned to the brand-loop gif (blue / indigo / purple), cooler than the old lilac.
   const THEME = {
-    background: "rgba(0,0,0,0)", foreground: "#d7d0e6",
-    cursor: "#b9a6dc", cursorAccent: "#140f22",
-    selectionBackground: "rgba(150,120,200,.30)",
-    black: "#2a2140", red: "#d98aa0", green: "#9bbf90", yellow: "#dcc58a",
-    blue: "#8fa6d6", magenta: "#b59ad6", cyan: "#8fcaca", white: "#d7d0e6",
-    brightBlack: "#5a4f74", brightRed: "#e7a3b4", brightGreen: "#b2d2a8",
-    brightYellow: "#ead7a6", brightBlue: "#a9bce4", brightMagenta: "#cbb4e6",
-    brightCyan: "#aadcdc", brightWhite: "#efe9f8"
+    background: "rgba(0,0,0,0)", foreground: "#d3d6ec",
+    cursor: "#9aa6ec", cursorAccent: "#0d1024",
+    selectionBackground: "rgba(110,124,210,.32)",
+    black: "#232a4a", red: "#d98aa0", green: "#9bbf90", yellow: "#dcc58a",
+    blue: "#8f9ee6", magenta: "#b0a0e6", cyan: "#8fc6dc", white: "#d3d6ec",
+    brightBlack: "#5a5f84", brightRed: "#e7a3b4", brightGreen: "#b2d2a8",
+    brightYellow: "#ead7a6", brightBlue: "#a9b6ee", brightMagenta: "#c4b8ee",
+    brightCyan: "#aadcdc", brightWhite: "#efeefb"
   };
+
+  // narration colours written straight into the terminal: PINK = sonelle texting you (bold, the
+  // "bypass permissions" magenta = --pink #ff79c6); WHITE = the quiet play-by-play of what's happening.
+  const PINK_SGR = "\x1b[1;38;2;255;121;198m";
+  const STATUS_SGR = "\x1b[38;2;176;182;224m";
+  const SGR_RESET = "\x1b[0m";
+
+  // small speaker glyph for the per-tab voice toggle (filled when on, slashed-quiet when off via css)
+  const SPK_SVG =
+    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>' +
+    '<path class="wave" d="M15.5 8.5a4.5 4.5 0 0 1 0 7" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.8" stroke-linecap="round"/></svg>';
+
+  function b64ToBytes(b64) {
+    const bin = atob(b64);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return buf;
+  }
 
   function newTermObj() {
     const term = new Terminal({
@@ -69,24 +90,85 @@
   }
 
   // ---------- Python -> JS push sinks (installed immediately) ----------
+  // While sonelle is typing a narration line straight into the terminal, hold back claude's own
+  // bytes so the two never interleave mid-line; the held output is flushed the instant she finishes.
+  function writeOrHold(t, data) {
+    if (t.narrating) {
+      if (!t.holdback) t.holdback = [];
+      if (t.holdback.length < 4000) t.holdback.push(data);   // capped so a long burst can't grow unbounded
+      return;
+    }
+    try { t.term.write(data); } catch (e) {}
+  }
   window.__ptyOutput = function (tabId, b64) {
-    const bin = atob(b64);
-    const buf = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    const buf = b64ToBytes(b64);
     const t = TABS.get(tabId);
-    if (t) { t.term.write(buf); return; }   // Uint8Array -> xterm stitches partial UTF-8
+    if (t) { writeOrHold(t, buf); return; }   // Uint8Array -> xterm stitches partial UTF-8
     let q = PENDING.get(tabId);
     if (!q) { q = []; PENDING.set(tabId, q); }
-    if (q.length < 4000) q.push(buf);       // buffer pre-register output (capped so a never-registered id can't grow unbounded)
+    if (q.length < 4000) q.push(buf);         // buffer pre-register output (capped so a never-registered id can't grow unbounded)
   };
   window.__ptyExit = function (tabId, code) {
     const t = TABS.get(tabId);
     if (!t) return;
     t.dead = true;
     const c = (code === null || code === undefined) ? "" : " (" + code + ")";
-    t.term.write("\r\n\x1b[2m[process exited" + c + "]\x1b[0m\r\n");
+    writeOrHold(t, "\r\n\x1b[2m[process exited" + c + "]\x1b[0m\r\n");
     if (t.tabEl) t.tabEl.classList.add("dead");
   };
+
+  // ---------- narrator push: a humanised line typed straight INTO the terminal (+ optional audio) ----
+  // Python (narrator.py) calls this when a tab's voice is on. kind "voice" = sonelle texting you
+  // (bold pink, with a chat caret) - openers, check-ins, milestones, her answers; kind "status" =
+  // the quiet play-by-play (soft white). The line is typed word-by-word into the xterm itself so it
+  // reads like she's messaging you live; audio (if any) plays in the page (WebView2 HTML5 audio).
+  window.__narrate = function (tabId, text, kind, mime, b64) {
+    const t = TABS.get(tabId);
+    if (!t) return;
+    pushNarration(t, text, kind, mime, b64);
+  };
+  function pushNarration(entry, text, kind, mime, b64) {
+    if (b64 && mime) playNarrationAudio(mime, b64);
+    if (!text) return;
+    if (!entry.narrq) entry.narrq = [];
+    entry.narrq.push({ text: String(text), kind: kind === "voice" ? "voice" : "status" });
+    if (!entry.narrating) runNarrQueue(entry);
+  }
+  function runNarrQueue(entry) {
+    if (!entry.narrq || !entry.narrq.length) {
+      entry.narrating = false;                          // burst done: release any held claude output
+      const hb = entry.holdback || []; entry.holdback = [];
+      for (let i = 0; i < hb.length; i++) { try { entry.term.write(hb[i]); } catch (e) {} }
+      return;
+    }
+    entry.narrating = true;
+    const item = entry.narrq.shift();
+    typeNarration(entry, item.text, item.kind, () => runNarrQueue(entry));
+  }
+  // type one line word-by-word: pink + a "> " caret for her voice, soft white + indent for status
+  function typeNarration(entry, text, kind, done) {
+    const term = entry.term;
+    const color = (kind === "voice") ? PINK_SGR : STATUS_SGR;
+    const prefix = (kind === "voice") ? "> " : "  ";
+    const tokens = text.split(/(\s+)/);                 // keep the whitespace as its own tokens
+    let i = 0;
+    try { term.write("\r\n" + color + prefix); } catch (e) {}
+    const tick = () => {
+      if (i >= tokens.length) {
+        try { term.write(SGR_RESET + "\r\n", done); } catch (e) { done(); }
+        return;
+      }
+      const tok = tokens[i++];
+      try { term.write(tok, () => setTimeout(tick, 34)); } catch (e) { setTimeout(tick, 34); }
+    };
+    tick();
+  }
+  function playNarrationAudio(mime, b64) {
+    try {
+      const a = new Audio("data:" + mime + ";base64," + b64);
+      a.play().catch(() => {});       // autoplay can reject silently; the typed line still shows
+    } catch (e) {}
+  }
 
   // ---------- tab naming ----------
   // Tabs are labelled with a plain incrementing number (1, 2, 3, ...) in the order they were opened.
@@ -102,14 +184,23 @@
     const lab = document.createElement("span");
     lab.className = "label";
     lab.textContent = label;
+    // per-tab voice toggle, right on the pill: mute the boring research sessions, keep the
+    // important ones talking. Independent per tab (you can mute tab 2 while tab 1 still speaks).
+    const spk = document.createElement("span");
+    spk.className = "spk";
+    spk.title = "voice: off";
+    spk.setAttribute("aria-label", "toggle voice for this tab");
+    spk.innerHTML = SPK_SVG;
     const x = document.createElement("span");
     x.className = "x";
     x.textContent = "×";
     x.title = "close";
     el.appendChild(lab);
+    el.appendChild(spk);
     el.appendChild(x);
     el.addEventListener("click", (e) => {
-      if (e.target === x) closeTab(tabId);
+      if (x.contains(e.target)) closeTab(tabId);
+      else if (spk.contains(e.target)) toggleTabVoice(tabId);
       else activateTab(tabId);
     });
     $("tabs").appendChild(el);
@@ -166,7 +257,24 @@
     const { term, fit } = newTermObj();
     term.open(pane);
     const webgl = mountWebgl(term);   // GPU renderer (after open): crisp, no flutter over the glass
-    return { term, fit, pane, webgl, tabEl: null, ro: null, disposers: [], dead: false };
+    // Scroll fix: this pane is OUTPUT-ONLY (disableStdin), but claude's TUI turns ON mouse tracking,
+    // which makes xterm hand the wheel to the app instead of scrolling its own scrollback - so the
+    // wheel "sticks" (you scroll up but can't come back down). Intercept the wheel in the CAPTURE
+    // phase and drive xterm's scrollback directly, so the wheel always scrolls history, both ways.
+    pane.addEventListener("wheel", (e) => {
+      try {
+        let lines;
+        if (e.deltaMode === 1) lines = e.deltaY;                          // already line units
+        else if (e.deltaMode === 2) lines = e.deltaY * (term.rows || 24); // page units
+        else lines = e.deltaY / 24;                                       // pixels -> ~lines
+        lines = lines < 0 ? Math.floor(lines) : Math.ceil(lines);
+        if (lines) term.scrollLines(lines);
+      } catch (x) {}
+      e.preventDefault();
+      e.stopPropagation();        // keep it from reaching xterm's mouse-report path
+    }, { passive: false, capture: true });
+    return { term, fit, pane, webgl, tabEl: null, ro: null, disposers: [], dead: false,
+             voice: false, narration: false, narrating: false, narrq: [], holdback: [] };
   }
 
   // ---------- live tab (real backend) ----------
@@ -193,8 +301,10 @@
     }
     const tabId = res.tabId;
     tabCount++;
+    entry.narration = !!(res && res.narration);   // backend wired claude's hooks for this tab -> voice can speak
     entry.name = project || nextTabName();   // a routed project keeps its name; otherwise a plain number
     entry.tabEl = makeTabEl(tabId, entry.name);
+    updateTabVoiceEl(entry);                  // reflect this tab's (off-by-default) voice state on its pill
     TABS.set(tabId, entry);
     const q = PENDING.get(tabId);
     if (q) { q.forEach((b) => entry.term.write(b)); PENDING.delete(tabId); }
@@ -231,8 +341,13 @@
     if (e.key === "Tab") { e.preventDefault(); sendRaw("\t"); return; }
     if (e.key === "Escape") { e.preventDefault(); sendRaw("\x1b"); return; }
     if (e.ctrlKey && (e.key === "c" || e.key === "C")) {
+      // interrupt only when NOTHING is selected. A selection in the read-only terminal lives in
+      // window.getSelection(); a selection inside the composer input does NOT (inputs have their own
+      // selection model) - check both so Ctrl+C copies composer text instead of killing the agent.
       const sel = (window.getSelection && window.getSelection().toString()) || "";
-      if (!sel) { e.preventDefault(); sendRaw("\x03"); }   // no selection -> interrupt; with one -> let copy happen
+      const inp = $("cmd");
+      const inpSel = !!(inp && document.activeElement === inp && inp.selectionStart !== inp.selectionEnd);
+      if (!sel && !inpSel) { e.preventDefault(); sendRaw("\x03"); }
       return;
     }
   }
@@ -274,11 +389,139 @@
     }
   }
 
+  // ---------- per-tab voice narration toggle (each tab has its own speaker on its pill) ----------
+  function updateTabVoiceEl(entry) {
+    if (!entry || !entry.tabEl) return;
+    const spk = entry.tabEl.querySelector(".spk");
+    if (!spk) return;
+    const on = !!entry.voice;
+    spk.classList.toggle("on", on);
+    spk.title = on ? "voice: on (sonelle speaks in this tab)" : "voice: off (muted)";
+  }
+  function toggleTabVoice(tabId) {
+    const e = TABS.get(tabId);
+    if (!e) return;
+    // turning ON but the backend never wired claude's hooks for this tab -> say so, stay off
+    if (live && !e.narration && !e.voice) {
+      pushNarration(e, "voice needs a claude build with --settings hooks - staying muted.", "voice");
+      return;
+    }
+    e.voice = !e.voice;
+    if (live) { try { window.pywebview.api.set_narration(tabId, e.voice); } catch (x) {} }
+    updateTabVoiceEl(e);
+    pushNarration(e, e.voice ? "voice on - i'll talk you through it." : "voice off - going quiet here.", "voice");
+  }
+
+  // ---------- brand-loop gif: drag with throw + edge-bounce, then drift home after idle ----------
+  // The mascot floats free (transparent, no box). Grab it; release while moving and it keeps going,
+  // BOUNCING off the window edges until friction stops it. 30s after it settles it returns to its
+  // home corner on two straight, eased, axis-aligned moves (horizontal, then vertical) - never a tp.
+  let loopRAF = 0, loopReturnTimer = 0;
+  function loopHome(el) {
+    const w = el.offsetWidth || 120, h = el.offsetHeight || 120;
+    return [Math.max(0, window.innerWidth - w - 30), Math.max(0, window.innerHeight - h - 8)];  // matches the CSS corner
+  }
+  function loopMaxX(el) { return Math.max(0, window.innerWidth - (el.offsetWidth || 120)); }
+  function loopMaxY(el) { return Math.max(0, window.innerHeight - (el.offsetHeight || 120)); }
+  function setLoopPos(el, x, y) { el.style.right = "auto"; el.style.bottom = "auto"; el.style.left = x + "px"; el.style.top = y + "px"; }
+  function cancelLoopMotion() {
+    if (loopRAF) { cancelAnimationFrame(loopRAF); loopRAF = 0; }
+    if (loopReturnTimer) { clearTimeout(loopReturnTimer); loopReturnTimer = 0; }
+  }
+  function wireBrandloopDrag() {
+    const el = $("brandloop");
+    if (!el) return;
+    el.style.cursor = "grab";
+    let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+    let lastX = 0, lastY = 0, lastT = 0, vx = 0, vy = 0;
+    el.addEventListener("mousedown", (e) => {
+      cancelLoopMotion();                 // grabbing it interrupts any throw/return in progress
+      dragging = true;
+      el.style.cursor = "grabbing";
+      const r = el.getBoundingClientRect();
+      setLoopPos(el, r.left, r.top);      // pin its current spot before we start moving it
+      ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY;
+      lastX = r.left; lastY = r.top; lastT = performance.now(); vx = 0; vy = 0;
+      e.preventDefault(); e.stopPropagation();
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      const nx = Math.max(0, Math.min(loopMaxX(el), ox + (e.clientX - sx)));
+      const ny = Math.max(0, Math.min(loopMaxY(el), oy + (e.clientY - sy)));
+      setLoopPos(el, nx, ny);
+      const t = performance.now(), dt = t - lastT;
+      if (dt > 0) { vx = (nx - lastX) / dt; vy = (ny - lastY) / dt; }   // px per ms
+      lastX = nx; lastY = ny; lastT = t;
+    });
+    window.addEventListener("mouseup", () => {
+      if (!dragging) return;
+      dragging = false;
+      el.style.cursor = "grab";
+      if (performance.now() - lastT > 80) { vx = 0; vy = 0; }   // paused before letting go -> no throw
+      if (Math.hypot(vx, vy) > 0.05) throwLoop(el, vx, vy);     // released mid-motion -> fling + bounce
+      else scheduleLoopReturn(el);                              // dropped still -> head home after 30s
+    });
+    window.addEventListener("resize", () => {
+      if (loopRAF || dragging) return;
+      if (el.style.left === "" || el.style.left === "auto") return;
+      setLoopPos(el, Math.min(loopMaxX(el), parseFloat(el.style.left) || 0),
+                     Math.min(loopMaxY(el), parseFloat(el.style.top) || 0));
+    });
+  }
+  // inertia: integrate velocity with friction, bounce off the 4 walls, until it slows to rest
+  function throwLoop(el, vx, vy) {
+    let x = parseFloat(el.style.left) || 0, y = parseFloat(el.style.top) || 0;
+    let prev = performance.now();
+    const FRICTION = 0.0026, RESTITUTION = 0.72;   // damping per ms; energy kept per wall bounce
+    const SLOW = 0.5;                              // play the whole throw at HALF speed (2x slower bounce + decel)
+    const step = (now) => {
+      const dt = Math.min(40, now - prev) * SLOW; prev = now;
+      x += vx * dt; y += vy * dt;
+      const mx = loopMaxX(el), my = loopMaxY(el);
+      if (x < 0) { x = 0; vx = -vx * RESTITUTION; } else if (x > mx) { x = mx; vx = -vx * RESTITUTION; }
+      if (y < 0) { y = 0; vy = -vy * RESTITUTION; } else if (y > my) { y = my; vy = -vy * RESTITUTION; }
+      const damp = Math.exp(-FRICTION * dt); vx *= damp; vy *= damp;
+      setLoopPos(el, x, y);
+      if (Math.hypot(vx, vy) > 0.015) { loopRAF = requestAnimationFrame(step); }
+      else { loopRAF = 0; scheduleLoopReturn(el); }
+    };
+    loopRAF = requestAnimationFrame(step);
+  }
+  // 30s after it settles, drift home on TWO straight axis-aligned moves (horizontal, then vertical)
+  function scheduleLoopReturn(el) {
+    if (loopReturnTimer) clearTimeout(loopReturnTimer);
+    loopReturnTimer = setTimeout(() => { loopReturnTimer = 0; returnLoopHome(el); }, 30000);
+  }
+  function easeInOut(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+  function animLoopAxis(el, axis, from, to, dur, done) {
+    const start = performance.now();
+    const step = (now) => {
+      const p = Math.min(1, (now - start) / dur);
+      const v = from + (to - from) * easeInOut(p);   // accelerate then slow down
+      if (axis === "x") el.style.left = v + "px"; else el.style.top = v + "px";
+      if (p < 1) { loopRAF = requestAnimationFrame(step); }
+      else { loopRAF = 0; if (done) done(); }
+    };
+    loopRAF = requestAnimationFrame(step);
+  }
+  function returnLoopHome(el) {
+    const home = loopHome(el);
+    const x0 = parseFloat(el.style.left) || 0, y0 = parseFloat(el.style.top) || 0;
+    animLoopAxis(el, "x", x0, home[0], 950, () => {        // move 1: slide across to home X...
+      animLoopAxis(el, "y", y0, home[1], 950, () => { loopRAF = 0; });   // move 2: ...then down to home Y
+    });
+  }
+
   // ---------- chrome wiring (safe with or without the bridge) ----------
   function wireChrome() {
     const openTab = () => { if (live) createLiveTab(null); else createDemoTab(); };
     $("btn-new").addEventListener("click", openTab);
     $("w-open").addEventListener("click", openTab);
+    wireBrandloopDrag();          // the mascot gif is grab-and-drop, and remembers where you leave it
+    // Ctrl+T opens a new terminal (the + button advertises this shortcut; WebView2 has no default for it)
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === "t" || e.key === "T")) { e.preventDefault(); openTab(); }
+    });
     $("send").addEventListener("click", sendLine);
     $("cmd").addEventListener("keydown", composerKey);
     $("cmd").addEventListener("paste", onComposerPaste);   // Ctrl+V an image -> attach it for claude
@@ -315,13 +558,14 @@
     const did = "demo" + (++tabCount);
     entry.name = nextTabName();
     entry.tabEl = makeTabEl(did, entry.name);
+    updateTabVoiceEl(entry);
     TABS.set(did, entry);
     entry.ro = new ResizeObserver(() => scheduleFit(entry));
     entry.ro.observe(entry.pane);
     activateTab(did);
     requestAnimationFrame(() => {
       safeFit(entry);
-      entry.term.write("  \x1b[38;2;154;134;196m▸\x1b[0m ");   // bare prompt - matches the real -Bare mode
+      entry.term.write("  \x1b[38;2;138;150;230m▸\x1b[0m ");   // bare prompt - matches the real -Bare mode
     });
   }
 

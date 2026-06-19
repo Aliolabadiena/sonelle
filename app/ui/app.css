@@ -2,17 +2,20 @@
    WebView2 can't be transparent, so the "glass" is self-contained: a full-bleed
    page gradient (the scene) + translucent panels with backdrop-filter over it. */
 
+/* Palette tuned to the brand-loop gif: blue / indigo / purple (sampled #6060D0, #4040B0,
+   #6070C0 periwinkle, #7050B0 purple, deep navy #101040 / #07091f), cooler than the old lilac. */
 :root{
-  --bg0:#0d0a14;          /* near-black */
-  --bg1:#150f22;
-  --bg2:#1b1330;          /* deep muted purple */
-  --txt:#d7d0e6;          /* soft lavender-white, not pure white */
-  --dim:#8b85a0;
-  --faint:#6f6a85;
-  --accent:#9a86c4;       /* desaturated lilac - NOT neon */
-  --accent-soft:rgba(154,134,196,.16);
-  --hair:rgba(170,150,210,.11);
-  --hair-strong:rgba(180,160,220,.21);
+  --bg0:#080a18;          /* near-black, blue-leaning */
+  --bg1:#0d1024;
+  --bg2:#141a3a;          /* deep indigo (the gif's #101040 family) */
+  --txt:#d3d6ec;          /* soft periwinkle-white, not pure white */
+  --dim:#8a90b4;
+  --faint:#6b7196;
+  --accent:#8b96e6;       /* periwinkle indigo (gif #6070C0 / #6060D0) - NOT neon */
+  --accent-soft:rgba(139,150,230,.16);
+  --pink:#ff79c6;         /* narrator's voice lines - the "bypass permissions on" magenta/pink */
+  --hair:rgba(150,162,230,.12);
+  --hair-strong:rgba(160,172,240,.22);
   --pane-radius:16px;
   --font:"Cascadia Code","Cascadia Mono",Consolas,"Courier New",monospace;
 }
@@ -24,9 +27,9 @@ body{
   font-family:var(--font);
   overflow:hidden;
   background:
-    radial-gradient(70% 55% at 22% 8%, rgba(108,78,168,.27), transparent 60%),
-    radial-gradient(60% 50% at 92% 4%, rgba(78,54,124,.24), transparent 62%),
-    radial-gradient(75% 65% at 78% 102%, rgba(64,44,104,.21), transparent 60%),
+    radial-gradient(70% 55% at 22% 8%, rgba(80,84,200,.26), transparent 60%),    /* indigo-blue */
+    radial-gradient(60% 50% at 92% 4%, rgba(112,80,176,.22), transparent 62%),   /* purple (gif #7050B0) */
+    radial-gradient(75% 65% at 78% 102%, rgba(48,64,128,.22), transparent 60%),  /* slate blue (gif #304080) */
     linear-gradient(165deg, var(--bg1), var(--bg0));
   user-select:none;
 }
@@ -35,7 +38,7 @@ body{
 
 /* ---------- glass primitive ---------- */
 .glass{
-  background:linear-gradient(160deg, rgba(42,30,66,.40), rgba(18,12,32,.32));
+  background:linear-gradient(160deg, rgba(34,40,86,.40), rgba(13,16,40,.32));
   backdrop-filter:blur(16px) saturate(120%);
   -webkit-backdrop-filter:blur(16px) saturate(120%);
   border:1px solid var(--hair);
@@ -50,7 +53,7 @@ body{
   display:flex; align-items:center; gap:10px;
   height:44px; padding:0 8px 0 14px;
   border-radius:14px;
-  background:linear-gradient(160deg, rgba(40,28,64,.46), rgba(16,11,28,.36));
+  background:linear-gradient(160deg, rgba(32,38,82,.46), rgba(12,15,36,.36));
   backdrop-filter:blur(16px) saturate(120%);
   -webkit-backdrop-filter:blur(16px) saturate(120%);
   border:1px solid var(--hair);
@@ -85,6 +88,17 @@ body{
   width:16px; height:16px; border-radius:5px; color:var(--faint); font-size:13px; line-height:1;
 }
 .tab .x:hover{ background:rgba(255,255,255,.08); color:var(--txt); }
+/* per-tab voice toggle (a small speaker on each pill): dim/quiet when muted, pink + sound-waves
+   when this tab is speaking. Independent per tab so you mute the boring ones and keep others on. */
+.tab .spk{
+  display:flex; align-items:center; justify-content:center;
+  width:16px; height:16px; border-radius:5px; color:var(--faint);
+}
+.tab .spk svg{ width:14px; height:14px; display:block; }
+.tab .spk .wave{ opacity:0; }                                   /* muted: cone only, no waves */
+.tab .spk:hover{ background:rgba(255,255,255,.08); color:var(--txt); }
+.tab .spk.on{ color:var(--pink); }
+.tab .spk.on .wave{ opacity:1; }                                /* speaking: show the waves, in pink */
 
 .spacer{ flex:1 1 auto; }
 
@@ -126,7 +140,7 @@ body{
      STOPS ABOVE the brand-loop gif: FitAddon subtracts this padding when it computes rows, so the
      text ends short of the gif instead of being drawn (and hidden) behind it - it stops before it. */
   padding:12px 4px 88px 16px;
-  background:linear-gradient(160deg, rgba(34,24,56,.38), rgba(14,10,26,.30));
+  background:linear-gradient(160deg, rgba(28,34,76,.38), rgba(11,14,34,.30));
   backdrop-filter:blur(13px) saturate(116%);
   -webkit-backdrop-filter:blur(13px) saturate(116%);
   border:1px solid var(--hair);
@@ -143,33 +157,35 @@ body{
 .pane .xterm{ padding-right:18px; }
 .pane .xterm-viewport::-webkit-scrollbar{ width:8px; }
 .pane .xterm-viewport::-webkit-scrollbar-thumb{
-  background:rgba(154,134,196,.40); border-radius:6px;
+  background:rgba(139,150,230,.42); border-radius:6px;
   border:2px solid transparent; background-clip:content-box;   /* thin thumb with a gap, off the text */
 }
 .pane .xterm-viewport::-webkit-scrollbar-track{ background:transparent; margin:6px 0; }
 
-/* ---------- always-on brand loop (the animated mascot gif) ---------- */
-/* The looping sonelle gif sits LOW in the bottom-right corner in a clean empty space of its own -
-   NOTHING is drawn under it. It is pulled in off the right edge (right:30px) so it clears the
-   terminal scrollbar's lane (the scrollbar rides ~15..22px in; the gif's right edge stops short of
-   it). Horizontally the WHOLE command-bar panel stops before it: #bar reserves a right band so the
-   glass cmdbar parks to the LEFT of the gif (panel and send button both clear it). Vertically the
-   pane reserves an 88px bottom band (see .pane) so the terminal grid stops ABOVE the gif's top - text
-   ends before it, never drawn (and hidden) behind it. So the gif's foot sits over the bare page
-   background beside the shrunk bar, and its body over the pane's empty band - a clean corner with no
-   panel, text, or scrollbar beneath. The opaque #07091f backing (matching the gif's own floor) fills
-   its transparent top so it reads as one solid framed block. pointer-events:none keeps it decorative
-   (Enter still sends; clicks fall through); z-index lifts it above the pane + bar; aria-hidden hides
-   it from a11y. The gif self-animates (re-timed to 200ms/frame - half speed). */
+/* ---------- narrator reports ---------- */
+/* Narration is no longer a CSS overlay - sonelle types it STRAIGHT INTO the terminal: pink (a "> "
+   caret, the bypass-permissions magenta) for her voice (openers, check-ins, milestones, answers) and
+   soft white for the play-by-play, word-by-word so it reads like she's texting you live. See app.js
+   typeNarration / pushNarration (the colours are written as terminal SGR, not styled here). */
+
+/* ---------- brand loop (the animated mascot gif - free-floating, draggable) ---------- */
+/* The sonelle gif keeps its soft, rounded, bordered CARD look but with a TRANSPARENT fill (its own
+   transparent top shows straight through instead of a dark block). It HOMES to the bottom-right
+   corner (right:30/bottom:8, off the scrollbar lane), but that's only its home spot: app.js
+   `wireBrandloopDrag` makes it GRAB-AND-DROP (pointer-events:auto + cursor:grab), with a throw
+   (release while moving -> it flings and BOUNCES off the window edges until friction stops it), and
+   30s after it settles it drifts back home on two straight, eased, axis-aligned moves. Once dragged
+   it switches to absolute left/top. z-index lifts it above the pane + bar. */
 .brandloop{
-  position:absolute; right:30px; bottom:8px; z-index:6;   /* right:30 pulls it in off the scrollbar lane */
-  height:134px; width:auto; pointer-events:none; user-select:none;
+  position:absolute; right:30px; bottom:8px; z-index:6;   /* home corner; off the scrollbar lane */
+  height:134px; width:auto; pointer-events:auto; user-select:none; cursor:grab;
   opacity:1;
-  background:#07091f;                /* NOT transparent: fills the gif's transparent top (matches its own floor) */
-  border:1px solid var(--hair);
-  border-radius:14px;
+  background:transparent;            /* transparent fill (the gif's own transparent top shows through) */
+  border:1px solid var(--hair);      /* keep the soft bordered card */
+  border-radius:14px;                /* soft, rounded edges */
   box-shadow:0 8px 28px rgba(0,0,0,.5);
 }
+.brandloop:active{ cursor:grabbing; }
 
 /* ---------- welcome (empty state) ---------- */
 .welcome{
@@ -191,7 +207,7 @@ body{
   color:#0f0b16; background:var(--accent); border:0; font-family:var(--font);
   font-size:13px; font-weight:500;
 }
-.primary:hover{ background:#ab98d2; }
+.primary:hover{ background:#a3acec; }
 
 /* ---------- command bar ---------- */
 /* The brand-loop gif lives in the bottom-right corner (anchored to #app), pulled in off the right edge
@@ -233,7 +249,7 @@ body{
   width:38px; height:38px; border:0; border-radius:11px; cursor:default;
   background:var(--accent); color:#0f0b16;
 }
-.send:hover{ background:#ab98d2; }
+.send:hover{ background:#a3acec; }
 .send .g-send{
   width:0;height:0;
   border-bottom:11px solid #0f0b16; border-left:6px solid transparent; border-right:6px solid transparent;

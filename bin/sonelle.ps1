@@ -32,6 +32,12 @@ if (Test-Path $cfg) {
 # -Yolo (or the env var the glass app forwards) overrides the mode so claude never asks for permission.
 # bypassPermissions is a real claude --permission-mode choice; toggle it live in the REPL with :yolo.
 if ($Yolo -or $env:SONELLE_YOLO) { $orchPerm = 'bypassPermissions' }
+# Voice narrator (glass app): when the app set SONELLE_NARRATE_SETTINGS, attach it as claude's
+# --settings so claude's hooks stream progress events to the per-tab file the app narrates from.
+# The app only sets this env after probing that `claude` supports --settings, so we can never feed
+# claude a bad flag here. Empty (no narration) for a plain terminal -> nothing changes.
+$orchSettings = ''
+if ($env:SONELLE_NARRATE_SETTINGS -and (Test-Path $env:SONELLE_NARRATE_SETTINGS)) { $orchSettings = $env:SONELLE_NARRATE_SETTINGS }
 $psExe = (Get-Process -Id $PID).Path
 . (Join-Path $root 'tools\_registry.ps1')
 
@@ -210,7 +216,7 @@ function DevSelf($prompt, $images) {
   $dirty = $false
   if (Get-Command git -ErrorAction SilentlyContinue) { try { $dirty = [bool](& git -C $root status --porcelain 2>$null) } catch {} }
   if ($dirty) { Write-Host ("  {0}note: engine has uncommitted changes - commit/stash first for a clean rewind point.{1}" -f $dim, $R) }
-  $cargs = @('--model', $orchModel, '--effort', $orchEffort); if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }
+  $cargs = @('--model', $orchModel, '--effort', $orchEffort); if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
   Push-Location $root
   try { & claude @cargs $seed } finally { Pop-Location }
   # invariant #4 guard: the engine must stay clean of hub state - warn if a session left any behind
@@ -247,7 +253,7 @@ function Route($short, $prompt, $images) {
     Write-Host ("    " + $dim + $code + $R)
     Write-Host ("    " + $dim + ($finalPrompt -replace "`n", " / ") + $R)
   }
-  $cargs = @('--model', $orchModel, '--effort', $orchEffort); if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }
+  $cargs = @('--model', $orchModel, '--effort', $orchEffort); if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
   if ($code -notmatch '^[-(]' -and (Test-Path $code)) { Push-Location $code } else { Push-Location $root }
   try { & claude @cargs $finalPrompt } finally { Pop-Location }
   $script:staged = @()   # staged images consumed

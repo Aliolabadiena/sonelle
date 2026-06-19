@@ -40,7 +40,11 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
 3. `tools\selftest.ps1` -> ALL PASS. Red = fix or revert; never commit red.
 4. Commit + push to the public repo. Everything is git-versioned, so **rewind freely** -
    experiment, and `git revert` / `git reset` if a direction turns out wrong.
-5. Capture any lesson in YOUR memory (not the engine) so the next session recalls it.
+5. Capture lessons. A **generic, cross-project** lesson (no personal data) ships IN the engine via
+   `tools\log_lesson.ps1 -Shared` -> `knowledge\` (public, ASCII, indexed by `knowledge\INDEX.md`); a
+   **personal / per-project** lesson goes to YOUR gitignored hub `memory\` (default, no `-Shared`). The
+   shared `knowledge\` base is curated engine content (like `docs\`/`templates\`), NOT hub state - so it
+   does not violate invariant 4; just keep it personal-data-free. The SessionStart hook recalls both.
 
 ## Common changes
 - **New terminal command:** add a handler in the REPL loop of `bin\sonelle.ps1`, a line in
@@ -83,19 +87,36 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   `.pywebview-drag-region` (NOT Electron's
   `-webkit-app-region`, which WebView2 ignores) with an `app.js` mousedown guard over `.nodrag` controls;
   Ctrl+V in the composer saves the clipboard image to temp (`save_paste_image`) and inserts an `@"path"`
-  token. An always-on **brand loop** (`#brandloop`, the looping mascot gif `app\ui\brandloop.gif`) is
-  anchored to `#app`, sitting LOW in the bottom-right corner (`bottom:8px`) in a clean empty space of
-  its own with NOTHING drawn beneath it. It is pulled in off the right edge (`right:30px`) so it clears
-  the terminal scrollbar's lane. It is OPAQUE (a solid backing fills the gif's transparent top so it
-  reads as one solid block) and decorative only (`aria-hidden` + `pointer-events:none`, `z-index` above
-  the pane + bar), so clicks fall THROUGH it to the send button (send still works). Nothing runs under
-  it on any side: vertically the pane reserves an 88px bottom band (`.pane` `padding-bottom`) so FitAddon
-  drops the rows the gif would cover and the text STOPS ABOVE it (before the gif, not hidden behind it);
-  horizontally the whole command-bar PANEL stops before it - `#bar` reserves a right band (`padding-right`)
-  so the glass `.cmdbar` (input + send button) parks to the LEFT of the gif rather than the panel running
-  under its corner. selftest 8e guards these. **Yolo (skip permission prompts):** `SONELLE_YOLO=1` makes the app spawn
+  token. A **brand loop** (`#brandloop`, the looping mascot gif `app\ui\brandloop.gif`) is anchored to
+  `#app` and HOMES to the bottom-right corner (`bottom:8px`, `right:30px` off the scrollbar lane). It is
+  a transparent-fill, soft bordered card (`background:transparent` + hairline border + radius) and has
+  **physics**: `wireBrandloopDrag` (`app.js`) makes it `pointer-events:auto`/`cursor:grab`; release it
+  mid-drag and `throwLoop` flings it with inertia/friction, BOUNCING off the window edges, then 30s
+  later `returnLoopHome` drifts it back home on two straight, eased, axis-aligned moves (the CSS
+  `right`/`bottom` is only the HOME corner; once moved it's absolute `left`/`top`). At the home corner
+  the pane reserves an 88px bottom band (`.pane` `padding-bottom`) and `#bar` a right band
+  (`padding-right`) so text + the command bar stop before it. selftest 8e guards these (incl. the physics).
+  **Recolour:** the glass palette is tuned to the gif's blue/indigo/purple - edit the `:root` vars +
+  gradients in `app.css` and the xterm `THEME` in `app.js` together if you reskin it.
+  **Yolo (skip permission prompts):** `SONELLE_YOLO=1` makes the app spawn
   the terminal with `-Yolo` -> `claude --permission-mode bypassPermissions`; `:yolo`/`-Yolo`/the config key
   `models.orchestratorPermissionMode` are the other ways in (all funnel through `$orchPerm` in `sonelle.ps1`).
+  **Voice narrator (`app\narrator.py` + `app\tts.py` + `app\narrate_hook.ps1`):** a speaker toggle on
+  EACH tab pill (mute per session). Data source is Claude Code HOOKS, not screen-scraping - the app
+  publishes `SONELLE_NARRATE_SETTINGS` (only after probing that `claude` supports `--settings`, so a bad
+  flag can never break a working app), `sonelle.ps1` attaches `--settings`, and `narrate_hook.ps1` appends
+  each event to the per-tab `SONELLE_NARRATE_FILE`; the narrator tails it, builds a warm FIRST-person line
+  tagged `voice`/`status`, and (voice on) speaks it. The line is **typed straight into the terminal**
+  (`typeNarration` in `app.js`) - pink for `voice`, soft white for `status` - and **serialized against the
+  PTY stream** (`writeOrHold`/`runNarrQueue`) so it never interleaves mid-line. **Voice engine** is
+  **Kokoro** (local neural, `app\tts.py` `_synth_kokoro`). The model is **VENDORED in the repo** at
+  `app\voice\` (the ~88 MB int8 build + voice pack - `_kokoro_files`, NO download) so the voice ships
+  with sonelle; only the `kokoro-onnx` RUNTIME installs best-effort from `app\requirements-voice.txt`
+  (never fatal), with `edge-tts` then SAPI as fallbacks. Default `af_heart` at 0.95 speed. Keep the
+  JS<->Python contract in sync on BOTH sides AND in
+  selftest 8e/8f (`set_narration`, `__narrate(tabId, text, kind, mime, b64)`). The narrator is guarded by
+  selftest 8f; keep `app\narrate_hook.ps1` pure ASCII like every `.ps1`, and the `.py` modules ASCII-clean
+  too. edge-tts is pinned `>=7.2.8` (older pins 403 on the MS handshake).
 - **Docs:** keep `README.md` + `docs\ARCHITECTURE.md` honest (mechanism vs discipline), and add a
   `CHANGELOG.md` entry.
 
