@@ -30,6 +30,14 @@
   to surface the raw `models` block alongside the hub/memory it already resolved. Four parsers collapse
   toward one, so a config-format change can't silently desync the terminal from the lanes. selftest
   section 9 asserts both callers use the resolver and that no inline JSON parse remains.
+- **The two registry parsers can no longer drift (Q1+Q2).** `_registry.ps1` warned against ad-hoc
+  registry parsing, but `app\sonelle_gui.py` had its own Python copy. The Python parse is now a single
+  `parse_projects(path)` function, and selftest section 9a runs both the PowerShell and Python parsers
+  over the same registry and asserts they return identical results - so a change to one that diverges
+  fails the build. A guard meta-test (Q2) greps the repo for the registry-row regex and refuses any
+  third parser outside the two sanctioned files. Fixed a latent divergence in passing: the Python
+  parser would have listed a lower-cased `shortcode` header row as a project; it now skips it like the
+  PowerShell parser does.
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a

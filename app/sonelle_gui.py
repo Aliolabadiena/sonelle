@@ -342,9 +342,11 @@ def _hub_dir():
     return hub
 
 
-def list_projects():
-    """Read-only: parse the hub PROJECTS.md table into [{shortcut,name,path}]."""
-    pf = os.path.join(_hub_dir(), "PROJECTS.md")
+def parse_projects(pf):
+    """The ONE Python registry parser: parse a PROJECTS.md file into [{shortcut,name,path}].
+    Mirrors tools/_registry.ps1 Get-SonelleProjects exactly - selftest (section Q1) asserts the
+    PowerShell and Python parsers agree on the same registry, so they can never drift. Do not add a
+    second ad-hoc registry parse anywhere (selftest Q2 greps for one)."""
     out = []
     if not os.path.isfile(pf):
         return out
@@ -363,8 +365,15 @@ def list_projects():
         short = cells[0]
         if not re.match(r"^[a-z0-9_]+$", short):   # skips header + |---| separator rows
             continue
+        if short == "shortcode":                   # skip a lower-cased header row (mirrors _registry.ps1)
+            continue
         out.append({"shortcut": short, "name": cells[1], "path": cells[2]})
     return out
+
+
+def list_projects():
+    """Read-only: parse the hub PROJECTS.md table into [{shortcut,name,path}]."""
+    return parse_projects(os.path.join(_hub_dir(), "PROJECTS.md"))
 
 
 # --- pasted-image staging (Ctrl+V in the composer) -------------------------------------------

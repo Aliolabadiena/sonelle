@@ -314,6 +314,29 @@ Ok "sonelle.ps1 uses the canonical resolver (no inline cfg parse)" (($srcTerm -m
 $srcTeam = Get-Content (Join-Path $engine 'bin\sonelle_team.ps1') -Raw
 Ok "sonelle_team.ps1 uses the canonical resolver (no inline cfg parse)" (($srcTeam -match 'Get-SonelleConfig') -and (-not ($srcTeam -match "Join-Path \`$engine 'sonelle\.config\.json'")))
 
+Write-Host "== 9a. one registry parser: PS == Python, and no third (Q1/Q2) =="
+# Q1: the PowerShell parser (Get-SonelleProjects) and the Python parser (parse_projects) must agree on
+# the SAME registry, or they will silently drift. Compare their shorts on the temp hub's PROJECTS.md.
+$regPath = Join-Path $tmp 'PROJECTS.md'
+$venvPy = Join-Path $engine '.venv\Scripts\python.exe'
+if (Test-Path $venvPy) {
+  $psShorts = ((Get-SonelleProjects $regPath) | ForEach-Object { $_.Short }) -join ','
+  $pyCode = "import sys; sys.path.insert(0, r'{0}'); import sonelle_gui as g; print(','.join(p['shortcut'] for p in g.parse_projects(r'{1}')))" -f (Join-Path $engine 'app'), $regPath
+  $pyShorts = (& $venvPy -c $pyCode 2>$null | Out-String).Trim()
+  Ok "PS and Python registry parsers agree (Q1)" (($psShorts -eq $pyShorts) -and ($psShorts.Length -gt 0))
+} else {
+  Write-Host "  [skip] no .venv python for the cross-parser equivalence test" -ForegroundColor DarkGray
+}
+# Q2: nobody adds a THIRD parser. Grep every .ps1/.py (minus .venv) for the registry-row regex signature;
+# the only PS file allowed to carry it is _registry.ps1, and the only Python file is sonelle_gui.py.
+$scanFiles = @(Get-ChildItem $engine -Recurse -Include *.ps1, *.py | Where-Object { $_.FullName -notmatch '\\\.venv\\' })
+$psParserHits = @(Select-String -Path $scanFiles.FullName -Pattern '\^\\\|\\s\*\(\[a-z0-9_' -ErrorAction SilentlyContinue | Where-Object { $_.Path -notmatch 'selftest\.ps1' })
+$psUnsanctioned = @($psParserHits | Where-Object { $_.Path -notmatch '_registry\.ps1' })
+Ok "the sanctioned PS registry parser exists" (@($psParserHits | Where-Object { $_.Path -match '_registry\.ps1' }).Count -ge 1)
+Ok "no unsanctioned PS registry parser (Q2)" ($psUnsanctioned.Count -eq 0)
+$pyParserHits = @(Select-String -Path $scanFiles.FullName -Pattern 'startswith\("\|"\)' -ErrorAction SilentlyContinue | Where-Object { $_.Path -notmatch 'sonelle_gui\.py' })
+Ok "no unsanctioned Python registry parser (Q2)" ($pyParserHits.Count -eq 0)
+
 Write-Host "== 9b. terminal honors -Hub (Q4) =="
 Ok "sonelle.ps1 has a -Hub param that wins over config" (($srcTerm -match '\[string\]\$Hub') -and ($srcTerm -match 'hubOverride'))
 $hubDemo = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo -Hub $tmp
