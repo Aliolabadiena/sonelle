@@ -27,8 +27,9 @@ import subprocess
 _CREATE_NO_WINDOW = 0x08000000
 
 # ---------------------------------------------------------------------------------------------
-# Engine 1: Kokoro - local neural voice (the good one). Model files are downloaded once, on first
-# use, into a per-user cache (NEVER the repo). onnxruntime does the inference on the CPU.
+# Engine 1: Kokoro - local neural voice (the good one). The model files are VENDORED IN THE REPO
+# (app/voice/) and loaded directly from there - no download, fully offline. onnxruntime runs inference
+# on the CPU. (To de-bloat the repo this is the file to move to Git LFS or a first-run download.)
 # ---------------------------------------------------------------------------------------------
 # Pinned model-files-v1.0 release of kokoro-onnx (the model + the bundled multi-voice pack).
 _KOKORO_DEFAULT_VOICE = "af_heart"   # the warm, natural flagship female voice in the v1.0 pack

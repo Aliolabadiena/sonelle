@@ -49,7 +49,9 @@ function RefreshOrch {
       if ($m.orchestratorEffort) { $script:orchEffort = [string]$m.orchestratorEffort }
       $script:orchCode = if ($m.codeWriter) { [string]$m.codeWriter } else { '' }
     } else { $script:orchCode = '' }
-  } catch {}
+  } catch {
+    Write-Warning ("sonelle: could not refresh model config - keeping current ({0})" -f $_.Exception.Message)
+  }
   # route file-editing to its OWN model via claude's subagent override; '' restores any external value.
   if ($script:orchCode) { $env:CLAUDE_CODE_SUBAGENT_MODEL = $script:orchCode }
   elseif ($script:origSubagentModel) { $env:CLAUDE_CODE_SUBAGENT_MODEL = $script:origSubagentModel }
@@ -396,7 +398,7 @@ function Route($short, $prompt, $images) {
     if ((Read-Host "  create new project '$short'? (y/N)") -match '^(y|Y)') { NewProject }
     return
   }
-  if ($code -notmatch '^[-(]' -and -not (Test-Path $code)) { Write-Host ("  {0}[warn] code path missing: {1}{2}" -f $clay, $code, $R) }
+  if ((Test-SonelleCodePath $code) -and -not (Test-Path -LiteralPath $code)) { Write-Host ("  {0}[warn] code path missing: {1}{2}" -f $clay, $code, $R) }
   $claude = Get-Command claude -ErrorAction SilentlyContinue
   if (-not $claude) {
     Write-Host ("  {0}[!] 'claude' not found on PATH. Install Claude Code and log into your subscription,{1}" -f $clay, $R)
@@ -422,7 +424,7 @@ function Route($short, $prompt, $images) {
   if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', $script:operatingPolicy) }
   else { $finalPrompt = $script:operatingPolicy + "`n`n" + $finalPrompt }
   if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
-  if ($code -notmatch '^[-(]' -and (Test-Path $code)) { Push-Location $code } else { Push-Location $root }
+  if ((Test-SonelleCodePath $code) -and (Test-Path -LiteralPath $code)) { Push-Location -LiteralPath $code } else { Push-Location -LiteralPath $root }
   try { & claude @cargs $finalPrompt } finally { Pop-Location }
   $script:staged = @()   # staged images consumed
 }

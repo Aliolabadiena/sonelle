@@ -189,7 +189,7 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   pulls what she's on right now (the file basename, the bash command, the grep pattern, the task) into the
   phrase, so the short cute `display` line NAMES it ("reading narrator.py <3", ASCII tag kept) and the
   `speak` line is **first-person with energy** (a varied opener + a phrase from a pool + a reaction on a
-  result, e.g. "all green, 1666 passing, nice!"). De-dup is keyed on category+subject so a new file
+  result, e.g. "all green, 42 passing, nice!"). De-dup is keyed on category+subject so a new file
   re-announces but a repeat collapses; a custom name is spoken as a sign-on on the bookends.
   `_clean_speech`/`_strip_emoticons` keep emoticons out of speech. The data source is **Claude Code
   hooks**, not screen scraping: the app

@@ -110,7 +110,7 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   **direction + variety**: `_subject` pulls what she's on (file basename / bash command / grep pattern /
   task) into a `{s}` slot, the `display` is a short tagged report-box line that NAMES it ("reading
   narrator.py <3"), and the `speak` is a FIRST-PERSON TTS line with energy - a varied opener (`_OPEN`) +
-  a phrase from a pool + a reaction on a result (`_REACT`), e.g. "all green, 1666 passing, nice!". The
+  a phrase from a pool + a reaction on a result (`_REACT`), e.g. "all green, 42 passing, nice!". The
   ambient de-dup is keyed on category+subject (`last_key`), so switching files re-announces but a run of
   the SAME file collapses; the assistant name (if set) is spoken as a sign-on on the bookends (start/idle)
   via `_decorate`. `_clean_speech`/`_strip_emoticons` keep emoticons out of speech, and the **reporting

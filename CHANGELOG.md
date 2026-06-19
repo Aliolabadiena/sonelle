@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.41 - 2026-06-19 (hardening pass: code-path safety, loud config failures, CI, honest test count)
+A skeptical external review flagged a cluster of sharp edges; this closes the load-bearing ones. No new
+features - the engine just gets harder to misuse, and the gate gets honest.
+- **One NA-path predicate.** The "is this CodePath a real path or an NA sentinel?" test (`^[-(]`) was
+  copy-pasted across four files (terminal, doctor, check_pointers, team) and could drift. Centralized into
+  `Test-SonelleCodePath` in `tools\_registry.ps1`; all four call it now. selftest 9 asserts the helper and
+  that no raw sentinel regex is left in the consumers.
+- **Lane start scripts survive an apostrophe in the code path.** `sonelle_team.ps1` wrote the project path
+  into a single-quoted PowerShell literal unescaped, so a path like `C:\dev\o'brien` produced an
+  unparseable `*.start.ps1`. The literal is now escaped (`'` -> `''`), and paths resolve with `-LiteralPath`
+  throughout (a `[` in a path can no longer be read as a wildcard). selftest 5b scaffolds a project with an
+  apostrophe path and asserts the generated start script still parses.
+- **A malformed config fails LOUD, not silent.** `Get-SonelleConfig` swallowed a bad `sonelle.config.json`
+  with an empty `catch {}` and silently relocated the whole workspace to the engine root; `RefreshOrch` did
+  the same before every prompt. Both now `Write-Warning` (the warning stream, so it never pollutes a parsed
+  return) and fall back to defaults. selftest 9 feeds malformed JSON and asserts the warning + safe fallback.
+- **CI.** `.github\workflows\selftest.yml` runs the self-test on every push / PR (windows-latest + Python);
+  the venv-only tests self-skip. The gate now runs on the server, not just on goodwill.
+- **Honest numbers.** selftest prints its real check count ("ALL PASS (N checks)") instead of a bare banner.
+  The illustrative "1666 passing" in the docs/narrator comments (only ever an EXAMPLE of narrating a
+  project's test run, never sonelle's own suite) is defused to a small number, and `tts.py`'s stale comment
+  claiming the voice model is "downloaded ... NEVER the repo" is corrected to match the code (it is vendored
+  in `app\voice\`). Actually shrinking the repo (LFS / first-run download) is still an open decision.
+
 ## v1.40 - 2026-06-19 (the voice narrator gets direction + emotion - it stops sounding like a robot)
 The reporter felt repetitive and flat: the box showed one bland word ("reading", "editing") and the
 spoken line was the same thing with an extra word ("sonelle is reading the code") - no sense of WHAT she

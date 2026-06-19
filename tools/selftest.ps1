@@ -10,8 +10,9 @@ $ErrorActionPreference = 'Stop'
 $engine = Split-Path $PSScriptRoot -Parent
 $ps     = (Get-Process -Id $PID).Path
 $script:fail = 0
+$script:pass = 0
 function Ok($label, $cond) {
-  if ($cond) { Write-Host ("  [PASS] {0}" -f $label) -ForegroundColor Green }
+  if ($cond) { Write-Host ("  [PASS] {0}" -f $label) -ForegroundColor Green; $script:pass++ }
   else { Write-Host ("  [FAIL] {0}" -f $label) -ForegroundColor Red; $script:fail++ }
 }
 
@@ -121,6 +122,15 @@ Ok "lane -Verify exits 1 on conflict"      ($LASTEXITCODE -eq 1)
 ((Get-Content $laneB -Raw) -replace '(?m)^owns:.*$', 'owns: tests/, README.md') | Set-Content $laneB
 $verOk = & $ps -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle_team.ps1') st -Verify -Hub $tmp
 Ok "lane -Verify passes when ownership is disjoint" (($LASTEXITCODE -eq 0) -and ((($verOk -join "`n")) -match 'no ownership overlap'))
+# fix: an apostrophe in the code path must not break the generated lane start script (it is escaped to '').
+$qPath = Join-Path $tmp "wei'rd_code"
+& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') q1 "Quote Proj" $qPath -Hub $tmp | Out-Null
+& $ps -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle_team.ps1') q1 -Lanes a -Hub $tmp -DryRun | Out-Null
+$qStart = Join-Path $qPath '.sonelle\lanes\a.start.ps1'
+Ok "lane start script written for an apostrophe code path" (Test-Path $qStart)
+$qe = $null; $qt = $null
+if (Test-Path $qStart) { [void][System.Management.Automation.Language.Parser]::ParseFile($qStart, [ref]$qt, [ref]$qe) }
+Ok "lane start script still parses with an apostrophe in the code path (escaped)" ($qe.Count -eq 0)
 
 Write-Host "== 5c. app (multi-terminal shell) =="
 $appPath = Join-Path $engine 'bin\sonelle_app.ps1'
@@ -449,6 +459,7 @@ $srcTts = if (Test-Path $ttsPy) { Get-Content $ttsPy -Raw } else { '' }
 Ok "tts has kokoro (local neural) + edge + sapi engines" (($srcTts -match 'def synth') -and ($srcTts -match '_synth_kokoro') -and ($srcTts -match '_synth_edge') -and ($srcTts -match '_synth_sapi'))
 Ok "tts loads the kokoro model bundled in the repo (no download)" (($srcTts -match 'def _kokoro_files') -and ($srcTts -match 'kokoro-v1\.0\.int8\.onnx') -and (-not ($srcTts -match 'urllib')) -and (-not ($srcTts -match 'def _download')))
 Ok "kokoro voice model is vendored in the repo" ((Test-Path (Join-Path $engine 'app\voice\kokoro-v1.0.int8.onnx')) -and (Test-Path (Join-Path $engine 'app\voice\voices-v1.0.bin')))
+Ok "tts comment matches the code (vendored, not the old 'downloaded once' lie)" (-not ($srcTts -match 'downloaded once'))
 Ok "backend imports + wires the narrator" (($srcGui -match 'import narrator') -and ($srcGui -match 'def set_narration') -and ($srcGui -match 'def _narrate_emit') -and ($srcGui -match '__narrate'))
 Ok "backend passes the voice/status kind to __narrate" ($srcGui -match '__narrate\(%s,%s,%s,%s,%s\)')
 Ok "backend sets the per-tab events env"  ($srcGui -match 'SONELLE_NARRATE_FILE')
@@ -591,6 +602,21 @@ Ok "resolver exposes a Models property"  ($null -ne ($r3.PSObject.Properties.Nam
 Ok "sonelle.ps1 uses the canonical resolver (no inline cfg parse)" (($srcTerm -match 'Get-SonelleConfig') -and (-not ($srcTerm -match "Join-Path \`$root 'sonelle\.config\.json'")))
 $srcTeam = Get-Content (Join-Path $engine 'bin\sonelle_team.ps1') -Raw
 Ok "sonelle_team.ps1 uses the canonical resolver (no inline cfg parse)" (($srcTeam -match 'Get-SonelleConfig') -and (-not ($srcTeam -match "Join-Path \`$engine 'sonelle\.config\.json'")))
+# the NA-path sentinel lives in ONE predicate (Test-SonelleCodePath) so the four call sites can't drift
+Ok "Test-SonelleCodePath: real path true; empty/NA false" ((Test-SonelleCodePath 'C:\x') -and (-not (Test-SonelleCodePath '')) -and (-not (Test-SonelleCodePath '-')) -and (-not (Test-SonelleCodePath '(set later)')))
+$sentinelHits = @(Select-String -Path (Join-Path $engine 'bin\sonelle.ps1'), (Join-Path $engine 'bin\sonelle_team.ps1'), (Join-Path $engine 'tools\doctor.ps1'), (Join-Path $engine 'tools\check_pointers.ps1') -Pattern '\^\[-\(\]' -ErrorAction SilentlyContinue)
+Ok "NA-path sentinel centralized (no raw regex left in the 4 consumers)" ($sentinelHits.Count -eq 0)
+# a malformed config must WARN (visible) and fall back to defaults - never SILENTLY relocate the hub
+$badCfg = Join-Path $tmp 'bad.config.json'
+[System.IO.File]::WriteAllText($badCfg, '{ not valid json ')
+$savedCfgB = $env:SONELLE_CONFIG; $env:SONELLE_CONFIG = $badCfg
+try {
+  $capW   = Get-SonelleConfig -Engine $engine 3>&1
+  $rbObj  = @($capW | Where-Object { ($_ -isnot [System.Management.Automation.WarningRecord]) -and ($_.PSObject.Properties.Name -contains 'Hub') })[0]
+  $rbWarn = ($capW | Where-Object { $_ -is [System.Management.Automation.WarningRecord] } | ForEach-Object { [string]$_ }) -join ' '
+  Ok "malformed config falls back to the engine hub (no silent relocate)" (($null -ne $rbObj) -and ($rbObj.Hub -eq $engine))
+  Ok "malformed config emits a visible warning, not silent" ($rbWarn -match 'malformed|ignoring')
+} finally { $env:SONELLE_CONFIG = $savedCfgB; Remove-Item $badCfg -Force -ErrorAction SilentlyContinue }
 
 Write-Host "== 9a. one registry parser: PS == Python, and no third (Q1/Q2) =="
 # Q1: the PowerShell parser (Get-SonelleProjects) and the Python parser (parse_projects) must agree on
@@ -707,5 +733,5 @@ Ok "committed plugin matches a fresh build (run build_plugin to resync)" ($pdrif
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 
 Write-Host ""
-if ($script:fail -eq 0) { Write-Host "[selftest] ALL PASS" -ForegroundColor Green; exit 0 }
-else { Write-Host ("[selftest] {0} FAIL" -f $script:fail) -ForegroundColor Red; exit 1 }
+if ($script:fail -eq 0) { Write-Host ("[selftest] ALL PASS ({0} checks)" -f $script:pass) -ForegroundColor Green; exit 0 }
+else { Write-Host ("[selftest] {0} FAIL / {1} pass" -f $script:fail, $script:pass) -ForegroundColor Red; exit 1 }

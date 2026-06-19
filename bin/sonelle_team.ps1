@@ -38,7 +38,7 @@ $pf = Join-Path $hub 'PROJECTS.md'
 $proj = (Get-SonelleProjects $pf) | Where-Object { $_.Short -eq $Project.ToLower() } | Select-Object -First 1
 if (-not $proj) { Write-Host "[X] project '$Project' not in $pf" -ForegroundColor Red; exit 1 }
 $code = $proj.CodePath
-if ($code -match '^[-(]' -or -not (Test-Path $code)) { Write-Host "[X] code path missing/NA: $code" -ForegroundColor Red; exit 1 }
+if (-not (Test-SonelleCodePath $code) -or -not (Test-Path -LiteralPath $code)) { Write-Host "[X] code path missing/NA: $code" -ForegroundColor Red; exit 1 }
 $lanesDir = Join-Path $code '.sonelle\lanes'
 
 if ($Status) {
@@ -128,7 +128,10 @@ foreach ($s in $specs) {
   Wr $statusFile "# lane: $l ($Project)`r`nmodel: $($s.Model) (effort $($s.Effort))`r`nstarted: $date`r`nstatus: active`r`nowns: (declare files/dirs this lane edits)`r`nother lanes - DO NOT touch their files: $others`r`n`r`n## log`r`n- $date started`r`n"
   $seed = "You are sonelle lane '$l' for project '$Project'. You own ONLY the '$l' workstream. The other lanes are: $others - read .sonelle/lanes/ and DO NOT edit their files (keep ownership disjoint; this project may have no git merge safety). Update .sonelle/lanes/$l.md as you work. Tell me this lane's task and I will work only within it."
   $startPs = Join-Path $lanesDir ($l + '.start.ps1')
-  Wr $startPs "Set-Location -LiteralPath '$code'`r`nclaude --model $($s.Model) --effort $($s.Effort) --permission-mode $lanePerm @'`r`n$seed`r`n'@`r`n"
+  # escape ' for the single-quoted PS literal: Windows paths may legally contain an apostrophe, and without
+  # this it would terminate the literal early and produce a broken (unparseable) start script.
+  $codeLit = $code.Replace("'", "''")
+  Wr $startPs "Set-Location -LiteralPath '$codeLit'`r`nclaude --model $($s.Model) --effort $($s.Effort) --permission-mode $lanePerm @'`r`n$seed`r`n'@`r`n"
   $wtTabs += 'new-tab --title "sonelle:' + $Project + ':' + $l + '" -d "' + $code + '" powershell -NoExit -ExecutionPolicy Bypass -File "' + $startPs + '"'
   Write-Host ("[+] lane '{0}' ({1}/{2}) -> .sonelle\lanes\{0}.md (+ start script)" -f $l, $s.Model, $s.Effort)
 }

@@ -28,6 +28,14 @@ function Get-SonelleProjects([string]$RegistryPath) {
   return $out
 }
 
+# A registry CodePath cell is either a real filesystem path or an "NA" sentinel the scaffolder writes
+# when a project has no code dir yet (a leading '(' e.g. "(set later)" or '-'). ONE predicate answers
+# "is this a real, usable path?" so the call sites (terminal, doctor, check_pointers, team) can't drift.
+# A leading '-' would also make Test-Path treat it as a parameter, so this guard doubles as a safety net.
+function Test-SonelleCodePath([string]$CodePath) {
+  return ([bool]$CodePath) -and ($CodePath -notmatch '^[-(]')
+}
+
 # Resolve {Hub, MemoryDir} from sonelle.config.json + optional overrides. Precedence:
 #   param override > config > default. An explicit -HubOverride means a DIFFERENT workspace,
 #   so config.memoryDir (which describes the config's hub) does NOT apply to it - memory then
@@ -49,7 +57,11 @@ function Get-SonelleConfig {
       }
       # raw model block (orchestrator* / lane*) so every caller resolves models from ONE parse, not its own.
       $cfgModels = $c.models
-    } catch {}
+    } catch {
+      # A malformed config must NOT silently relocate the whole workspace to the engine root - surface it
+      # on the warning stream (so it never pollutes a function's stdout return) and fall back to defaults.
+      Write-Warning ("sonelle: ignoring malformed config '{0}' - using defaults ({1})" -f $cfgFile, $_.Exception.Message)
+    }
   }
   if ($HubOverride) {
     $hub = $HubOverride

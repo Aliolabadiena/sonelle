@@ -7,7 +7,7 @@ narrate_hook.ps1 to claude's PreToolUse / PostToolUse / Notification / Stop / Us
 events. Each event is appended as one JSON line to a per-tab events file. A TabNarrator tails that
 file and turns events into humanised, FIRST-PERSON lines that name what she's actually on - the
 file, the command, the task - so they have DIRECTION ("ok, digging into narrator.py", "running
-selftest to see if it holds", "all green, 1666 passing, nice!", "that's me done") rather than a
+selftest to see if it holds", "all green, 42 passing, nice!", "that's me done") rather than a
 flat "she is reading the code". Each line is built by composition (a varied opener + a phrase from
 a sizable pool + a reaction on results) so it never loops like a robot, rate-limited to the
 important beats; when the tab's voice toggle is on it speaks each via tts.synth and pushes
@@ -61,7 +61,7 @@ _WEB = {"webfetch", "websearch"}
 #   DISPLAY  -> the little report box under the gif: SHORT but it NAMES the thing ("reading
 #               narrator.py <3") and keeps a cute ASCII tag (:*, <3, :), :o). Pure ASCII.
 #   SPEAK    -> tts: FIRST PERSON with energy - a varied opener (_OPEN) + the phrase + a reaction on
-#               results (_REACT), e.g. "ok, digging into narrator.py" / "all green, 1666 passing,
+#               results (_REACT), e.g. "ok, digging into narrator.py" / "all green, 42 passing,
 #               nice!". Never an emoticon (the report tags are display-only; _clean_speech also guards).
 # Each category gives a POOL of display phrases ("d") and speak phrases ("s") so she never loops. The
 # assistant name (when set) is spoken as a sign-on on the bookends only (start / idle), not every line.

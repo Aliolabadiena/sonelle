@@ -39,7 +39,7 @@ if (-not (Test-Path $pf)) {
   $projects = Get-SonelleProjects $pf
   if ($projects.Count -eq 0) { Write-Host "  (registry empty - nothing to check)" }
   foreach ($p in $projects) {
-    if ($p.CodePath -and $p.CodePath -notmatch '^[-(]') { Check ("$($p.Short) code path") $p.CodePath }
+    if (Test-SonelleCodePath $p.CodePath) { Check ("$($p.Short) code path") $p.CodePath }
   }
   # memory files referenced anywhere in the registry (resolved against $memDir from config)
   if (-not (Test-Path $memDir -PathType Container)) {

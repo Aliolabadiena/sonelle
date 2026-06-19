@@ -57,8 +57,8 @@ if (-not (Test-Path $pf)) {
     $any = $true
     $code = $p.CodePath
     Write-Host ("  - {0} ({1})" -f $p.Short, $code)
-    if ($code -and $code -notmatch '^[-(]') {
-      Result "    code path exists" (Test-Path $code) "-> $code"
+    if (Test-SonelleCodePath $code) {
+      Result "    code path exists" (Test-Path -LiteralPath $code) "-> $code"
       $checked++
       $hook = Join-Path $code 'sonelle.check.ps1'
       if (Test-Path $hook) {
