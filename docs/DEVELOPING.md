@@ -120,17 +120,27 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   (`set_narration`, `__narrate(tabId, display, kind, mime, b64)`); keep `app\narrate_hook.ps1` pure ASCII
   like every `.ps1`, and the `.py` modules ASCII-clean too. edge-tts is pinned `>=7.2.8` (older pins 403).
 - **The reporter + settings panel (`app\`):** `#brandloop` is a WRAPPER - a report box (`#loop-report`)
-  ABOVE a `.gifwrap` (gif + control row: padlock . mute . session label). Padlock pins the gif + opens the
-  report; pressing **V** (`toggleReport`, when not typing in an input) opens it WITHOUT locking; per-tab
-  gif state lives in `entry.gif` (`applyGifState` on tab switch). Narration goes to the report box (NOT the
+  ABOVE a `.gifwrap` (gif + control row: **report-arrow . padlock . mute . session label**). The
+  **report-arrow** (`.lbtn.arrow` -> `toggleReport`) opens/closes the report (so does **V**, when not
+  typing in an input); the **padlock** ONLY pins the gif (no bounce / no drift) and has NOTHING to do with
+  the report - the report shows on `.brandloop.reportopen` only (the old `.brandloop.locked .report` CSS
+  coupling was removed in v1.34). Per-tab gif state lives in `entry.gif` (`applyGifState` on tab switch). Narration goes to the report box (NOT the
   terminal) and audio plays through one global serialized queue. (A desktop pop-out overlay was tried and
   dropped on purpose - the reporter stays in-app; don't re-add it.) The **settings gear** (before the
   `_ O X` controls) opens `#settings`: 20 palettes (`app\ui\palettes.js`, `applyPalette` rewrites the
   `:root` vars + every xterm theme, and `activeTheme` so NEW tabs adopt it), assistant name (DISPLAY only -
   never the engine self-short), upload-your-own mascot (`upload_mascot` -> `%LOCALAPPDATA%\sonelle`, never
-  the repo), reporting style, voices instructions (display only), and model+effort (-> `models.*`).
-  `get_settings`/`save_settings` persist to `sonelle.config.json`. Guarded by selftest 8e (reporter),
-  8f (narrator), 8i (settings); keep the JS<->Python contract synced on both sides.
+  the repo), reporting style, voices instructions (display only), and the **model split**: the
+  **orchestrator** model + effort (`models.orchestrator`/`orchestratorEffort` -> `--model`/`--effort`) and
+  a separate **code-writer** model (`models.codeWriter`, `inherit`/empty = same) that `bin\sonelle.ps1`
+  exports as `CLAUDE_CODE_SUBAGENT_MODEL` so claude's file-editing SUBAGENTS run on their own model.
+  `get_settings`/`save_settings` persist to `sonelle.config.json`. **These are LIVE:** `RefreshOrch` in
+  `bin\sonelle.ps1` re-reads the model block right before each `claude` launch (Route + DevSelf), so a
+  panel change applies to the NEXT prompt with no tab restart - the config file is the channel (and
+  `$env:SONELLE_CONFIG` can repoint that file; the resolver in `tools\_registry.ps1` honors it, which is
+  also how selftest 5d stays hermetic). Permission mode is NOT re-read live (it has `-Yolo`/`:yolo`
+  overrides). Guarded by selftest 5d (behavioral: model/effort/code-writer + SONELLE_CONFIG), 8e
+  (reporter), 8f (narrator), 8i (settings); keep the JS<->Python contract synced on both sides.
 - **Docs:** keep `README.md` + `docs\ARCHITECTURE.md` honest (mechanism vs discipline), and add a
   `CHANGELOG.md` entry.
 

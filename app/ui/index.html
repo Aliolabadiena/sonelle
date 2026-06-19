@@ -65,18 +65,21 @@
 
     <!-- brand loop: the animated sonelle "mascot" gif + her REPORTER, anchored to #app. It STARTS LOW
          in the bottom-right corner (its own clean band) but is GRAB-AND-DROP (app.js wireBrandloopDrag:
-         throw + edge-bounce, drift home after 30s). The control row (padlock . pop-out . mute . session
-         label) and the .report box below the gif are how sonelle "talks": her humanised lines land in
-         the report box (shown when the gif is LOCKED), not in the terminal. The padlock pins the gif
-         and reveals the report; pop-out ejects the gif to a desktop overlay. Per-tab state lives in
-         app.js entry.gif. draggable="false" stops the browser's own image-drag. -->
+         throw + edge-bounce, drift home after 30s). The control row (report-arrow . padlock . mute .
+         session label) and the .report box ABOVE the gif are how sonelle "talks": her humanised lines
+         land in the report box, not in the terminal. The ARROW toggles the report open/closed (so does
+         the V key); the padlock ONLY pins the gif in place (it has nothing to do with the report). Per-tab
+         state lives in app.js entry.gif. draggable="false" stops the browser's own image-drag. -->
     <div id="brandloop" class="brandloop" aria-hidden="true">
       <!-- report box ABOVE the gif so the gif stays in its home corner; it expands upward. Shown when
-           the gif is locked OR you press V. -->
+           you press the arrow (on the gif) or the V key. -->
       <div id="loop-report" class="report nodrag"></div>
       <div class="gifwrap">
         <img class="gif" src="brandloop.gif" alt="" draggable="false">
         <div class="loopctl nodrag">
+          <button class="lbtn arrow" title="show report" aria-label="show the report">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
           <button class="lbtn lock" title="lock in place" aria-label="lock the mascot in place">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><rect x="5" y="10" width="14" height="9" rx="2" fill="currentColor"/></svg>
           </button>
@@ -126,8 +129,9 @@
               </select>
             </div>
             <div>
-              <label class="set-label" for="set-model">claude model</label>
+              <label class="set-label" for="set-model">orchestrator model</label>
               <select id="set-model" class="set-input">
+                <option value="best">best</option>
                 <option value="opus">opus</option>
                 <option value="sonnet">sonnet</option>
                 <option value="haiku">haiku</option>
@@ -137,7 +141,7 @@
           </section>
           <section class="set-row two">
             <div>
-              <label class="set-label" for="set-effort">effort level</label>
+              <label class="set-label" for="set-effort">orchestrator effort</label>
               <select id="set-effort" class="set-input">
                 <option value="low">low</option>
                 <option value="medium">medium</option>
@@ -146,7 +150,20 @@
                 <option value="max">max</option>
               </select>
             </div>
-            <div class="set-note">model + effort apply to NEW terminals.</div>
+            <div>
+              <label class="set-label" for="set-code">code-writer model</label>
+              <select id="set-code" class="set-input">
+                <option value="inherit">inherit (same)</option>
+                <option value="best">best</option>
+                <option value="opus">opus</option>
+                <option value="sonnet">sonnet</option>
+                <option value="haiku">haiku</option>
+                <option value="fable">fable</option>
+              </select>
+            </div>
+          </section>
+          <section class="set-row">
+            <div class="set-note">orchestrator = the session you talk to; code-writer = the subagents that edit files. Applies to your next prompt.</div>
           </section>
           <section class="set-row">
             <label class="set-label">other voices (instructions)</label>

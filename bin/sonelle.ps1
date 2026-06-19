@@ -22,16 +22,39 @@ $hubOverride = $Hub
 # ONE config resolver (Get-SonelleConfig): hub (-Hub override wins) + the raw models block. No ad-hoc parse here.
 $resolved  = Get-SonelleConfig -Engine $root -HubOverride $hubOverride
 $hub       = $resolved.Hub
-$orchModel = 'opus'; $orchEffort = 'xhigh'; $orchPerm = ''   # orchestrator (the session you talk to) is ALWAYS max
+# Orchestrator (the session you talk to): model + effort (sensible thinky defaults). code-writer = the
+# model claude's file-editing SUBAGENTS use (via CLAUDE_CODE_SUBAGENT_MODEL); '' = inherit the orchestrator.
+$orchModel = 'opus'; $orchEffort = 'xhigh'; $orchPerm = ''; $orchCode = ''
+$origSubagentModel = $env:CLAUDE_CODE_SUBAGENT_MODEL   # preserve any external override so '' restores it
 $cm = $resolved.Models
 if ($cm) {
   if ($cm.orchestrator)               { $orchModel = $cm.orchestrator }
   if ($cm.orchestratorEffort)         { $orchEffort = $cm.orchestratorEffort }
   if ($cm.orchestratorPermissionMode) { $orchPerm = $cm.orchestratorPermissionMode }
+  if ($cm.codeWriter)                 { $orchCode = [string]$cm.codeWriter }
 }
 # -Yolo (or the env var the glass app forwards) overrides the mode so claude never asks for permission.
 # bypassPermissions is a real claude --permission-mode choice; toggle it live in the REPL with :yolo.
 if ($Yolo -or $env:SONELLE_YOLO) { $orchPerm = 'bypassPermissions' }
+# Re-read the orchestrator model/effort + the code-writer (subagent) model from config right BEFORE each
+# claude launch, so a change in the app's settings panel applies to the NEXT prompt with no tab restart
+# (the panel writes sonelle.config.json - that file, or $env:SONELLE_CONFIG, is the channel). Permission
+# mode is NOT re-read here: it has live overrides (-Yolo / SONELLE_YOLO / :yolo) a re-read would clobber.
+function RefreshOrch {
+  try {
+    $r = Get-SonelleConfig -Engine $root -HubOverride $hubOverride
+    $m = $r.Models
+    if ($m) {
+      if ($m.orchestrator)       { $script:orchModel  = [string]$m.orchestrator }
+      if ($m.orchestratorEffort) { $script:orchEffort = [string]$m.orchestratorEffort }
+      $script:orchCode = if ($m.codeWriter) { [string]$m.codeWriter } else { '' }
+    } else { $script:orchCode = '' }
+  } catch {}
+  # route file-editing to its OWN model via claude's subagent override; '' restores any external value.
+  if ($script:orchCode) { $env:CLAUDE_CODE_SUBAGENT_MODEL = $script:orchCode }
+  elseif ($script:origSubagentModel) { $env:CLAUDE_CODE_SUBAGENT_MODEL = $script:origSubagentModel }
+  else { Remove-Item Env:CLAUDE_CODE_SUBAGENT_MODEL -ErrorAction SilentlyContinue }
+}
 # Voice narrator (glass app): when the app set SONELLE_NARRATE_SETTINGS, attach it as claude's
 # --settings so claude's hooks stream progress events to the per-tab file the app narrates from.
 # The app only sets this env after probing that `claude` supports --settings, so we can never feed
@@ -232,7 +255,9 @@ function DevSelf($prompt, $images) {
           "Read docs\DEVELOPING.md and docs\ARCHITECTURE.md FIRST, and treat docs\DEVELOPING.md as your SOLE authority for THIS session. Claude Code auto-loads the root CLAUDE.md (the dispatcher template the engine ships) - IGNORE its dispatcher / project-routing / state-reading framing here; this session develops the engine, it does not route projects or manage a hub.`n" +
           "Honor every invariant in DEVELOPING.md: pure-ASCII PowerShell, no personal data in the repo, do NOT scaffold hub/project state (never run new_project or log_lesson at the engine root), and run tools\selftest.ps1 to ALL PASS before any commit (extend selftest for new features so the engine stays self-verifying). Everything is git-versioned, so changes are rewindable.`n`n" +
           "Task: $ask"
-  Write-Host ("  " + $clay + $arrow + " dev" + $R + "  " + $dim + "developing the engine itself  " + $dot + "  " + $orchModel + " " + $dot + " " + $orchEffort + $R)
+  RefreshOrch   # pick up any settings-panel change to model/effort/code-writer (live, no restart)
+  $mline = $orchModel + " " + $dot + " " + $orchEffort; if ($orchCode) { $mline += " " + $dot + " code:" + $orchCode }
+  Write-Host ("  " + $clay + $arrow + " dev" + $R + "  " + $dim + "developing the engine itself  " + $dot + "  " + $mline + $R)
   $dirty = $false
   if (Get-Command git -ErrorAction SilentlyContinue) { try { $dirty = [bool](& git -C $root status --porcelain 2>$null) } catch {} }
   if ($dirty) { Write-Host ("  {0}note: engine has uncommitted changes - commit/stash first for a clean rewind point.{1}" -f $dim, $R) }
@@ -266,10 +291,12 @@ function Route($short, $prompt, $images) {
     $finalPrompt = $prompt + "`n`nAttached image(s) - please read them:`n" + (($images | ForEach-Object { " - $_" }) -join "`n")
     Write-Host ("  {0}+ {1} image(s) attached{2}" -f $dim, $images.Count, $R)
   }
+  RefreshOrch   # pick up any settings-panel change to model/effort/code-writer (live, no restart)
+  $mline = $orchModel + " " + $dot + " " + $orchEffort; if ($orchCode) { $mline += " " + $dot + " code:" + $orchCode }
   if ($script:bare) {
     Write-Host ("  " + $clay + $arrow + " " + $R + $dim + $short + $R)   # chat feel: just confirm the project
   } else {
-    Write-Host ("  " + $clay + $arrow + " " + $short + $R + "  " + $dim + $orchModel + " " + $dot + " " + $orchEffort + $R)
+    Write-Host ("  " + $clay + $arrow + " " + $short + $R + "  " + $dim + $mline + $R)
     Write-Host ("    " + $dim + $code + $R)
     Write-Host ("    " + $dim + ($finalPrompt -replace "`n", " / ") + $R)
   }

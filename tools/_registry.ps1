@@ -36,7 +36,8 @@ function Get-SonelleProjects([string]$RegistryPath) {
 function Get-SonelleConfig {
   param([string]$Engine, [string]$HubOverride = '', [string]$MemoryOverride = '')
   $cfgHub = ''; $cfgMem = ''; $cfgModels = $null
-  $cfgFile = Join-Path $Engine 'sonelle.config.json'
+  # $env:SONELLE_CONFIG overrides the config path (power users + a hermetic selftest); else engine-root.
+  $cfgFile = if ($env:SONELLE_CONFIG) { $env:SONELLE_CONFIG } else { Join-Path $Engine 'sonelle.config.json' }
   if (Test-Path $cfgFile) {
     try {
       $c = Get-Content $cfgFile -Raw | ConvertFrom-Json

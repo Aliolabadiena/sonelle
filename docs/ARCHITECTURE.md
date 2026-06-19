@@ -115,9 +115,10 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   bottom:8px`, off the scrollbar lane) with **physics** (`pointer-events:auto`, `cursor:grab`):
   `wireBrandloopDrag` lets you drag it; release it mid-motion and `throwLoop` flings it with
   inertia/friction, BOUNCING off the window edges, then 30s later `returnLoopHome` drifts it home (a
-  control/report click doesn't start a drag). The **padlock** (`toggleLoopLock`) pins it (no bounce / no
-  drift) and opens the report; pressing **V** (`toggleReport`, when not typing) opens/closes the report
-  without locking (`.brandloop.locked .report`, `.brandloop.reportopen .report`); **mute** mirrors that
+  control/report click doesn't start a drag). The **report-arrow** (`toggleReport`) opens/closes the
+  report (so does **V** when not typing); the **padlock** (`toggleLoopLock`) ONLY pins it (no bounce / no
+  drift) and has nothing to do with the report - the box shows on `.brandloop.reportopen` alone (the old
+  `.brandloop.locked .report` coupling was dropped in v1.34); **mute** mirrors that
   tab's voice toggle; the **session label** is low-contrast `--moody` text. **Per-tab gif state** lives in
   `entry.gif = {left, top, locked, reportOpen, report[]}` and is saved/applied on every tab switch
   (`applyGifState`). The pane reserves an 88px bottom band so the grid stops ABOVE the gif, `#bar` a right
@@ -134,8 +135,15 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   live), the **assistant name** (display-only - the narrator reads it, the engine self-dev shortcode is
   untouched), **upload-your-own mascot** (`upload_mascot` stages it to `%LOCALAPPDATA%\sonelle`, never the
   repo), the **reporting style** (warm/terse/hacker/bubbly -> `narrator.style`), **other-voices instructions**
-  (display only), and the **claude model + effort** (-> `models.*`, read by `bin\sonelle.ps1` for new tabs).
-  `save_settings` merges into `sonelle.config.json`; palette/name are also cached in `localStorage`.
+  (display only), and the **model split** - the **orchestrator** model + effort (`models.orchestrator`/
+  `orchestratorEffort` -> claude's `--model`/`--effort`) and a separate **code-writer** model
+  (`models.codeWriter`, `inherit` = same) that `bin\sonelle.ps1` exports as `CLAUDE_CODE_SUBAGENT_MODEL`
+  so claude's file-editing subagents run on their own model. `save_settings` merges into
+  `sonelle.config.json`; palette/name are also cached in `localStorage`. The model block is **live**:
+  `RefreshOrch` re-reads it before every `claude` launch, so a settings change takes effect on the NEXT
+  prompt without restarting the tab (the config file - overridable via `$env:SONELLE_CONFIG` - is the
+  channel). A claude session already mid-run keeps the model/effort it launched with (only Claude Code's
+  own in-session effort control can change that); permission mode stays on its `-Yolo`/`:yolo` overrides.
 - **Launch + deps:** `bin\sonelle_gui.ps1` bootstraps a local `.venv` (`pywebview` + `pywinpty`, pinned in
   `app\requirements.txt`) on first run, then starts the GUI with `pythonw` (no console). The window
   passes `icon=assets\icon\sonelle.ico` to `webview.start()` so the window's `Form.Icon` is the sonelle

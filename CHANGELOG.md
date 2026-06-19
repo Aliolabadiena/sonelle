@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.35 — 2026-06-19 (model split + live settings: thinky orchestrator, separate code-writer)
+- **Separate model for the code-writer (subagents) vs the orchestrator.** The settings panel now has an
+  **orchestrator model + effort** (the session you talk to -> claude's `--model`/`--effort`) AND a
+  **code-writer model** (`inherit` = same). When set, `bin\sonelle.ps1` exports it as
+  `CLAUDE_CODE_SUBAGENT_MODEL`, so claude's file-editing subagents run on their own model - e.g. a thinky
+  Opus orchestrator with an Opus (or faster Sonnet) code-writer. Persisted under `models.codeWriter`. A
+  `best` option (Fable 5 if available, else Opus) was added to both pickers.
+- **Settings are now LIVE - no tab restart.** Before, model/effort were read once when a tab launched, so
+  a change in the panel did nothing until you opened a new terminal (this confused people). `RefreshOrch`
+  now re-reads the model block from config right before each `claude` launch (Route + DevSelf), so a panel
+  change applies to your NEXT prompt in any open tab. (A claude session already mid-run keeps what it
+  launched with - that's Claude Code's own in-session effort control, not sonelle's to change.)
+- **`$env:SONELLE_CONFIG` overrides the config path.** The resolver (`tools\_registry.ps1`) honors it -
+  handy for power users, and it lets selftest 5d run **hermetically** instead of depending on the dev's
+  real engine-root config (which made the model/effort assertions fragile).
+- **selftest:** 5d is now hermetic and behavioral - it proves model/effort come from config (live) and
+  that the code-writer reaches claude as `CLAUDE_CODE_SUBAGENT_MODEL`; 8i covers the new code-writer
+  field; new checks assert `RefreshOrch` re-reads per prompt and the resolver honors `SONELLE_CONFIG`.
+  All green.
+
+## v1.34 — 2026-06-19 (reporter UX: an arrow opens the report; the lock just pins)
+- **The report now opens with an arrow on the gif - the padlock only pins.** Before, the padlock did
+  double duty (pin the gif AND reveal the report), which was confusing. Now the gif's control row leads
+  with a dedicated **report-arrow** (`toggleReport`); the **padlock** is purely "lock in place" (no
+  bounce / no drift home) and has nothing to do with the report box. The **V** key still toggles the
+  report too. The arrow points up to open (the box expands upward) and flips down when open. CSS
+  decoupled: `.brandloop.locked .report` is gone; the report shows on `.reportopen` only.
+- **selftest:** 8e updated - the control row asserts the report-arrow, the JS asserts the arrow wires
+  `toggleReport`, and the CSS asserts the lock no longer opens the report (decoupling guarded). All green.
+
 ## v1.33 — 2026-06-19 (the reporter + customization: sonelle gets a face and a settings panel)
 - **Narration moved OUT of the terminal into a report box (the report bug fixed).** sonelle used to
   type her humanised lines straight into the xterm, but claude's TUI runs on the alternate screen and

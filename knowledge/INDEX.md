@@ -21,3 +21,5 @@ gitignored hub `memory/` (and your Claude auto-memory). Rule of thumb:
 - [powershell-pure-ascii](powershell-pure-ascii.md) - PS 5.1 misreads non-ASCII in a no-BOM .ps1; build glyphs at runtime from [char] codepoints.
 - [powershell-case-insensitive-vars](powershell-case-insensitive-vars.md) - $Hub and $hub are ONE variable; reassigning a same-name-different-case working var clobbers a parameter override.
 - [selftest-grep-assertion-self-collision](selftest-grep-assertion-self-collision.md) - source-grep assertions can match comments / their own wording; anchor on a unique code-only token and watch negative matches.
+- [css-class-token-collision](css-class-token-collision.md) - Don't reuse a class token an existing descendant selector targets
+- [hermetic-config-test-env-override](hermetic-config-test-env-override.md) - Make config-dependent behavioral tests hermetic with an env path override

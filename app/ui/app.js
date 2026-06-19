@@ -544,7 +544,8 @@
     renderReport(entry);
   }
 
-  // padlock: locked -> no bounce / no drift home, stays put, and the report box opens
+  // padlock: locked -> no bounce / no drift home, stays put. It ONLY pins the gif; it has nothing to do
+  // with the report box (the arrow / V key own that now).
   function toggleLoopLock() {
     const e = activeEntry(); if (!e || !e.gif) return;
     e.gif.locked = !e.gif.locked;
@@ -552,31 +553,36 @@
     if (e.gif.locked) cancelLoopMotion();
     if (el) el.classList.toggle("locked", e.gif.locked);
     updateLoopButtons(e);
-    renderReport(e);
   }
 
-  // press V: open/close the report box WITHOUT locking the gif (it stays free to float)
+  // the arrow on the gif (or the V key): open/close the report box. Independent of the lock - the gif
+  // stays free to float whether the report is open or not.
   function toggleReport() {
     const e = activeEntry(); if (!e || !e.gif) return;
     e.gif.reportOpen = !e.gif.reportOpen;
     const el = $("brandloop");
     if (el) el.classList.toggle("reportopen", e.gif.reportOpen);
+    updateLoopButtons(e);
     renderReport(e);
   }
 
   function updateLoopButtons(entry) {
+    const arrow = document.querySelector("#brandloop .arrow");
     const lock = document.querySelector("#brandloop .lock");
     const mute = document.querySelector("#brandloop .mute");
     const slab = document.querySelector("#brandloop .slabel");
     const g = entry && entry.gif;
+    if (arrow) { arrow.classList.toggle("on", !!(g && g.reportOpen)); arrow.title = (g && g.reportOpen) ? "hide report" : "show report"; }
     if (lock) { lock.classList.toggle("on", !!(g && g.locked)); lock.title = (g && g.locked) ? "unlock (resume floating)" : "lock in place"; }
     if (mute) { mute.classList.toggle("on", !!(entry && entry.voice)); mute.title = (entry && entry.voice) ? "voice: on" : "voice: off"; }
     if (slab) slab.textContent = "session " + ((entry && entry.session) || "");
   }
 
   function wireLoopControls() {
+    const arrow = document.querySelector("#brandloop .arrow");
     const lock = document.querySelector("#brandloop .lock");
     const mute = document.querySelector("#brandloop .mute");
+    if (arrow) arrow.addEventListener("click", (e) => { e.stopPropagation(); toggleReport(); });
     if (lock) lock.addEventListener("click", (e) => { e.stopPropagation(); toggleLoopLock(); });
     if (mute) mute.addEventListener("click", (e) => { e.stopPropagation(); if (active) toggleTabVoice(active); });
     // press V (when not typing) to pop the report box out / hide it again
@@ -593,7 +599,7 @@
   // ---------- customization: palettes, assistant name, mascot, the settings panel ----------
   const PALETTES = window.SONELLE_PALETTES || [];
   let CURRENT_SETTINGS = { paletteId: "indigo", assistantName: "sonelle", style: "warm",
-                           model: "opus", effort: "xhigh", mascotPath: "" };
+                           model: "opus", effort: "xhigh", codeModel: "inherit", mascotPath: "" };
 
   function getPalette(id) {
     for (const p of PALETTES) if (p.id === id) return p;
@@ -680,6 +686,7 @@
     const st = $("set-style"); if (st) st.value = s.style || "warm";
     const md = $("set-model"); if (md) md.value = s.model || "opus";
     const ef = $("set-effort"); if (ef) ef.value = s.effort || "xhigh";
+    const cw = $("set-code"); if (cw) cw.value = s.codeModel || "inherit";
     const mn = $("set-mascot-name");
     if (mn) mn.textContent = s.mascotPath ? ("custom: " + s.mascotPath.split(/[\\/]/).pop()) : "using the built-in mascot";
     buildPaletteGrid(localStorage.getItem("sonelle.palette") || s.paletteId || "indigo");
@@ -694,7 +701,8 @@
       assistantName: (($("set-name") && $("set-name").value) || "sonelle").trim() || "sonelle",
       style: ($("set-style") && $("set-style").value) || "warm",
       model: ($("set-model") && $("set-model").value) || "opus",
-      effort: ($("set-effort") && $("set-effort").value) || "xhigh"
+      effort: ($("set-effort") && $("set-effort").value) || "xhigh",
+      codeModel: ($("set-code") && $("set-code").value) || "inherit"
     };
     if (live) { try { await window.pywebview.api.save_settings(obj); } catch (x) {} }
     try { localStorage.setItem("sonelle.palette", obj.paletteId); localStorage.setItem("sonelle.name", obj.assistantName); } catch (x) {}

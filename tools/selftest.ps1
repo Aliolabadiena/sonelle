@@ -143,30 +143,46 @@ Ok "rollback left no memory index line"  ((-not (Test-Path $rbIdx)) -or (-not ((
 if (Test-Path $rbHub) { Remove-Item $rbHub -Recurse -Force }
 
 Write-Host "== 5d. routing invokes claude correctly (behavioral, T1/T4) =="
-# Put a fake `claude` on PATH that records its argv + cwd, drive the terminal over stdin, and assert it
-# handed claude the right model/effort, cd'd into the project, and honored -Yolo. Env that would leak
-# (SONELLE_YOLO / SONELLE_NARRATE_SETTINGS from a live session) is neutralized so the test is deterministic.
+# Put a fake `claude` on PATH that records its argv + cwd + the code-writer env var, drive the terminal
+# over stdin, and assert it handed claude the right model/effort, routed the code-writer to its own
+# CLAUDE_CODE_SUBAGENT_MODEL, cd'd into the project, and honored -Yolo. The models come from a HERMETIC
+# config we point $env:SONELLE_CONFIG at (NOT the dev's real engine-root config) so the test is
+# deterministic AND proves the values are read from config, not the hardcoded defaults. Env that would
+# leak (SONELLE_YOLO / SONELLE_NARRATE_SETTINGS / a pre-set subagent model) is neutralized too.
 $stub = Join-Path $tmp 'stub'; New-Item -ItemType Directory -Path $stub -Force | Out-Null
 $cap  = Join-Path $stub 'cap.txt'
-$stubLines = @('@echo off', 'echo %*> "%SONELLE_STUB_CAP%"', 'cd >> "%SONELLE_STUB_CAP%"', 'exit 0')
+$stubLines = @('@echo off', 'echo %*> "%SONELLE_STUB_CAP%"', 'cd >> "%SONELLE_STUB_CAP%"',
+               'echo SUBMODEL=[%CLAUDE_CODE_SUBAGENT_MODEL%]>> "%SONELLE_STUB_CAP%"', 'exit 0')
 [System.IO.File]::WriteAllText((Join-Path $stub 'claude.cmd'), ($stubLines -join "`r`n") + "`r`n")
+$cfg5d = Join-Path $tmp 'orch.config.json'
+[System.IO.File]::WriteAllText($cfg5d, '{ "models": { "orchestrator": "opus", "orchestratorEffort": "xhigh", "codeWriter": "sonnet" } }')
 $savedPath = $env:Path; $savedYolo = $env:SONELLE_YOLO; $savedNarr = $env:SONELLE_NARRATE_SETTINGS
-$env:SONELLE_YOLO = ''; $env:SONELLE_NARRATE_SETTINGS = ''; $env:Path = "$stub;$env:Path"; $env:SONELLE_STUB_CAP = $cap
+$savedCfg = $env:SONELLE_CONFIG; $savedSub = $env:CLAUDE_CODE_SUBAGENT_MODEL
+$env:SONELLE_YOLO = ''; $env:SONELLE_NARRATE_SETTINGS = ''; $env:CLAUDE_CODE_SUBAGENT_MODEL = ''
+$env:SONELLE_CONFIG = $cfg5d; $env:Path = "$stub;$env:Path"; $env:SONELLE_STUB_CAP = $cap
 try {
   if (Test-Path $cap) { Remove-Item $cap -Force }
   "st: hello`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare | Out-Null
   $capTxt = if (Test-Path $cap) { Get-Content $cap -Raw } else { '' }
-  Ok "routing passes --model opus --effort xhigh" (($capTxt -match '--model') -and ($capTxt -match 'opus') -and ($capTxt -match '--effort') -and ($capTxt -match 'xhigh'))
-  Ok "routing cd's into the project code path"     ($capTxt -match [regex]::Escape($codePath))
-  Ok "no yolo => no bypassPermissions"             (-not ($capTxt -match 'bypassPermissions'))
+  Ok "routing passes --model opus --effort xhigh (from config, live)" (($capTxt -match '--model') -and ($capTxt -match 'opus') -and ($capTxt -match '--effort') -and ($capTxt -match 'xhigh'))
+  Ok "code-writer routed to CLAUDE_CODE_SUBAGENT_MODEL"               ($capTxt -match 'SUBMODEL=\[sonnet\]')
+  Ok "routing cd's into the project code path"                        ($capTxt -match [regex]::Escape($codePath))
+  Ok "no yolo => no bypassPermissions"                               (-not ($capTxt -match 'bypassPermissions'))
   if (Test-Path $cap) { Remove-Item $cap -Force }
   "st: hello`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare -Yolo | Out-Null
   $capYolo = if (Test-Path $cap) { Get-Content $cap -Raw } else { '' }
   Ok "yolo => --permission-mode bypassPermissions" (($capYolo -match '--permission-mode') -and ($capYolo -match 'bypassPermissions'))
 } finally {
   $env:Path = $savedPath; $env:SONELLE_YOLO = $savedYolo; $env:SONELLE_NARRATE_SETTINGS = $savedNarr
+  $env:SONELLE_CONFIG = $savedCfg; $env:CLAUDE_CODE_SUBAGENT_MODEL = $savedSub
   Remove-Item Env:\SONELLE_STUB_CAP -ErrorAction SilentlyContinue
 }
+# the orchestrator re-reads model/effort/code-writer per prompt (live, no tab restart) + the resolver
+# honors $env:SONELLE_CONFIG so the panel's change is picked up from the config file each launch
+$srcTerm = Get-Content (Join-Path $engine 'bin\sonelle.ps1') -Raw
+Ok "orchestrator re-reads model/effort/code-writer per prompt (live)" (($srcTerm -match 'function RefreshOrch') -and ([regex]::Matches($srcTerm, 'RefreshOrch').Count -ge 3) -and ($srcTerm -match 'CLAUDE_CODE_SUBAGENT_MODEL'))
+$srcReg = Get-Content (Join-Path $engine 'tools\_registry.ps1') -Raw
+Ok "config resolver honors `$env:SONELLE_CONFIG override"             ($srcReg -match 'SONELLE_CONFIG')
 
 Write-Host "== 6. check_pointers DETECTS a broken pointer (negative test) =="
 Remove-Item $codePath -Recurse -Force
@@ -279,10 +295,10 @@ $barReserve = ($srcCss -match '#bar\{[^}]*padding-right:\s*(\d+)px') -and ([int]
 Ok "command bar panel stops before the brand loop (its own clear corner)" $barReserve
 # the brand loop is now a WRAPPER (gif + control row + report box) - sonelle's in-app REPORTER
 Ok "brand loop wraps the gif + a control row + a report box" (($srcHtml -match '<div id="brandloop"') -and ($srcHtml -match 'class="gif" src="brandloop\.gif"') -and ($srcHtml -match 'id="loop-report"') -and ($srcHtml -match 'class="loopctl'))
-Ok "gif control row has padlock / mute / session label" (($srcHtml -match 'lbtn lock') -and ($srcHtml -match 'lbtn mute') -and ($srcHtml -match 'class="slabel"') -and (-not ($srcHtml -match 'lbtn pop')))
+Ok "gif control row has report-arrow / padlock / mute / session label" (($srcHtml -match 'lbtn arrow') -and ($srcHtml -match 'lbtn lock') -and ($srcHtml -match 'lbtn mute') -and ($srcHtml -match 'class="slabel"') -and (-not ($srcHtml -match 'lbtn pop')))
 Ok "frontend keeps per-tab gif state + restores it on tab switch (item 6)" (($srcJs -match 'function newGifState') -and ($srcJs -match 'function applyGifState') -and ($srcJs -match 'entry\.gif'))
-Ok "gif controls wired: lock + mute; report opens on lock OR V" (($srcJs -match 'function toggleLoopLock') -and ($srcJs -match 'function wireLoopControls') -and ($srcJs -match 'function toggleReport') -and ($srcJs -match 'reportopen') -and ($srcJs -match 'e\.key !== "v"'))
-Ok "report box opens on lock OR V; session label is moody (item 10)" (($srcCss -match '\.brandloop \.report\{') -and ($srcCss -match '\.brandloop\.locked \.report') -and ($srcCss -match '\.brandloop\.reportopen \.report') -and ($srcCss -match '\.brandloop \.slabel\{') -and ($srcCss -match '--moody'))
+Ok "gif controls wired: lock pins only; report opens on the arrow OR V" (($srcJs -match 'function toggleLoopLock') -and ($srcJs -match 'function wireLoopControls') -and ($srcJs -match 'function toggleReport') -and ($srcJs -match '#brandloop \.arrow') -and ($srcJs -match 'reportopen') -and ($srcJs -match 'e\.key !== "v"'))
+Ok "report box opens on the arrow/V only; lock is decoupled; session label is moody (item 10)" (($srcCss -match '\.brandloop \.report\{') -and ($srcCss -match '\.brandloop\.reportopen \.report') -and (-not ($srcCss -match '\.brandloop\.locked \.report')) -and ($srcCss -match '\.brandloop\.reportopen \.lbtn\.arrow svg') -and ($srcCss -match '\.brandloop \.slabel\{') -and ($srcCss -match '--moody'))
 $srcGuiPs = Get-Content (Join-Path $engine 'bin\sonelle_gui.ps1') -Raw
 Ok "launcher installs deps + runs pythonw" (($srcGuiPs -match 'requirements\.txt') -and ($srcGuiPs -match 'pythonw'))
 $pyCmd = Get-Command py -ErrorAction SilentlyContinue
@@ -356,12 +372,12 @@ $srcPal = if (Test-Path $palJs) { Get-Content $palJs -Raw } else { '' }
 Ok "palettes.js ships >= 20 curated themes" ((Test-Path $palJs) -and (@([regex]::Matches($srcPal, '\bid:\s*"')).Count -ge 20))
 Ok "index loads palettes.js BEFORE app.js" (($srcHtml.IndexOf('src="palettes.js"') -ge 0) -and ($srcHtml.IndexOf('src="palettes.js"') -lt $srcHtml.IndexOf('src="app.js"')))
 Ok "the gear sits BEFORE the window controls" (($srcHtml -match 'id="btn-settings"') -and ($srcHtml.IndexOf('btn-settings') -lt $srcHtml.IndexOf('class="wctrls')))
-Ok "settings panel has palette/name/mascot/style/model/effort/voices" (($srcHtml -match 'id="settings"') -and ($srcHtml -match 'id="set-palettes"') -and ($srcHtml -match 'id="set-name"') -and ($srcHtml -match 'id="set-mascot') -and ($srcHtml -match 'id="set-style"') -and ($srcHtml -match 'id="set-model"') -and ($srcHtml -match 'id="set-effort"') -and ($srcHtml -match 'id="set-voices"'))
+Ok "settings panel has palette/name/mascot/style/model/effort/code-writer/voices" (($srcHtml -match 'id="settings"') -and ($srcHtml -match 'id="set-palettes"') -and ($srcHtml -match 'id="set-name"') -and ($srcHtml -match 'id="set-mascot') -and ($srcHtml -match 'id="set-style"') -and ($srcHtml -match 'id="set-model"') -and ($srcHtml -match 'id="set-effort"') -and ($srcHtml -match 'id="set-code"') -and ($srcHtml -match 'id="set-voices"'))
 Ok "frontend applies palettes live + persists the settings" (($srcJs -match 'function applyPalette') -and ($srcJs -match 'function buildPaletteGrid') -and ($srcJs -match 'function saveSettings') -and ($srcJs -match 'save_settings') -and ($srcJs -match 'get_settings'))
 Ok "voices section is display-only (just shows the config keys)" (($srcHtml -match 'id="set-voices"') -and ($srcHtml -match 'narrator') -and ($srcHtml -match 'kokoro'))
 Ok "backend reads/writes settings + stages the mascot to a user dir (not the repo)" (($srcGui -match 'def get_settings') -and ($srcGui -match 'def save_settings') -and ($srcGui -match 'def upload_mascot') -and ($srcGui -match 'LOCALAPPDATA'))
 Ok "assistant name is DISPLAY-ONLY (never touches the engine self-short)" (($srcGui -match 'DISPLAY name only') -and (-not ($srcGui -match 'selfShort')) -and (-not ($srcJs -match 'selfShort')))
-Ok "model + effort persist under models.* (read by sonelle.ps1)" (($srcGui -match 'orchestrator') -and ($srcGui -match 'orchestratorEffort'))
+Ok "model + effort + code-writer persist under models.* (read by sonelle.ps1)" (($srcGui -match 'orchestrator') -and ($srcGui -match 'orchestratorEffort') -and ($srcGui -match 'codeWriter') -and ($srcJs -match 'codeModel'))
 
 Write-Host "== 8g. shared knowledge base =="
 $kbIdx = Join-Path $engine 'knowledge\INDEX.md'

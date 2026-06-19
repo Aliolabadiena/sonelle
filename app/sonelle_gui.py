@@ -411,12 +411,14 @@ def get_settings():
         "style": narr.get("style") or "warm",
         "model": models.get("orchestrator") or "opus",
         "effort": models.get("orchestratorEffort") or "xhigh",
+        "codeModel": models.get("codeWriter") or "inherit",
     }
 
 
 def save_settings(obj):
-    """Merge the panel's choices into sonelle.config.json (atomic). Model/effort land under models.*
-    (already read by bin/sonelle.ps1 for --model/--effort on NEW terminals); style under narrator.*."""
+    """Merge the panel's choices into sonelle.config.json (atomic). Model/effort/code-writer land under
+    models.* (read by bin/sonelle.ps1 - the orchestrator gets --model/--effort, the code-writer becomes
+    CLAUDE_CODE_SUBAGENT_MODEL - live on the next prompt); style under narrator.*."""
     obj = obj or {}
     cfg = _read_config()
     if "paletteId" in obj:
@@ -430,12 +432,19 @@ def save_settings(obj):
         n = cfg.get("narrator") or {}
         n["style"] = obj["style"]
         cfg["narrator"] = n
-    if "model" in obj or "effort" in obj:
+    if "model" in obj or "effort" in obj or "codeModel" in obj:
         m = cfg.get("models") or {}
         if "model" in obj:
             m["orchestrator"] = obj["model"]
         if "effort" in obj:
             m["orchestratorEffort"] = obj["effort"]
+        if "codeModel" in obj:
+            # "" / "inherit" -> subagents inherit the orchestrator model (drop the key)
+            cw = (obj.get("codeModel") or "").strip()
+            if cw and cw != "inherit":
+                m["codeWriter"] = cw
+            else:
+                m.pop("codeWriter", None)
         cfg["models"] = m
     ok = _write_config(cfg)
     return {"ok": bool(ok)}

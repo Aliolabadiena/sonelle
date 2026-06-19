@@ -167,11 +167,11 @@ body{
 /* Narration is NO LONGER typed into the terminal (claude's alt-screen TUI repainted over it, so the
    lines vanished - that was the report bug). It now lands in the .report box below the gif: pink for
    sonelle's voice, soft white for the play-by-play (see app.js reportLine). The #brandloop wrapper
-   holds the gif, a control row (lock . pop-out . mute . session label) and the report box. It HOMES to
-   the bottom-right corner (right:30/bottom:8, off the scrollbar lane) - only its home spot: app.js
+   holds the gif, a control row (report-arrow . lock . mute . session label) and the report box. It HOMES
+   to the bottom-right corner (right:30/bottom:8, off the scrollbar lane) - only its home spot: app.js
    `wireBrandloopDrag` makes it GRAB-AND-DROP (pointer-events:auto + cursor:grab) with a throw (release
-   while moving -> flings + BOUNCES off the edges) and a 30s drift home; LOCKED it stays put + shows the
-   report; popped it ejects to a desktop overlay. Once dragged it switches to absolute left/top. */
+   while moving -> flings + BOUNCES off the edges) and a 30s drift home; the report-arrow (or V) opens the
+   report; LOCKED it just stays put (no report coupling). Once dragged it switches to absolute left/top. */
 .brandloop{
   position:absolute; right:30px; bottom:8px; z-index:6;   /* home corner; off the scrollbar lane */
   width:auto; pointer-events:auto; user-select:none; cursor:grab;
@@ -198,7 +198,7 @@ body{
 }
 .brandloop .gifwrap:hover .loopctl,
 .brandloop.locked .loopctl,
-.brandloop.reportopen .loopctl{ opacity:1; pointer-events:auto; }
+.brandloop.reportopen .loopctl{ opacity:1; pointer-events:auto; }   /* stay visible while locked or report open */
 .brandloop .lbtn{
   display:flex; align-items:center; justify-content:center;
   width:22px; height:22px; padding:0; border:0; border-radius:7px; cursor:default;
@@ -207,6 +207,9 @@ body{
 .brandloop .lbtn svg{ width:14px; height:14px; display:block; }
 .brandloop .lbtn:hover{ background:var(--accent-soft); color:var(--txt); }
 .brandloop .lbtn.on{ color:var(--accent); }
+/* the report-arrow points UP (open the report, which expands upward); rotates to point DOWN when open */
+.brandloop .lbtn.arrow svg{ transition:transform .14s; }
+.brandloop.reportopen .lbtn.arrow svg{ transform:rotate(180deg); }
 .brandloop .mute .wave{ opacity:0; }                /* muted: cone only */
 .brandloop .mute.on{ color:var(--pink); }
 .brandloop .mute.on .wave{ opacity:1; }             /* speaking: pink waves */
@@ -217,7 +220,8 @@ body{
   background:rgba(8,10,24,.5); white-space:nowrap;
 }
 /* report box: sonelle's lines type out here, hacker-style. It sits ABOVE the gif (so the gif stays in
-   its corner) and is shown when the gif is LOCKED or you press V; ~50% the gif height, scrolls. */
+   its corner) and is shown when you press the ARROW (on the gif) or the V key - the lock does NOT open
+   it; ~50% the gif height, scrolls. */
 .brandloop .report{
   display:none;
   width:220px; height:66px; overflow-y:auto; padding:6px 9px;
@@ -228,7 +232,6 @@ body{
   -webkit-backdrop-filter:blur(8px);
   font-size:11px; line-height:1.4;
 }
-.brandloop.locked .report,
 .brandloop.reportopen .report{ display:block; }
 /* same scrollbar as the terminal (rides its own lane, periwinkle thumb with a gap) */
 .brandloop .report::-webkit-scrollbar{ width:8px; }
