@@ -19,6 +19,12 @@
   same slot - `$hub = $root` silently clobbered the override. Fixed by capturing the param first.
   selftest section 9b drives `-Demo -Hub <temphub>` and asserts the welcome lists the override hub's
   projects (a behavioral check, not just a grep).
+- **The terminal now has a real behavioral test (T1+T4).** selftest section 5d puts a fake `claude` on
+  PATH that records its argv + working directory, drives the terminal over stdin with `-Hub`, and
+  asserts it handed claude `--model opus --effort xhigh`, `cd`'d into the project's code path, and that
+  `-Yolo` adds `--permission-mode bypassPermissions` while a plain run does not. This is the first test
+  that exercises routing end-to-end instead of grepping source - it would have caught the Q4 bug on its
+  own. Leaking session env (`SONELLE_YOLO`, `SONELLE_NARRATE_SETTINGS`) is neutralized so it's deterministic.
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a

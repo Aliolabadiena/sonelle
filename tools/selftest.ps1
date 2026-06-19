@@ -94,6 +94,32 @@ $appOut = & $ps -NoProfile -Sta -ExecutionPolicy Bypass -File $appPath -SelfTest
 Ok "app -SelfTest exit 0"        ($LASTEXITCODE -eq 0)
 Ok "app -SelfTest builds the UI" (($appOut -join "`n") -match 'SELFTEST (OK|SKIP)')
 
+Write-Host "== 5d. routing invokes claude correctly (behavioral, T1/T4) =="
+# Put a fake `claude` on PATH that records its argv + cwd, drive the terminal over stdin, and assert it
+# handed claude the right model/effort, cd'd into the project, and honored -Yolo. Env that would leak
+# (SONELLE_YOLO / SONELLE_NARRATE_SETTINGS from a live session) is neutralized so the test is deterministic.
+$stub = Join-Path $tmp 'stub'; New-Item -ItemType Directory -Path $stub -Force | Out-Null
+$cap  = Join-Path $stub 'cap.txt'
+$stubLines = @('@echo off', 'echo %*> "%SONELLE_STUB_CAP%"', 'cd >> "%SONELLE_STUB_CAP%"', 'exit 0')
+[System.IO.File]::WriteAllText((Join-Path $stub 'claude.cmd'), ($stubLines -join "`r`n") + "`r`n")
+$savedPath = $env:Path; $savedYolo = $env:SONELLE_YOLO; $savedNarr = $env:SONELLE_NARRATE_SETTINGS
+$env:SONELLE_YOLO = ''; $env:SONELLE_NARRATE_SETTINGS = ''; $env:Path = "$stub;$env:Path"; $env:SONELLE_STUB_CAP = $cap
+try {
+  if (Test-Path $cap) { Remove-Item $cap -Force }
+  "st: hello`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare | Out-Null
+  $capTxt = if (Test-Path $cap) { Get-Content $cap -Raw } else { '' }
+  Ok "routing passes --model opus --effort xhigh" (($capTxt -match '--model') -and ($capTxt -match 'opus') -and ($capTxt -match '--effort') -and ($capTxt -match 'xhigh'))
+  Ok "routing cd's into the project code path"     ($capTxt -match [regex]::Escape($codePath))
+  Ok "no yolo => no bypassPermissions"             (-not ($capTxt -match 'bypassPermissions'))
+  if (Test-Path $cap) { Remove-Item $cap -Force }
+  "st: hello`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare -Yolo | Out-Null
+  $capYolo = if (Test-Path $cap) { Get-Content $cap -Raw } else { '' }
+  Ok "yolo => --permission-mode bypassPermissions" (($capYolo -match '--permission-mode') -and ($capYolo -match 'bypassPermissions'))
+} finally {
+  $env:Path = $savedPath; $env:SONELLE_YOLO = $savedYolo; $env:SONELLE_NARRATE_SETTINGS = $savedNarr
+  Remove-Item Env:\SONELLE_STUB_CAP -ErrorAction SilentlyContinue
+}
+
 Write-Host "== 6. check_pointers DETECTS a broken pointer (negative test) =="
 Remove-Item $codePath -Recurse -Force
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $tmp | Out-Null
