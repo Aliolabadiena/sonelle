@@ -84,9 +84,9 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   RIGHT padding in and gives the xterm grid a right gutter (`.pane .xterm{ padding-right }`) so the
   scrollbar rides the box edge in its own lane instead of overlapping the last column of glyphs (FitAddon
   subtracts that element padding when it computes columns).
-- **Tab names:** each terminal tab is labelled with a random woman's name (Megan, Sakura, Sidney...) from
-  the pool in `app\ui\names.js` (a few hundred, ASCII), not `sonelle 1 / sonelle 2`. `pickName()` in
-  `app.js` prefers a name not already on an open tab; a project-named tab keeps the project name.
+- **Tab names:** each terminal tab is labelled with a plain incrementing number (`1`, `2`, `3`, ...) in
+  the order it was opened. `nextTabName()` in `app.js` bumps a monotonic `tabSeq` counter, so closing a
+  tab never renumbers the rest. A project-named tab keeps the project name.
 - **Contract:** JS->Python via `window.pywebview.api.{new_tab, send_input, resize, close_tab, list_projects,
   save_paste_image, win_minimize, win_toggle_max, win_close}`; Python->JS via fire-and-forget `run_js` calling
   `window.__ptyOutput(tabId, base64Bytes)` / `window.__ptyExit(tabId, code)`. `tabId` is Python-owned.
@@ -102,11 +102,20 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   `taskkill /F /T` its pid (ConPTY has no signal tree, so claude/node grandchildren would orphan).
 - **Glass:** WebView2 **cannot** be transparent on Windows, so the glass is self-contained - an in-app
   gradient + translucent `backdrop-filter` panels - identical on Win10/11 (no OS acrylic dependency).
-- **Brand loop:** a small coral sonelle sound-wave (`#brandloop`) lives in the bottom-right of the
-  terminal area and gently loops the whole time (a CSS breathe + a flowing stroke - no gif asset). It
-  is anchored to `#stack` so it always rides just above the composer, and is purely decorative
-  (`aria-hidden` + `pointer-events:none`), so it never blocks a click or text selection in the
-  terminal beneath it; it holds still under `prefers-reduced-motion`.
+- **Brand loop:** the looping sonelle mascot gif (`#brandloop`, `app\ui\brandloop.gif`) sits LOW in the
+  bottom-right corner, anchored to `#app` (`height:134px; bottom:8px`), in a clean empty space of its
+  own with NOTHING drawn beneath it. It is pulled in off the right edge (`right:30px`) so it clears the
+  terminal scrollbar's lane (the scrollbar rides ~15..22px in). Nothing runs under it on any side:
+  vertically the pane reserves an 88px bottom band (`.pane` `padding-bottom`), and because `FitAddon`
+  subtracts that padding when it sizes the grid, the terminal text stops ABOVE the gif's top (before
+  it, not hidden behind it); horizontally the whole command-bar PANEL stops before it - `#bar` reserves
+  a right band (`padding-right`) so the glass `.cmdbar` (input + send button) parks to the LEFT of the
+  gif rather than the panel running under its corner. So its foot sits over the bare page background
+  beside the shrunk bar and its body over the pane's empty band. It stays OPAQUE - a solid `#07091f`
+  backing (matching the gif's own floor) fills the gif's transparent top so it reads as one solid
+  framed block. It is purely decorative (`aria-hidden` + `pointer-events:none`, `z-index` above the
+  pane + bar), so clicks pass through to the send button (send still works) and it never steals a
+  selection; the gif self-animates at half speed (200ms/frame).
 - **Launch + deps:** `bin\sonelle_gui.ps1` bootstraps a local `.venv` (`pywebview` + `pywinpty`, pinned in
   `app\requirements.txt`) on first run, then starts the GUI with `pythonw` (no console). The window
   passes `icon=assets\icon\sonelle.ico` to `webview.start()` so the window's `Form.Icon` is the sonelle

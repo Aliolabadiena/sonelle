@@ -121,8 +121,11 @@ body{
 .pane{
   position:absolute; inset:0;
   border-radius:var(--pane-radius);
-  /* right padding pulled in (4 vs 16 left) so the scrollbar rides the box edge, not the text */
-  padding:12px 4px 12px 16px;
+  /* right padding pulled in (4 vs 16 left) so the scrollbar rides the box edge, not the text;
+     the big BOTTOM padding (88 vs 12 top) reserves a band at the foot of the terminal so the grid
+     STOPS ABOVE the brand-loop gif: FitAddon subtracts this padding when it computes rows, so the
+     text ends short of the gif instead of being drawn (and hidden) behind it - it stops before it. */
+  padding:12px 4px 88px 16px;
   background:linear-gradient(160deg, rgba(34,24,56,.38), rgba(14,10,26,.30));
   backdrop-filter:blur(13px) saturate(116%);
   -webkit-backdrop-filter:blur(13px) saturate(116%);
@@ -145,35 +148,27 @@ body{
 }
 .pane .xterm-viewport::-webkit-scrollbar-track{ background:transparent; margin:6px 0; }
 
-/* ---------- always-on brand loop (bottom-right) ---------- */
-/* A small sonelle sound-wave that lives in the bottom-right corner of the terminal area, gently
-   breathing (opacity + a 1px bob) while the wave itself flows. It is on all the time as quiet brand
-   presence. Anchored to #stack (not #app) so it always rides just above the composer regardless of
-   the footer height. Decorative only: pointer-events:none + aria-hidden so it never blocks a click
-   or text selection in the terminal underneath. Pure CSS - no gif asset. */
+/* ---------- always-on brand loop (the animated mascot gif) ---------- */
+/* The looping sonelle gif sits LOW in the bottom-right corner in a clean empty space of its own -
+   NOTHING is drawn under it. It is pulled in off the right edge (right:30px) so it clears the
+   terminal scrollbar's lane (the scrollbar rides ~15..22px in; the gif's right edge stops short of
+   it). Horizontally the WHOLE command-bar panel stops before it: #bar reserves a right band so the
+   glass cmdbar parks to the LEFT of the gif (panel and send button both clear it). Vertically the
+   pane reserves an 88px bottom band (see .pane) so the terminal grid stops ABOVE the gif's top - text
+   ends before it, never drawn (and hidden) behind it. So the gif's foot sits over the bare page
+   background beside the shrunk bar, and its body over the pane's empty band - a clean corner with no
+   panel, text, or scrollbar beneath. The opaque #07091f backing (matching the gif's own floor) fills
+   its transparent top so it reads as one solid framed block. pointer-events:none keeps it decorative
+   (Enter still sends; clicks fall through); z-index lifts it above the pane + bar; aria-hidden hides
+   it from a11y. The gif self-animates (re-timed to 200ms/frame - half speed). */
 .brandloop{
-  position:absolute; right:14px; bottom:10px; z-index:5;
-  width:38px; height:38px; pointer-events:none;
-  opacity:.42; animation:loop-breathe 4.2s ease-in-out infinite;
-  filter:drop-shadow(0 1px 3px rgba(0,0,0,.35));
-}
-.brandloop .loop-mark{ width:100%; height:100%; display:block; }
-.brandloop .loop-mark path{
-  stroke-dasharray:18 10;                       /* segmented wave so the flow is visible */
-  animation:loop-flow 3.6s linear infinite;
-}
-@keyframes loop-breathe{
-  0%,100%{ opacity:.30; transform:translateY(0); }
-  50%    { opacity:.52; transform:translateY(-1px); }
-}
-@keyframes loop-flow{
-  from{ stroke-dashoffset:0; }
-  to  { stroke-dashoffset:-56; }                /* 2 x (dash+gap) -> seamless wrap */
-}
-/* respect a reduced-motion preference: hold it still, still visible */
-@media (prefers-reduced-motion: reduce){
-  .brandloop{ animation:none; }
-  .brandloop .loop-mark path{ animation:none; stroke-dasharray:none; }
+  position:absolute; right:30px; bottom:8px; z-index:6;   /* right:30 pulls it in off the scrollbar lane */
+  height:134px; width:auto; pointer-events:none; user-select:none;
+  opacity:1;
+  background:#07091f;                /* NOT transparent: fills the gif's transparent top (matches its own floor) */
+  border:1px solid var(--hair);
+  border-radius:14px;
+  box-shadow:0 8px 28px rgba(0,0,0,.5);
 }
 
 /* ---------- welcome (empty state) ---------- */
@@ -199,7 +194,14 @@ body{
 .primary:hover{ background:#ab98d2; }
 
 /* ---------- command bar ---------- */
-#bar{ flex:0 0 auto; display:flex; flex-direction:column; gap:7px; }
+/* The brand-loop gif lives in the bottom-right corner (anchored to #app), pulled in off the right edge
+   (right:30px) so it clears the terminal scrollbar's lane. The WHOLE command-bar panel stops before
+   it: #bar reserves a right band (padding-right) the width of the gif's footprint (gif ~154px wide at
+   right:30px -> left edge ~184px in; 190px clears it with a small gap), so the glass cmdbar's right
+   edge parks to the LEFT of the gif instead of the panel running underneath it. The gif then sits in
+   a clean empty corner - over the page background at its foot and the pane's empty bottom band above -
+   with nothing (panel, text, or scrollbar) drawn under it. */
+#bar{ flex:0 0 auto; display:flex; flex-direction:column; gap:7px; padding-right:190px; }
 .chips{ display:flex; gap:6px; overflow-x:auto; padding:0 2px; min-height:0; scrollbar-width:none; }
 .chips::-webkit-scrollbar{ display:none; }
 .chip{
@@ -209,9 +211,12 @@ body{
 }
 .chip:hover{ color:#efe9f8; background:var(--accent-soft); border-color:var(--hair-strong); }
 
+/* Normal padding now: the right band that keeps this panel clear of the brand-loop gif lives on #bar
+   (above), which shrinks the whole panel rather than just insetting its content - so the send button
+   sits at the panel's own right edge and the panel stops before the gif. */
 .cmdbar{
   display:flex; align-items:center; gap:11px;
-  height:52px; padding:0 8px 0 16px; border-radius:14px;
+  height:52px; padding:0 16px; border-radius:14px;
 }
 .cmdbar .prompt{ width:9px; height:9px; flex:0 0 auto; }
 .cmdbar .prompt::before{

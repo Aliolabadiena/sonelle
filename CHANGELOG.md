@@ -1,5 +1,77 @@
 # Changelog
 
+## v1.29 — 2026-06-19 (glass app: the brand loop gets its own clean corner)
+- **The mascot gif now sits in a clean empty corner with nothing drawn under it, and clears the
+  scrollbar.** Two refinements over v1.28: (1) the whole command-bar **panel** now stops before the
+  gif instead of just its content - the right band moved from `.cmdbar` `padding-right` to `#bar`
+  `padding-right` (`176px -> 190px`), so the glass cmdbar's right edge (input + send button) parks to
+  the LEFT of the gif and the panel no longer runs under the gif's corner; `.cmdbar` padding is back to
+  normal (`0 16px`). (2) The gif is pulled IN off the right edge (`right:14px -> 30px`) so its right
+  edge stops short of the terminal **scrollbar** lane (the scrollbar rides ~15..22px in) - it no longer
+  sits over the scroll block. Net effect: the gif's foot sits over the bare page background beside the
+  shrunk bar and its body over the pane's empty bottom band - a clean framed corner with no panel,
+  text, or scrollbar beneath it. The gif size, opacity, and timing are unchanged. selftest 8e now
+  asserts the gif is pulled off the scrollbar lane (`.brandloop` `right >= 24px`) and that the panel
+  reserve is on `#bar` (`padding-right >= 120px`). Verified with a headless render.
+
+## v1.28 — 2026-06-19 (glass app: the composer stops before the brand loop, horizontally too)
+- **The command bar no longer runs under the mascot gif sideways.** v1.26 stopped *terminal* text from
+  running under the brand loop by reserving a bottom band; but the **composer** (the input you type in +
+  the send button) still slid right, underneath the gif's corner. Now `.cmdbar` reserves a matching
+  RIGHT band (`padding-right: 8px -> 176px`, the width of the gif at `right:14px`) - the horizontal twin
+  of the pane's 88px bottom band. The send button parks to the LEFT of the gif and the input (`flex:1`)
+  shrinks so typed text stops *before* the gif instead of sliding under it. The gif itself is unchanged
+  (same size, position, opacity). selftest 8e adds an assertion that the command bar reserves that right
+  band (`.cmdbar` `padding-right >= 120px`).
+
+## v1.27 — 2026-06-19 (glass app: tabs are just numbered 1, 2, 3)
+- **Terminal tabs are now labelled with a plain number instead of a random woman's name.** The
+  `app\ui\names.js` pool (a few hundred names) and the `pickName()` picker are removed; `app.js` now
+  names each tab with a monotonic counter via `nextTabName()` (`1`, `2`, `3`, ... in the order opened).
+  The counter only climbs, so closing a tab never renumbers the others. `index.html` no longer loads
+  `names.js`, and the file is deleted. selftest 8e drops the name-pool checks and instead asserts the
+  numbered naming (`nextTabName` / `tabSeq`, no `pickName`/`SONELLE_NAMES`) and that `names.js` is gone.
+
+## v1.26 — 2026-06-19 (glass app: the brand loop drops into the bar, text stops above it)
+- **The mascot brand loop now sits LOW over the send-button corner, and terminal text stops above it
+  instead of running under it.** The gif was lifted clear of the composer (v1.25); now it is dropped
+  back DOWN into the command bar (`bottom:72px -> 8px`) so it overlays the send-button corner, as
+  requested. To keep text off it, the terminal grid now genuinely *stops before* the gif rather than
+  being hidden behind the opaque block: the pane reserves an 88px bottom band (`.pane` `padding-bottom:
+  12px -> 88px`), and because `FitAddon` subtracts that padding when it sizes the grid, the bottom rows
+  end ABOVE the gif's top - no text is ever drawn (and lost) behind it. The gif stays OPAQUE (so nothing
+  shows through where it sits over the bar) and decorative (`pointer-events:none`), so clicks still pass
+  THROUGH it to the send button beneath - send keeps working even while the gif covers it (Enter sends
+  too). selftest 8e now also asserts the gif is low (`bottom <= 24px`) and the pane reserves a bottom
+  band (`padding-bottom >= 40px`). Verified with a headless render.
+
+## v1.25 — 2026-06-19 (glass app: the brand loop is opaque, bigger, and slower)
+- **The mascot brand loop no longer lets terminal text show through it, and it's bigger and calmer.**
+  The gif has a transparent top (~20% of its pixels), so over the glass terminal you could see text
+  *through* it - it looked like the text was running behind the figure. It is now OPAQUE: a solid
+  `#07091f` backing (the gif's own opaque floor colour, so the fill is seamless) sits behind it, so
+  terminal text can never show through - the block reads as a clean wall the text stops at instead of
+  running under it. It is **20% bigger** (`height:112px -> 134px`) and **lifted clear of the composer**
+  (`bottom:4px -> 72px`, above the `8+52+8 = 68px` the pad + bar + gap occupy) so the now-opaque block
+  never covers the send button. The gif file itself is **re-timed to half speed** (each frame `100ms
+  -> 200ms`, an 1.8s loop now 3.6s) via a lossless binary patch of its frame delays - the pixels and
+  palette are untouched, only the timing changed. selftest 8e now also asserts the `.brandloop` opaque
+  backing. The gif stays vendored in the repo (`app\ui\brandloop.gif`).
+
+## v1.24 — 2026-06-19 (glass app: the brand loop is now the mascot gif, perched on the input bar)
+- **The bottom-right brand loop is now the real animated mascot gif, not the CSS sound-wave.** v1.23's
+  coral wave is replaced by `app\ui\brandloop.gif` (a transparent-background pixel-art loop), and it no
+  longer just floats in the terminal corner - it now STRADDLES the seam between the composer and the
+  terminal: anchored to `#app` (the shared parent of `#stack` + `#bar`) with its vertical centre on the
+  top edge of the command bar (`height:112px; bottom:4px` over the 52px bar + 8px pad), so the lower
+  half overlaps the input bar you type into and the upper half rises into the terminal - the figure
+  looks perched on the bar. Still decorative only (`aria-hidden` + `pointer-events:none`, lifted above
+  both panels by `z-index`), so it never blocks a click or text selection (the send button included)
+  beneath it; the gif self-animates (no CSS keyframes). selftest 8e now asserts the `#brandloop` `<img>`,
+  its `src="brandloop.gif"`, the shipped gif file, the `.brandloop` rule, and `pointer-events:none`.
+  Verified with a headless render: the gif loads with a transparent background and sits across the seam,
+  lower half on the input bar, upper half in the terminal.
+
 ## v1.23 — 2026-06-19 (glass app: an always-on brand loop in the bottom-right)
 - **There's now a living sonelle mark in the bottom-right corner.** A small coral sound-wave sits in
   the bottom-right of the terminal area and gently loops all the time - it breathes (a soft

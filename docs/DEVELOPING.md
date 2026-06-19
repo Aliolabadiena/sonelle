@@ -75,16 +75,25 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   ghosts/flickers and mashes glyphs, WebGL clears each cell on the GPU (falls back to DOM if no GL context).
   Font is Cascadia Mono first (ligatures overlap in the cell grid); resize fits are debounced (`scheduleFit`).
   The scrollbar gets its own lane via a right gutter on `.pane .xterm` (FitAddon drops the columns it covers)
-  so it rides the box edge, not the text. Tabs are labelled with random women's names from `app\ui\names.js`
-  (`pickName` in `app.js`), not `sonelle N`. The launcher `bin\sonelle_gui.ps1` owns venv+deps; `.venv\` is gitignored.
+  so it rides the box edge, not the text. Tabs are labelled with a plain incrementing number (1, 2, 3, ...)
+  via `nextTabName` (a monotonic `tabSeq`) in `app.js`. The launcher `bin\sonelle_gui.ps1` owns venv+deps; `.venv\` is gitignored.
   The window brands itself `sonelle.ico` (`icon=` on `webview.start()` sets `Form.Icon`; the TASKBAR
   also needs `SetCurrentProcessExplicitAppUserModelID` at startup, else the button groups under
   `pythonw.exe` and shows its Python feather); it drags from the title bar via pywebview's
   `.pywebview-drag-region` (NOT Electron's
   `-webkit-app-region`, which WebView2 ignores) with an `app.js` mousedown guard over `.nodrag` controls;
   Ctrl+V in the composer saves the clipboard image to temp (`save_paste_image`) and inserts an `@"path"`
-  token. An always-on **brand loop** (`#brandloop`, a CSS-animated sonelle wave - no asset) sits in the
-  bottom-right of `#stack`, decorative only (`aria-hidden` + `pointer-events:none`). selftest 8e guards these. **Yolo (skip permission prompts):** `SONELLE_YOLO=1` makes the app spawn
+  token. An always-on **brand loop** (`#brandloop`, the looping mascot gif `app\ui\brandloop.gif`) is
+  anchored to `#app`, sitting LOW in the bottom-right corner (`bottom:8px`) in a clean empty space of
+  its own with NOTHING drawn beneath it. It is pulled in off the right edge (`right:30px`) so it clears
+  the terminal scrollbar's lane. It is OPAQUE (a solid backing fills the gif's transparent top so it
+  reads as one solid block) and decorative only (`aria-hidden` + `pointer-events:none`, `z-index` above
+  the pane + bar), so clicks fall THROUGH it to the send button (send still works). Nothing runs under
+  it on any side: vertically the pane reserves an 88px bottom band (`.pane` `padding-bottom`) so FitAddon
+  drops the rows the gif would cover and the text STOPS ABOVE it (before the gif, not hidden behind it);
+  horizontally the whole command-bar PANEL stops before it - `#bar` reserves a right band (`padding-right`)
+  so the glass `.cmdbar` (input + send button) parks to the LEFT of the gif rather than the panel running
+  under its corner. selftest 8e guards these. **Yolo (skip permission prompts):** `SONELLE_YOLO=1` makes the app spawn
   the terminal with `-Yolo` -> `claude --permission-mode bypassPermissions`; `:yolo`/`-Yolo`/the config key
   `models.orchestratorPermissionMode` are the other ways in (all funnel through `$orchPerm` in `sonelle.ps1`).
 - **Docs:** keep `README.md` + `docs\ARCHITECTURE.md` honest (mechanism vs discipline), and add a

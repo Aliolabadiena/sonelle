@@ -31,17 +31,7 @@
     </header>
 
     <!-- terminal panes (output only - typing is disabled here; the composer below is the input) -->
-    <main id="stack">
-      <!-- always-on brand loop: a small sonelle sound-wave that gently breathes + flows in the
-           bottom-right corner as quiet brand presence. Decorative only (aria-hidden +
-           pointer-events:none in app.css) so it never intercepts clicks or text selection in the
-           terminal beneath it; CSS-animated, no gif asset. -->
-      <div id="brandloop" class="brandloop" aria-hidden="true">
-        <svg class="loop-mark" viewBox="0 0 100 100">
-          <path d="M20 50 q7.5 -18 15 0 t15 0 t15 0 t15 0" fill="none" stroke="#FF9B85" stroke-width="7" stroke-linecap="round"/>
-        </svg>
-      </div>
-    </main>
+    <main id="stack"></main>
 
     <!-- shown only when no tabs are open -->
     <section id="welcome" class="welcome glass" hidden>
@@ -62,12 +52,20 @@
         <button id="send" class="send" title="send" aria-label="send"><span class="g-send"></span></button>
       </div>
     </footer>
+
+    <!-- always-on brand loop: the animated sonelle "mascot" gif, anchored to #app. It sits LOW in the
+         bottom-right corner, dropped into the command bar so it overlays the send-button corner. The
+         terminal grid reserves an 88px bottom band (in app.css) so its text STOPS ABOVE the gif and is
+         never drawn behind it - it stops before the gif, not under it. It is OPAQUE (a solid backing
+         fills the gif's transparent top) so nothing shows through where it sits over the bar.
+         Decorative only (aria-hidden + pointer-events:none), so clicks pass through to the send button
+         beneath it (send still works) and it never steals a text selection; the gif animates itself. -->
+    <img id="brandloop" class="brandloop" src="brandloop.gif" alt="" aria-hidden="true" draggable="false">
   </div>
 
   <script src="vendor/xterm.js"></script>
   <script src="vendor/addon-fit.js"></script>
   <script src="vendor/addon-webgl.js"></script>
-  <script src="names.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

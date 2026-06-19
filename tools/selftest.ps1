@@ -146,7 +146,6 @@ $appDir = Join-Path $engine 'app'
 $guiPy  = Join-Path $appDir 'sonelle_gui.py'
 foreach ($rel in @(
   'app\sonelle_gui.py', 'app\requirements.txt', 'app\ui\index.html', 'app\ui\app.js', 'app\ui\app.css',
-  'app\ui\names.js',
   'app\ui\vendor\xterm.js', 'app\ui\vendor\xterm.css', 'app\ui\vendor\addon-fit.js', 'app\ui\vendor\addon-webgl.js',
   'bin\sonelle_gui.ps1', 'assets\icon\sonelle.ico')) {
   Ok ("exists: " + $rel) (Test-Path (Join-Path $engine $rel))
@@ -166,21 +165,30 @@ Ok "frontend has output sink + ready gate" (($srcJs -match 'window\.__ptyOutput'
 Ok "frontend uses FitAddon.FitAddon"  ($srcJs -match 'new FitAddon\.FitAddon\(\)')
 Ok "frontend mounts the WebGL renderer" (($srcJs -match 'WebglAddon\.WebglAddon') -and ($srcJs -match 'function mountWebgl'))
 Ok "frontend debounces resize fits"   ($srcJs -match 'function scheduleFit')
-Ok "frontend names tabs from the pool" (($srcJs -match 'function pickName') -and ($srcJs -match 'SONELLE_NAMES') -and (-not ($srcJs -match '"sonelle " \+')))
+Ok "frontend numbers tabs (1, 2, 3...)" (($srcJs -match 'function nextTabName') -and ($srcJs -match 'String\(\+\+tabSeq\)') -and (-not ($srcJs -match 'pickName')) -and (-not ($srcJs -match 'SONELLE_NAMES')))
 Ok "frontend pastes images via save_paste_image" (($srcJs -match 'save_paste_image') -and ($srcJs -match '"paste"'))
 Ok "frontend guards titlebar drag"    ($srcJs -match "closest\(`"\.nodrag`"\)")
-$srcNames = Get-Content (Join-Path $appDir 'ui\names.js') -Raw
-$nameCount = ([regex]::Matches($srcNames, '"[A-Za-z]+"')).Count
-Ok "names pool is sizable (>=200)"    (($srcNames -match 'window\.SONELLE_NAMES') -and ($nameCount -ge 200))
 $srcCss = Get-Content (Join-Path $appDir 'ui\app.css') -Raw
 Ok "css gives the terminal a scrollbar gutter" (($srcCss -match '\.pane \.xterm\{ padding-right') -and ($srcCss -match 'xterm-viewport::-webkit-scrollbar'))
 $srcHtml = Get-Content (Join-Path $appDir 'ui\index.html') -Raw
 Ok "index loads vendored xterm + app.js" (($srcHtml -match 'vendor/xterm\.js') -and ($srcHtml -match 'app\.js'))
 Ok "index loads the WebGL addon"      ($srcHtml -match 'vendor/addon-webgl\.js')
-Ok "index loads the tab-name pool"    ($srcHtml -match 'names\.js')
+Ok "the women's-name pool is gone"    ((-not (Test-Path (Join-Path $appDir 'ui\names.js'))) -and (-not ($srcHtml -match 'names\.js')))
 Ok "titlebar is a pywebview drag region" ($srcHtml -match 'pywebview-drag-region')
 Ok "brand marks render the app icon (svg, not gradient cubes)" (($srcHtml -match '<svg class="mark"') -and ($srcHtml -match '<svg class="w-mark"') -and ($srcHtml -match 'stroke="#FF9B85"') -and (-not ($srcCss -match '\.brand \.mark\{[^}]*linear-gradient')) -and (-not ($srcCss -match '\.welcome \.w-mark\{[^}]*linear-gradient')))
-Ok "always-on bottom-right brand loop (animated, decorative)" (($srcHtml -match 'id="brandloop"') -and ($srcHtml -match '<svg class="loop-mark"') -and ($srcCss -match '\.brandloop\{') -and ($srcCss -match 'pointer-events:none') -and ($srcCss -match '@keyframes loop-') -and ($srcCss -match 'animation:loop-'))
+Ok "brand loop gif is an opaque, decorative bottom-right mark" (($srcHtml -match 'id="brandloop"') -and ($srcHtml -match 'src="brandloop\.gif"') -and ($srcHtml -match 'aria-hidden="true"') -and (Test-Path (Join-Path $appDir 'ui\brandloop.gif')) -and ($srcCss -match '\.brandloop\{') -and ($srcCss -match 'pointer-events:none') -and ($srcCss -match '\.brandloop\{[^}]*background:#07091f'))
+# the gif sits LOW (small bottom, over the send-button corner) and the pane reserves a big bottom band
+# so the terminal grid stops ABOVE it (text stops before the gif, never drawn/hidden under it). It is
+# also pulled IN off the right edge (right > scrollbar lane) so the scrollbar is never under it.
+$loopLow = ($srcCss -match '\.brandloop\{[^}]*bottom:\s*(\d+)px') -and ([int]$Matches[1] -le 24)
+$loopOffScrollbar = ($srcCss -match '\.brandloop\{[^}]*right:\s*(\d+)px') -and ([int]$Matches[1] -ge 24)
+$paneReserve = ($srcCss -match '\.pane\{[^}]*padding:\s*\d+px\s+\d+px\s+(\d+)px\s+\d+px') -and ([int]$Matches[1] -ge 40)
+Ok "terminal reserves a bottom band so text stops above the low brand loop" ($loopLow -and $paneReserve)
+Ok "brand loop is pulled in off the scrollbar lane" $loopOffScrollbar
+# the command-bar PANEL stops before the gif: #bar reserves a right band so the whole glass cmdbar
+# (input + send button) parks to the LEFT of the gif - it sits in its own corner, nothing under it
+$barReserve = ($srcCss -match '#bar\{[^}]*padding-right:\s*(\d+)px') -and ([int]$Matches[1] -ge 120)
+Ok "command bar panel stops before the brand loop (its own clear corner)" $barReserve
 $srcGuiPs = Get-Content (Join-Path $engine 'bin\sonelle_gui.ps1') -Raw
 Ok "launcher installs deps + runs pythonw" (($srcGuiPs -match 'requirements\.txt') -and ($srcGuiPs -match 'pythonw'))
 $pyCmd = Get-Command py -ErrorAction SilentlyContinue

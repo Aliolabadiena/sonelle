@@ -9,6 +9,7 @@
   const PENDING = new Map();   // tabId -> [Uint8Array] buffered before the term is registered
   let active = null;
   let tabCount = 0;
+  let tabSeq = 0;              // tab label counter: tabs are named 1, 2, 3, ... in the order opened
   let live = false;            // true once the pywebview bridge is present
 
   const $ = (id) => document.getElementById(id);
@@ -88,20 +89,10 @@
   };
 
   // ---------- tab naming ----------
-  // Each tab reads like a person (Megan, Sakura, Sidney...) from the big pool in names.js, instead of
-  // "sonelle 1 / sonelle 2". Prefer a name not already on an open tab; fall back to any (or "sonelle"
-  // if the pool is somehow empty) so a tab always gets a label.
-  function pickName() {
-    const pool = (window.SONELLE_NAMES && window.SONELLE_NAMES.length) ? window.SONELLE_NAMES : null;
-    if (!pool) return "sonelle";
-    const used = new Set();
-    for (const [, e] of TABS) { if (e && e.name) used.add(e.name); }
-    for (let i = 0; i < 16; i++) {
-      const n = pool[Math.floor(Math.random() * pool.length)];
-      if (!used.has(n)) return n;
-    }
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
+  // Tabs are labelled with a plain incrementing number (1, 2, 3, ...) in the order they were opened.
+  // The counter only ever climbs, so closing a tab never renumbers the rest - the next new tab keeps
+  // counting up rather than reusing a freed number.
+  function nextTabName() { return String(++tabSeq); }
 
   // ---------- tab pills ----------
   function makeTabEl(tabId, label) {
@@ -202,7 +193,7 @@
     }
     const tabId = res.tabId;
     tabCount++;
-    entry.name = project || pickName();   // a project keeps its name; otherwise a random woman's name
+    entry.name = project || nextTabName();   // a routed project keeps its name; otherwise a plain number
     entry.tabEl = makeTabEl(tabId, entry.name);
     TABS.set(tabId, entry);
     const q = PENDING.get(tabId);
@@ -322,7 +313,7 @@
     const entry = buildPane();
     for (const [, e] of TABS) e.pane.style.display = "none";
     const did = "demo" + (++tabCount);
-    entry.name = pickName();
+    entry.name = nextTabName();
     entry.tabEl = makeTabEl(did, entry.name);
     TABS.set(did, entry);
     entry.ro = new ResizeObserver(() => scheduleFit(entry));
