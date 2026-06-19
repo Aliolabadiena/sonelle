@@ -16,24 +16,19 @@ param([switch]$Demo, [switch]$Bare, [switch]$Yolo, [string]$Hub = '')   # -Bare:
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 # Capture -Hub NOW: PowerShell variable names are case-insensitive, so the param $Hub and the working
-# variable $hub are the SAME slot - the '$hub = $root' below would clobber the override otherwise.
+# variable $hub are the SAME slot - any later '$hub = ...' would clobber the override otherwise.
 $hubOverride = $Hub
-$hub  = $root
+. (Join-Path $root 'tools\_registry.ps1')
+# ONE config resolver (Get-SonelleConfig): hub (-Hub override wins) + the raw models block. No ad-hoc parse here.
+$resolved  = Get-SonelleConfig -Engine $root -HubOverride $hubOverride
+$hub       = $resolved.Hub
 $orchModel = 'opus'; $orchEffort = 'xhigh'; $orchPerm = ''   # orchestrator (the session you talk to) is ALWAYS max
-# optional overrides from sonelle.config.json (hub for routing; models for the orchestrator)
-$cfg = Join-Path $root 'sonelle.config.json'
-if (Test-Path $cfg) {
-  try {
-    $c = Get-Content $cfg -Raw | ConvertFrom-Json
-    $h = $c.hub
-    if ($h -and $h -ne '.') { if ([System.IO.Path]::IsPathRooted($h)) { $hub = $h } else { $hub = Join-Path $root $h } }
-    if ($c.models.orchestrator)               { $orchModel = $c.models.orchestrator }
-    if ($c.models.orchestratorEffort)         { $orchEffort = $c.models.orchestratorEffort }
-    if ($c.models.orchestratorPermissionMode) { $orchPerm = $c.models.orchestratorPermissionMode }
-  } catch {}
+$cm = $resolved.Models
+if ($cm) {
+  if ($cm.orchestrator)               { $orchModel = $cm.orchestrator }
+  if ($cm.orchestratorEffort)         { $orchEffort = $cm.orchestratorEffort }
+  if ($cm.orchestratorPermissionMode) { $orchPerm = $cm.orchestratorPermissionMode }
 }
-# -Hub wins over config: an explicit workspace override (mirrors every other tool; makes the terminal testable in isolation).
-if ($hubOverride) { $hub = $hubOverride }
 # -Yolo (or the env var the glass app forwards) overrides the mode so claude never asks for permission.
 # bypassPermissions is a real claude --permission-mode choice; toggle it live in the REPL with :yolo.
 if ($Yolo -or $env:SONELLE_YOLO) { $orchPerm = 'bypassPermissions' }
@@ -44,7 +39,7 @@ if ($Yolo -or $env:SONELLE_YOLO) { $orchPerm = 'bypassPermissions' }
 $orchSettings = ''
 if ($env:SONELLE_NARRATE_SETTINGS -and (Test-Path $env:SONELLE_NARRATE_SETTINGS)) { $orchSettings = $env:SONELLE_NARRATE_SETTINGS }
 $psExe = (Get-Process -Id $PID).Path
-. (Join-Path $root 'tools\_registry.ps1')
+# (_registry.ps1 is already dot-sourced above for Get-SonelleConfig - Get-SonelleProjects comes from it too.)
 
 # --- color support: enable VT on legacy consoles; fall back to plain text ---
 $useColor = -not $env:NO_COLOR

@@ -20,19 +20,17 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $engine = Split-Path $PSScriptRoot -Parent
-$hub = if ($Hub) { $Hub } else { $engine }
-$laneModel = 'opus'; $laneEffort = 'high'; $lanePerm = 'acceptEdits'   # worker defaults; per-lane override via name=model:effort
-$cfg = Join-Path $engine 'sonelle.config.json'
-if (Test-Path $cfg) {
-  try {
-    $c = Get-Content $cfg -Raw | ConvertFrom-Json
-    if (-not $Hub -and $c.hub -and $c.hub -ne '.') { $hub = if ([System.IO.Path]::IsPathRooted($c.hub)) { $c.hub } else { Join-Path $engine $c.hub } }
-    if ($c.models.laneDefault)        { $laneModel = $c.models.laneDefault }
-    if ($c.models.laneEffort)         { $laneEffort = $c.models.laneEffort }
-    if ($c.models.lanePermissionMode) { $lanePerm = $c.models.lanePermissionMode }
-  } catch {}
-}
 . (Join-Path $engine 'tools\_registry.ps1')
+# ONE config resolver (Get-SonelleConfig): hub (-Hub override wins) + the raw models block. No ad-hoc parse here.
+$resolved = Get-SonelleConfig -Engine $engine -HubOverride $Hub
+$hub = $resolved.Hub
+$laneModel = 'opus'; $laneEffort = 'high'; $lanePerm = 'acceptEdits'   # worker defaults; per-lane override via name=model:effort
+$cm = $resolved.Models
+if ($cm) {
+  if ($cm.laneDefault)        { $laneModel = $cm.laneDefault }
+  if ($cm.laneEffort)         { $laneEffort = $cm.laneEffort }
+  if ($cm.lanePermissionMode) { $lanePerm = $cm.lanePermissionMode }
+}
 
 $pf = Join-Path $hub 'PROJECTS.md'
 $proj = (Get-SonelleProjects $pf) | Where-Object { $_.Short -eq $Project.ToLower() } | Select-Object -First 1

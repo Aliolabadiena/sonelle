@@ -32,7 +32,7 @@ function Get-SonelleProjects([string]$RegistryPath) {
 #   own config from leaking into a temp/other hub (e.g. selftest's throwaway hub).
 function Get-SonelleConfig {
   param([string]$Engine, [string]$HubOverride = '', [string]$MemoryOverride = '')
-  $cfgHub = ''; $cfgMem = ''
+  $cfgHub = ''; $cfgMem = ''; $cfgModels = $null
   $cfgFile = Join-Path $Engine 'sonelle.config.json'
   if (Test-Path $cfgFile) {
     try {
@@ -43,6 +43,8 @@ function Get-SonelleConfig {
       if ($c.memoryDir) {
         $cfgMem = if ([System.IO.Path]::IsPathRooted($c.memoryDir)) { $c.memoryDir } else { Join-Path $Engine $c.memoryDir }
       }
+      # raw model block (orchestrator* / lane*) so every caller resolves models from ONE parse, not its own.
+      $cfgModels = $c.models
     } catch {}
   }
   if ($HubOverride) {
@@ -52,5 +54,5 @@ function Get-SonelleConfig {
     $hub = if ($cfgHub) { $cfgHub } else { $Engine }
     $mem = if ($MemoryOverride) { $MemoryOverride } elseif ($cfgMem) { $cfgMem } else { [System.IO.Path]::Combine($hub, 'memory') }
   }
-  return [pscustomobject]@{ Hub = $hub; MemoryDir = $mem }
+  return [pscustomobject]@{ Hub = $hub; MemoryDir = $mem; Models = $cfgModels }
 }

@@ -306,6 +306,13 @@ $r2 = Get-SonelleConfig -Engine $engine -HubOverride $fakeHub -MemoryOverride $f
 Ok "explicit -MemoryDir wins"           ($r2.MemoryDir -eq $fakeMem)
 Ok "check_pointers accepts -MemoryDir"  ((Get-Content (Join-Path $PSScriptRoot 'check_pointers.ps1') -Raw) -match '\$MemoryDir')
 Ok "doctor forwards -MemoryDir"         ((Get-Content (Join-Path $PSScriptRoot 'doctor.ps1') -Raw) -match 'check_pointers\.ps1.*-MemoryDir')
+# Q3: one config resolver - the terminal + team must use Get-SonelleConfig, not re-parse the JSON themselves.
+Ok "resolver also returns the Models block" ((Get-Content (Join-Path $PSScriptRoot '_registry.ps1') -Raw) -match 'Models\s*=\s*\$cfgModels')
+$r3 = Get-SonelleConfig -Engine $engine
+Ok "resolver exposes a Models property"  ($null -ne ($r3.PSObject.Properties.Name | Where-Object { $_ -eq 'Models' }))
+Ok "sonelle.ps1 uses the canonical resolver (no inline cfg parse)" (($srcTerm -match 'Get-SonelleConfig') -and (-not ($srcTerm -match "Join-Path \`$root 'sonelle\.config\.json'")))
+$srcTeam = Get-Content (Join-Path $engine 'bin\sonelle_team.ps1') -Raw
+Ok "sonelle_team.ps1 uses the canonical resolver (no inline cfg parse)" (($srcTeam -match 'Get-SonelleConfig') -and (-not ($srcTeam -match "Join-Path \`$engine 'sonelle\.config\.json'")))
 
 Write-Host "== 9b. terminal honors -Hub (Q4) =="
 Ok "sonelle.ps1 has a -Hub param that wins over config" (($srcTerm -match '\[string\]\$Hub') -and ($srcTerm -match 'hubOverride'))

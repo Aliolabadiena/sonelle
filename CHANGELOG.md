@@ -25,6 +25,11 @@
   `-Yolo` adds `--permission-mode bypassPermissions` while a plain run does not. This is the first test
   that exercises routing end-to-end instead of grepping source - it would have caught the Q4 bug on its
   own. Leaking session env (`SONELLE_YOLO`, `SONELLE_NARRATE_SETTINGS`) is neutralized so it's deterministic.
+- **One config resolver, not three (Q3).** `bin\sonelle.ps1` and `bin\sonelle_team.ps1` no longer
+  hand-parse `sonelle.config.json` - both now call the canonical `Get-SonelleConfig`, which was extended
+  to surface the raw `models` block alongside the hub/memory it already resolved. Four parsers collapse
+  toward one, so a config-format change can't silently desync the terminal from the lanes. selftest
+  section 9 asserts both callers use the resolver and that no inline JSON parse remains.
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a
