@@ -91,10 +91,11 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   the order it was opened. `nextTabName()` in `app.js` bumps a monotonic `tabSeq` counter, so closing a
   tab never renumbers the rest. A project-named tab keeps the project name.
 - **Contract:** JS->Python via `window.pywebview.api.{new_tab, send_input, resize, close_tab, set_narration,
-  list_projects, save_paste_image, win_minimize, win_toggle_max, win_close}`; Python->JS via fire-and-forget
-  `run_js` calling `window.__ptyOutput(tabId, base64Bytes)` / `window.__ptyExit(tabId, code)` /
-  `window.__narrate(tabId, text, kind, mime, audioB64)` (`kind` = `"voice"` pink / `"status"` white).
-  `tabId` is Python-owned.
+  get_settings, save_settings, upload_mascot, list_projects, save_paste_image, win_minimize, win_toggle_max,
+  win_close}`; Python->JS via fire-and-forget `run_js` calling `window.__ptyOutput(tabId, base64Bytes)` /
+  `window.__ptyExit(tabId, code)` / `window.__narrate(tabId, display, kind, mime, audioB64)` (the `display`
+  text lands in the mascot's report box, `kind` = `"voice"` pink / `"status"` white). `tabId` is
+  Python-owned. `new_tab` also returns a `session` number (the spoken "session N" opener).
 - **Window move:** the frameless window drags from the title bar via pywebview's `.pywebview-drag-region`
   class (WebView2 ignores Electron's `-webkit-app-region`); an `app.js` mousedown guard cancels the drag
   over `.nodrag` controls so buttons/tabs/the input still click. The taskbar/window icon is `sonelle.ico`
@@ -107,24 +108,34 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   `taskkill /F /T` its pid (ConPTY has no signal tree, so claude/node grandchildren would orphan).
 - **Glass:** WebView2 **cannot** be transparent on Windows, so the glass is self-contained - an in-app
   gradient + translucent `backdrop-filter` panels - identical on Win10/11 (no OS acrylic dependency).
-- **Brand loop:** the looping sonelle mascot gif (`#brandloop`, `app\ui\brandloop.gif`) STARTS LOW in the
-  bottom-right corner, anchored to `#app` (`height:134px; bottom:8px`), in a clean empty space of its
-  own with NOTHING drawn beneath it - but it now has **physics** (`pointer-events:auto`, `cursor:grab`):
-  `wireBrandloopDrag` in `app.js` lets you drag it anywhere; release it mid-motion and `throwLoop`
-  flings it with inertia + friction, BOUNCING off the window edges until it stops, then 30s later
-  `returnLoopHome` drifts it back to the home corner on two straight, eased, axis-aligned moves. The
-  `right`/`bottom` here is only its HOME corner; once moved it switches to absolute `left`/`top`. At
-  its home corner it is pulled in off the right edge (`right:30px`) so it clears the
-  terminal scrollbar's lane (the scrollbar rides ~15..22px in). Nothing runs under it on any side:
-  vertically the pane reserves an 88px bottom band (`.pane` `padding-bottom`), and because `FitAddon`
-  subtracts that padding when it sizes the grid, the terminal text stops ABOVE the gif's top (before
-  it, not hidden behind it); horizontally the whole command-bar PANEL stops before it - `#bar` reserves
-  a right band (`padding-right`) so the glass `.cmdbar` (input + send button) parks to the LEFT of the
-  gif rather than the panel running under its corner. It's a **transparent-fill, soft bordered card**
-  (a hairline border + `border-radius` + shadow, `background:transparent` so the gif's own transparent
-  top shows through instead of a dark block). `z-index` lifts it above the pane + bar;
-  `draggable="false"` disables the browser's own image-drag so our custom drag is the only one. The gif
-  self-animates at half speed (200ms/frame).
+- **Brand loop (the mascot + her reporter):** `#brandloop` is a WRAPPER (`app\ui\index.html`) holding a
+  **report box** (`#loop-report`) ABOVE a `.gifwrap` (the looping mascot gif `app\ui\brandloop.gif` + a
+  control row: **padlock . mute . session label**). The report sits above the gif so the gif stays in its
+  home corner and the box expands upward. It STARTS LOW in the bottom-right corner (`right:30px;
+  bottom:8px`, off the scrollbar lane) with **physics** (`pointer-events:auto`, `cursor:grab`):
+  `wireBrandloopDrag` lets you drag it; release it mid-motion and `throwLoop` flings it with
+  inertia/friction, BOUNCING off the window edges, then 30s later `returnLoopHome` drifts it home (a
+  control/report click doesn't start a drag). The **padlock** (`toggleLoopLock`) pins it (no bounce / no
+  drift) and opens the report; pressing **V** (`toggleReport`, when not typing) opens/closes the report
+  without locking (`.brandloop.locked .report`, `.brandloop.reportopen .report`); **mute** mirrors that
+  tab's voice toggle; the **session label** is low-contrast `--moody` text. **Per-tab gif state** lives in
+  `entry.gif = {left, top, locked, reportOpen, report[]}` and is saved/applied on every tab switch
+  (`applyGifState`). The pane reserves an 88px bottom band so the grid stops ABOVE the gif, `#bar` a right
+  band so the command bar parks to its LEFT, and the report box uses the terminal's scrollbar styling.
+  `draggable="false"` kills the browser image-drag; the gif self-animates at half speed.
+- **Reporting (the report bug fix):** narration is NO LONGER typed into the terminal - claude's TUI runs
+  on the alternate screen and repaints over injected lines, so they vanished. `window.__narrate` now
+  appends the `display` text to that tab's report log (`reportLine` -> `renderReport` into `#loop-report`,
+  pink `.rline.voice` / white `.rline.status`) and plays the audio through ONE **global serialized queue**
+  (`enqueueAudio`/`pumpAudio`) so two sessions never talk over each other. (An earlier desktop pop-out
+  overlay was dropped on purpose - the reporter lives in-app.)
+- **Settings (the gear):** a titlebar gear (before the `_ O X` controls) opens a glass panel (`#settings`):
+  **20 palettes** (`app\ui\palettes.js`; `applyPalette` writes the `:root` CSS vars + every xterm theme,
+  live), the **assistant name** (display-only - the narrator reads it, the engine self-dev shortcode is
+  untouched), **upload-your-own mascot** (`upload_mascot` stages it to `%LOCALAPPDATA%\sonelle`, never the
+  repo), the **reporting style** (warm/terse/hacker/bubbly -> `narrator.style`), **other-voices instructions**
+  (display only), and the **claude model + effort** (-> `models.*`, read by `bin\sonelle.ps1` for new tabs).
+  `save_settings` merges into `sonelle.config.json`; palette/name are also cached in `localStorage`.
 - **Launch + deps:** `bin\sonelle_gui.ps1` bootstraps a local `.venv` (`pywebview` + `pywinpty`, pinned in
   `app\requirements.txt`) on first run, then starts the GUI with `pythonw` (no console). The window
   passes `icon=assets\icon\sonelle.ico` to `webview.start()` so the window's `Form.Icon` is the sonelle
@@ -140,20 +151,20 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   so it never asks. In any terminal you can also toggle it live with `:yolo` (or `:yolo on|off`), or set it
   permanently via `sonelle.config.json` -> `models.orchestratorPermissionMode: "bypassPermissions"`.
 - **Voice narrator (per-tab):** each tab pill carries its OWN speaker toggle (built in `app.js`
-  `makeTabEl`), so you mute the boring research sessions and keep the important ones talking. When a
-  tab's voice is on, sonelle **texts you straight into the terminal** - lines typed word-by-word, in
-  warm FIRST person, in two colours: **pink** (a `> ` caret, the "bypass permissions on" magenta) when
-  she's talking to YOU ("ok, on it.", "all green - 1666 passing!", "all done - i'm idle now.") and
-  **soft white** for the play-by-play ("reading through the code...", "running the tests..."). The
-  inline lines are written as terminal SGR (`typeNarration`) and **serialized against claude's own
-  output** (a brief hold-back, `writeOrHold`/`runNarrQueue`) so the two never interleave mid-line. The
-  data source is **Claude Code hooks**, not screen scraping: the app launches `claude` with
-  `--settings <generated file>` so its `PreToolUse`/`PostToolUse`/`Notification`/`Stop`/
-  `UserPromptSubmit` events are appended (by `app\narrate_hook.ps1`, via the per-tab env var
-  `SONELLE_NARRATE_FILE`) to a per-tab JSONL file. A per-tab narrator (`app\narrator.py`) tails it,
-  maps each event to a rate-limited line tagged `voice`/`status`, and - voice on - synthesizes speech
-  (`app\tts.py`) and pushes `(text, kind, audio)` to the UI via `window.__narrate`; audio plays in the
-  WebView2 page. **Voice engine:** the primary is **Kokoro** - a modern neural voice that runs LOCALLY
+  `makeTabEl`; the mascot's mute button mirrors it), so you mute the boring research sessions and keep
+  the important ones talking. When a tab's voice is on, sonelle **reports in the box under the mascot**
+  (NOT the terminal - see "Reporting" above) in two colours: **pink** when she's talking to YOU and
+  **soft white** for the play-by-play. Each event is **dual-rendered**: a short, cute `display` line
+  (with an ASCII tag like `:)` / `<3`) for the report box and a fuller, natural, THIRD-person `speak`
+  line for TTS (`build_line` returns `(display, speak, kind, important)`; `_clean_speech`/`_strip_emoticons`
+  keep emoticons out of speech). The data source is **Claude Code hooks**, not screen scraping: the app
+  launches `claude` with `--settings <generated file>` so its `PreToolUse`/`PostToolUse`/`Notification`/
+  `Stop`/`UserPromptSubmit` events are appended (by `app\narrate_hook.ps1`, via the per-tab env var
+  `SONELLE_NARRATE_FILE`) to a per-tab JSONL file. A per-tab `TabNarrator` (`app\narrator.py`) tails it,
+  maps each event to a rate-limited `(display, speak)` tagged `voice`/`status`, picks the phrase set for
+  the configured **reporting style** (warm/terse/hacker/bubbly), and - voice on - synthesizes speech
+  (`app\tts.py`) and pushes via `window.__narrate`; audio plays through the global serialized queue, and
+  with 2+ live narrators the spoken opener says "session N, ...". **Voice engine:** the primary is **Kokoro** - a modern neural voice that runs LOCALLY
   (ONNX, free/no-key, fully offline). The voice MODEL is **vendored in the repo** at `app\voice\` (the
   ~88 MB int8 build + voice pack, small enough for plain git) - **no download**, it ships with sonelle;
   only the small `kokoro-onnx` runtime installs via pip (best-effort, `app\requirements-voice.txt`).

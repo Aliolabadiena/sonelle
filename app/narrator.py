@@ -51,44 +51,142 @@ _READ = {"read", "glob", "grep", "ls", "notebookread"}
 _EDIT = {"edit", "write", "multiedit", "notebookedit", "update", "create", "applypatch"}
 _WEB = {"webfetch", "websearch"}
 
-# First-person, texting-a-friend phrasings - a small pool per category so she doesn't loop like a
-# robot. PINK categories (start/waiting/idle) talk TO you; WHITE ones just say what's happening.
-_PHRASES = {
-    "start":      ["ok, on it.", "alright, diving in.", "got it - starting now.", "on it, give me a sec."],
-    "reading":    ["reading through the code...", "poking around the files...",
-                   "getting my bearings here...", "having a look at the code..."],
-    "editing":    ["making some edits...", "rewriting a bit of this...",
-                   "getting my hands into the code...", "tweaking the scripts..."],
-    "researching":["digging around online...", "doing a little research...", "looking this up..."],
-    "running":    ["running a command...", "firing off a command...", "let me run something..."],
-    "testing":    ["running the tests...", "let's see if this passes...", "kicking off the test suite..."],
-    "committing": ["committing this...", "saving it in a commit...", "writing the commit..."],
-    "pushing":    ["pushing it up...", "shipping it to the repo...", "sending it up now..."],
-    "helper":     ["sending out a little helper...", "spinning up a sidekick..."],
-    "working":    ["working on it...", "on the case...", "still going..."],
-    "waiting":    ["need your go-ahead.", "should i keep going?", "your call - want me to continue?"],
-    "idle":       ["all done - i'm idle now.", "wrapped up, resting now.", "finished; i'm idle."],
+# TWO renderings per event (the reporter "style split"):
+#   - DISPLAY -> the little report box under the gif: SHORT and to the point, but alive with a cute
+#     ASCII tag (:*, <3, :), :o). Pure ASCII so the .py stays ASCII-clean.
+#   - SPEAK   -> tts: a touch fuller, natural, THIRD person ("sonelle is reading the code"), and NEVER
+#     contains an emoticon (the report-box tags are stripped from speech by _clean_speech anyway).
+# Each category is a list of [display, speak] pairs so she doesn't loop like a robot. The DISPLAY name
+# "sonelle" in a speak line is swapped for the configured assistant name at emit time (see _named).
+#
+# Four reporting STYLES (the settings panel picks one via narrator.style): warm (default), terse,
+# hacker, bubbly. Each is a full variant of the phrase set. PINK categories (start/waiting/idle/green/
+# error/answer) talk TO you; WHITE ones (reading/editing/...) are the quiet play-by-play.
+_STYLES = {
+    "warm": {
+        "start":      [["on it <3", "sonelle is on it now"], ["got it :)", "sonelle is getting started"]],
+        "reading":    [["reading <3", "sonelle is reading through the code"],
+                       ["looking around :)", "sonelle is getting her bearings"]],
+        "editing":    [["editing :)", "sonelle is editing the code"],
+                       ["tweaking it <3", "sonelle is rewriting a bit of this"]],
+        "researching":[["looking it up :o", "sonelle is researching this online"]],
+        "running":    [["running it :)", "sonelle is running a command"]],
+        "testing":    [["testing :o", "sonelle is running the tests"]],
+        "committing": [["committing :)", "sonelle is writing the commit"]],
+        "pushing":    [["shipping it <3", "sonelle is pushing it up to the repo"]],
+        "helper":     [["little helper :o", "sonelle is spinning up a sidekick"]],
+        "working":    [["working <3", "sonelle is working on it"]],
+        "waiting":    [["has a question :o", "sonelle has a question for you"]],
+        "idle":       [["all done <3", "sonelle is all done now"]],
+    },
+    "terse": {
+        "start":      [["start", "sonelle started"]],
+        "reading":    [["reading", "sonelle is reading the code"]],
+        "editing":    [["editing", "sonelle is editing"]],
+        "researching":[["research", "sonelle is researching"]],
+        "running":    [["running", "sonelle is running a command"]],
+        "testing":    [["testing", "sonelle is running tests"]],
+        "committing": [["commit", "sonelle is committing"]],
+        "pushing":    [["push", "sonelle is pushing"]],
+        "helper":     [["helper", "sonelle launched a helper"]],
+        "working":    [["working", "sonelle is working"]],
+        "waiting":    [["question", "sonelle has a question"]],
+        "idle":       [["done", "sonelle is done"]],
+    },
+    "hacker": {
+        "start":      [["> init", "sonelle is spinning up"]],
+        "reading":    [["> read src", "sonelle is scanning the source"]],
+        "editing":    [["> patch", "sonelle is patching the code"]],
+        "researching":[["> recon", "sonelle is running recon"]],
+        "running":    [["> exec", "sonelle is executing a command"]],
+        "testing":    [["> run tests", "sonelle is running the test suite"]],
+        "committing": [["> commit", "sonelle is committing the work"]],
+        "pushing":    [["> push", "sonelle is pushing to the remote"]],
+        "helper":     [["> fork agent", "sonelle forked a sub-agent"]],
+        "working":    [["> busy", "sonelle is working the problem"]],
+        "waiting":    [["> awaiting input", "sonelle needs your input"]],
+        "idle":       [["> idle", "sonelle is idle"]],
+    },
+    "bubbly": {
+        "start":      [["yay, on it!! <3", "sonelle is super on it now"]],
+        "reading":    [["reading!! :D", "sonelle is reading all the code"]],
+        "editing":    [["editing!! <3", "sonelle is happily editing away"]],
+        "researching":[["googling!! :o", "sonelle is looking this all up"]],
+        "running":    [["running!! :D", "sonelle is running a command"]],
+        "testing":    [["testing!! :o", "sonelle is running the tests, fingers crossed"]],
+        "committing": [["saving!! <3", "sonelle is committing this"]],
+        "pushing":    [["shipping!! :D", "sonelle is shipping it up, woo"]],
+        "helper":     [["helper!! :o", "sonelle called in a little helper"]],
+        "working":    [["working!! <3", "sonelle is working on it"]],
+        "waiting":    [["psst, question!! :o", "sonelle has a quick question for you"]],
+        "idle":       [["all done!! <3", "sonelle is all wrapped up, yay"]],
+    },
+}
+_DEFAULT_STYLE = "warm"
+
+# count-based milestones (test pass/fail) - [display_template, speak_template], one per style. "%s"
+# is the count. DISPLAY is short + tagged; SPEAK is natural, third person, no emoticon.
+_MILESTONES = {
+    "warm":   {"green": ["tests green :)", "the tests came back green, %s passing"],
+               "error": ["uh oh :o", "the tests came back failing, %s to fix"]},
+    "terse":  {"green": ["%s passing", "tests pass, %s green"],
+               "error": ["%s failing", "tests failing, %s broken"]},
+    "hacker": {"green": ["> tests PASS", "all tests passed, %s green"],
+               "error": ["> tests FAIL", "tests failed, %s failing"]},
+    "bubbly": {"green": ["all green!! :D", "the tests are all green, %s passing, yay"],
+               "error": ["oh no!! :o", "the tests are failing, %s to fix"]},
 }
 
 
-def _pick(cat):
-    pool = _PHRASES.get(cat)
+def _styleset(style):
+    return _STYLES.get(style) or _STYLES[_DEFAULT_STYLE]
+
+
+def _pick(style, cat):
+    """Return a [display, speak] pair for this style+category, or None."""
+    pool = _styleset(style).get(cat) or _STYLES[_DEFAULT_STYLE].get(cat)
     if not pool:
         return None
     try:
-        return random.choice(pool)
+        return list(random.choice(pool))
     except Exception:
-        return pool[0]
+        return list(pool[0])
+
+
+def _milestone(style, cat, n):
+    """Return a [display, speak] pair for a count-based milestone (green/error)."""
+    m = (_MILESTONES.get(style) or _MILESTONES[_DEFAULT_STYLE]).get(cat)
+    if not m:
+        m = _MILESTONES[_DEFAULT_STYLE][cat]
+    try:
+        return [m[0] % n if "%s" in m[0] else m[0], m[1] % n if "%s" in m[1] else m[1]]
+    except Exception:
+        return [str(cat), str(cat)]
+
+
+def _strip_emoticons(s):
+    """Remove emoticons / kaomoji so the spoken line never vocalizes ':)' or '<3'. The report-box
+    DISPLAY text keeps its cute tags; only SPEAK text is run through here."""
+    import re
+    s = str(s or "")
+    s = re.sub(r"</?3", " ", s)                                      # <3 </3 hearts
+    s = re.sub(r"[:;=8xX][-^o']?[\)\(\]\[DPpOo3/\\|*]{1,3}", " ", s) # :) ;-) xD :* :o :/ etc.
+    s = re.sub(r"[\^>oO][_.\-][\^<oO]", " ", s)                      # ^_^ >_< o_o kaomoji cores
+    # drop emoji / pictographs / arrows (>= U+2190) but keep accented Latin letters
+    s = "".join(ch if ord(ch) < 0x2190 else " " for ch in s)
+    return s
 
 
 def _clean_speech(s):
-    """Flatten an assistant message to plain speakable text: drop markdown noise, collapse space."""
+    """Flatten an assistant message to plain speakable text: drop markdown noise + emoticons,
+    collapse space."""
     import re
     s = str(s or "")
     s = re.sub(r"```.*?```", " ", s, flags=re.S)        # fenced code blocks
     s = re.sub(r"`([^`]*)`", r"\1", s)                  # inline code -> its text
     s = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", s)    # links/images -> the label
     s = re.sub(r"[*_#>|`~]+", " ", s)                   # leftover markdown punctuation
+    s = _strip_emoticons(s)                             # never speak ':)' / '<3' / kaomoji
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
@@ -121,7 +219,7 @@ def _pre_category(tool, ti):
 
 
 def _post_line(tool, resp):
-    """Only narrate meaningful command RESULTS: test pass/fail counts. Returns (cat, text) or None."""
+    """Detect a meaningful command RESULT (test pass/fail counts). Returns (cat, count_str) or None."""
     if (tool or "").lower() != "bash":
         return None
     if isinstance(resp, (dict, list)):
@@ -134,26 +232,40 @@ def _post_line(tool, resp):
     import re
     mfail = re.search(r'(\d+)\s+(?:failed|failing|errors?)', low)
     if mfail and int(mfail.group(1)) > 0:
-        n = mfail.group(1)
-        return ("error", "ugh - %s came back failing. on it." % n)
+        return ("error", mfail.group(1))
     mpass = re.search(r'(\d+)\s+(?:passed|passing)', low)
     if mpass and int(mpass.group(1)) > 0:
-        return ("green", "all green - %s passing!" % mpass.group(1))
+        return ("green", mpass.group(1))
     mratio = re.search(r'\b(\d+)\s*/\s*(\d+)\b', text)
     if mratio and mratio.group(1) == mratio.group(2) and int(mratio.group(2)) > 0:
-        return ("green", "all green - %s passing!" % mratio.group(2))
+        return ("green", mratio.group(2))
     return None
 
 
-def build_line(state, ev):
-    """Map one hook event -> (text, kind, important) or None. `kind` is 'voice' (pink: sonelle
-    texting you) or 'status' (white: the play-by-play). `state` carries ambient de-dup memory."""
-    name = ev.get("hook_event_name") or ev.get("hookEventName") or ""
+def build_line(state, ev, cfg=None):
+    """Map one hook event -> (display, speak, kind, important) or None.
+
+    DISPLAY = the short report-box line (with a cute ASCII tag); SPEAK = the natural spoken line
+    (third person, no emoticon). `kind` is 'voice' (pink: sonelle texting you) or 'status' (white:
+    the play-by-play). `cfg` carries the reporting `style` + assistant `name`; `state` carries the
+    ambient de-dup memory."""
+    cfg = cfg or {}
+    style = cfg.get("style") or _DEFAULT_STYLE
+    nm = cfg.get("name") or "sonelle"
+    nm = nm if (nm and nm != "sonelle") else None      # only substitute a non-default name
+
+    def _pair(p, cat, important):
+        display, speak = p[0], p[1]
+        if nm:
+            speak = speak.replace("sonelle", nm)       # speak as the chosen assistant name
+        return (display, speak, _kind(cat), important)
+
+    ename = ev.get("hook_event_name") or ev.get("hookEventName") or ""
     tool = ev.get("tool_name") or ev.get("toolName") or ""
     ti = ev.get("tool_input") or ev.get("toolInput") or {}
 
     cat = None
-    if name == "UserPromptSubmit":
+    if ename == "UserPromptSubmit":
         p = ev.get("prompt") or ev.get("user_prompt") or ""
         state["last_prompt"] = p
         # a short/targeted question or confirmation ("sounds good?", "what's my ss show?") -> don't
@@ -161,31 +273,31 @@ def build_line(state, ev):
         if len(p.strip()) <= 140 or p.strip().endswith("?"):
             return None
         cat = "start"
-    elif name == "Stop":
-        # Claude Code hands us her final reply in last_assistant_message. When it's short, SPEAK IT -
-        # this is how she answers simple/targeted questions and voices her own "sounds good?" check-ins.
+    elif ename == "Stop":
+        # Claude Code hands us her final reply in last_assistant_message. When it's short, REPORT IT -
+        # this is how she answers simple/targeted questions; the box shows it and (voice on) speaks it.
         msg = _clean_speech(ev.get("last_assistant_message") or ev.get("lastAssistantMessage"))
         prompt = (state.get("last_prompt") or "").strip()
         cap = 400 if prompt.endswith("?") else 260
         if msg and len(msg) <= cap:
             state["last_cat"] = "answer"
             state["last_cat_ts"] = time.monotonic()
-            return (msg, "voice", True)
+            return (msg, msg, "voice", True)           # her own words -> box display + speech
         cat = "idle"
-    elif name == "Notification":
+    elif ename == "Notification":
         cat = "waiting"
-    elif name == "SubagentStop":
+    elif ename == "SubagentStop":
         return None  # too granular to narrate
-    elif name == "PreToolUse":
+    elif ename == "PreToolUse":
         cat = _pre_category(tool, ti)
-    elif name == "PostToolUse":
+    elif ename == "PostToolUse":
         pr = _post_line(tool, ev.get("tool_response") or ev.get("toolResponse"))
         if not pr:
             return None
-        cat, text = pr
+        cat, n = pr
         state["last_cat"] = cat
         state["last_cat_ts"] = time.monotonic()
-        return (text, _kind(cat), True)
+        return _pair(_milestone(style, cat, n), cat, True)
     else:
         return None
 
@@ -199,25 +311,27 @@ def build_line(state, ev):
         if cat == state.get("last_cat") and (now - state.get("last_cat_ts", 0.0)) < AMBIENT_REPEAT:
             return None
 
-    text = _pick(cat)
-    if not text:
+    pair = _pick(style, cat)
+    if not pair:
         return None
     state["last_cat"] = cat
     state["last_cat_ts"] = now
-    return (text, _kind(cat), important)
+    return _pair(pair, cat, important)
 
 
 # ---------------------------------------------------------------------------------------------
 # per-tab narrator: tail the events file -> humanise -> (if voice on) speak + push to the UI
 # ---------------------------------------------------------------------------------------------
 class TabNarrator:
-    def __init__(self, tab_id, events_file, emit, voice_cfg):
+    def __init__(self, tab_id, events_file, emit, voice_cfg, session=0):
         self.tab_id = tab_id
         self.events_file = events_file
-        self._emit = emit                 # emit(tab_id, text, kind, mime_or_None, b64_or_None)
+        self._emit = emit                 # emit(tab_id, display, kind, mime_or_None, b64_or_None)
         self._cfg = voice_cfg or {}
         self._voice = False
         self._alive = True
+        self._session = session           # this tab's session number ("session N" spoken opener)
+        self._multi = False               # set by the manager: True when 2+ narrators are live
         self._state = {"last_cat": None, "last_cat_ts": 0.0}
         self._q = queue.Queue(maxsize=8)
         self._last_spoke = 0.0
@@ -227,6 +341,11 @@ class TabNarrator:
     def start(self):
         self._tail.start()
         self._work.start()
+
+    def set_multi(self, on):
+        # when more than one tab is narrating, spoken VOICE lines get a "session N, ..." prefix so you
+        # can tell which session is talking (the report boxes / gif labels already show it visually).
+        self._multi = bool(on)
 
     def set_voice(self, on):
         on = bool(on)
@@ -277,7 +396,7 @@ class TabNarrator:
             return
         if not isinstance(ev, dict):
             return
-        out = build_line(self._state, ev)
+        out = build_line(self._state, ev, self._cfg)
         if not out:
             return
         try:
@@ -299,7 +418,7 @@ class TabNarrator:
                 break
             if not self._alive:
                 continue
-            text, kind, important = item
+            display, speak, kind, important = item
             # an ambient line that's already superseded by a newer queued line: skip it
             if not important and not self._q.empty():
                 continue
@@ -313,8 +432,11 @@ class TabNarrator:
                 continue
             mime = None
             b64 = None
+            spk = speak
+            if self._multi and kind == "voice" and self._session:
+                spk = "session %d, %s" % (self._session, speak)          # announce which session speaks
             try:
-                res = tts.synth_b64(text, self._cfg) if tts else None
+                res = tts.synth_b64(spk, self._cfg) if tts else None      # SPEAK (no emoticon) -> audio
                 if res:
                     mime, b64 = res
             except Exception:
@@ -322,7 +444,7 @@ class TabNarrator:
                 b64 = None
             self._last_spoke = time.monotonic()
             try:
-                self._emit(self.tab_id, text, kind, mime, b64)
+                self._emit(self.tab_id, display, kind, mime, b64)        # DISPLAY (cute) -> report box
             except Exception:
                 pass
 
@@ -355,16 +477,21 @@ def _read_cfg(engine_dir):
     # Default to the local Kokoro neural voice (good, offline once downloaded); edge/sapi are the
     # fallbacks inside tts.synth. "voice" is the Kokoro voice id; "speed" is its rate (1.0 = normal).
     cfg = {"enabled": True, "engine": "kokoro", "voice": "af_heart", "speed": 0.95,
-           "rate": "+0%", "pitch": "+0Hz"}
+           "rate": "+0%", "pitch": "+0Hz", "style": _DEFAULT_STYLE, "name": "sonelle"}
     path = os.path.join(engine_dir, "sonelle.config.json")
     if os.path.isfile(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 c = json.load(f)
             n = c.get("narrator") or {}
-            for k in ("enabled", "engine", "voice", "speed", "rate", "pitch"):
+            for k in ("enabled", "engine", "voice", "speed", "rate", "pitch", "style", "name"):
                 if k in n:
                     cfg[k] = n[k]
+            # the assistant DISPLAY name may also live at the top level (the settings panel writes it
+            # there so the terminal-launched narrator picks it up); top level wins if present.
+            an = c.get("assistantName")
+            if an:
+                cfg["name"] = an
         except Exception:
             pass
     return cfg

@@ -277,6 +277,12 @@ Ok "brand loop is pulled in off the scrollbar lane" $loopOffScrollbar
 # (input + send button) parks to the LEFT of the gif - it sits in its own corner, nothing under it
 $barReserve = ($srcCss -match '#bar\{[^}]*padding-right:\s*(\d+)px') -and ([int]$Matches[1] -ge 120)
 Ok "command bar panel stops before the brand loop (its own clear corner)" $barReserve
+# the brand loop is now a WRAPPER (gif + control row + report box) - sonelle's in-app REPORTER
+Ok "brand loop wraps the gif + a control row + a report box" (($srcHtml -match '<div id="brandloop"') -and ($srcHtml -match 'class="gif" src="brandloop\.gif"') -and ($srcHtml -match 'id="loop-report"') -and ($srcHtml -match 'class="loopctl'))
+Ok "gif control row has padlock / mute / session label" (($srcHtml -match 'lbtn lock') -and ($srcHtml -match 'lbtn mute') -and ($srcHtml -match 'class="slabel"') -and (-not ($srcHtml -match 'lbtn pop')))
+Ok "frontend keeps per-tab gif state + restores it on tab switch (item 6)" (($srcJs -match 'function newGifState') -and ($srcJs -match 'function applyGifState') -and ($srcJs -match 'entry\.gif'))
+Ok "gif controls wired: lock + mute; report opens on lock OR V" (($srcJs -match 'function toggleLoopLock') -and ($srcJs -match 'function wireLoopControls') -and ($srcJs -match 'function toggleReport') -and ($srcJs -match 'reportopen') -and ($srcJs -match 'e\.key !== "v"'))
+Ok "report box opens on lock OR V; session label is moody (item 10)" (($srcCss -match '\.brandloop \.report\{') -and ($srcCss -match '\.brandloop\.locked \.report') -and ($srcCss -match '\.brandloop\.reportopen \.report') -and ($srcCss -match '\.brandloop \.slabel\{') -and ($srcCss -match '--moody'))
 $srcGuiPs = Get-Content (Join-Path $engine 'bin\sonelle_gui.ps1') -Raw
 Ok "launcher installs deps + runs pythonw" (($srcGuiPs -match 'requirements\.txt') -and ($srcGuiPs -match 'pythonw'))
 $pyCmd = Get-Command py -ErrorAction SilentlyContinue
@@ -307,7 +313,10 @@ $srcHook = if (Test-Path $hookPs) { Get-Content $hookPs -Raw } else { '' }
 Ok "hook appends events to SONELLE_NARRATE_FILE" (($srcHook -match 'SONELLE_NARRATE_FILE') -and ($srcHook -match 'Add-Content') -and ($srcHook -match 'exit 0'))
 $srcNarr = if (Test-Path $narrPy) { Get-Content $narrPy -Raw } else { '' }
 Ok "narrator builds hooks settings, gated on --settings support" (($srcNarr -match 'def setup') -and ($srcNarr -match '_claude_supports_settings') -and ($srcNarr -match '--settings'))
-Ok "narrator writes first-person texting lines, tagged voice/status" (($srcNarr -match 'class TabNarrator') -and ($srcNarr -match 'def build_line') -and ($srcNarr -match '_PHRASES') -and ($srcNarr -match '_VOICE_CATS'))
+Ok "narrator splits each event into display + speak (dual rendering)" (($srcNarr -match 'class TabNarrator') -and ($srcNarr -match 'def build_line') -and ($srcNarr -match 'display, speak, kind, important = item') -and ($srcNarr -match '_VOICE_CATS'))
+Ok "narrator has 4 reporting styles (warm/terse/hacker/bubbly)" (($srcNarr -match '_STYLES') -and ($srcNarr -match '"warm"') -and ($srcNarr -match '"terse"') -and ($srcNarr -match '"hacker"') -and ($srcNarr -match '"bubbly"') -and ($srcNarr -match 'def _milestone'))
+Ok "speak text never vocalizes emoticons/kaomoji" (($srcNarr -match 'def _strip_emoticons') -and ($srcNarr -match 's = _strip_emoticons\(s\)'))
+Ok "spoken openers announce the session when 2+ talk (item 9)" (($srcNarr -match 'def set_multi') -and ($srcNarr -match 'session %d,'))
 Ok "narrator maps the claude hook events"  (($srcNarr -match 'PreToolUse') -and ($srcNarr -match 'PostToolUse') -and ($srcNarr -match 'Notification') -and ($srcNarr -match 'Stop') -and ($srcNarr -match 'def events_file_for'))
 Ok "narrator speaks short answers (last_assistant_message)" (($srcNarr -match 'last_assistant_message') -and ($srcNarr -match 'def _clean_speech'))
 $srcTts = if (Test-Path $ttsPy) { Get-Content $ttsPy -Raw } else { '' }
@@ -321,8 +330,11 @@ Ok "backend runs narrator.setup + publishes settings" (($srcGui -match 'narrator
 Ok "terminal attaches --settings on the narrate env" (($srcTerm -match 'SONELLE_NARRATE_SETTINGS') -and ($srcTerm -match "'--settings'"))
 Ok "frontend has the narrate sink + per-tab voice toggle" (($srcJs -match 'window\.__narrate') -and ($srcJs -match 'function toggleTabVoice') -and ($srcJs -match 'function updateTabVoiceEl') -and ($srcJs -match 'set_narration'))
 Ok "voice toggle is per-tab (speaker on each pill)" (($srcJs -match 'spk\.className = "spk"') -and ($srcCss -match '\.tab \.spk\{') -and (-not ($srcHtml -match 'id="btn-voice"')))
-Ok "narration types into the terminal: pink voice / white status" (($srcJs -match 'function typeNarration') -and ($srcJs -match 'PINK_SGR') -and ($srcJs -match '255;121;198') -and ($srcJs -match 'STATUS_SGR') -and (-not ($srcCss -match '\.narration \.line\{')))
-Ok "narration is serialized against pty output (no interleave)" (($srcJs -match 'function writeOrHold') -and ($srcJs -match 'holdback') -and ($srcJs -match 'function runNarrQueue'))
+Ok "narration lands in the DOM report box, not the terminal (the bug fix)" (($srcJs -match 'function reportLine') -and ($srcJs -match 'function renderReport') -and ($srcJs -match 'loop-report') -and (-not ($srcJs -match 'function typeNarration')) -and (-not ($srcJs -match 'PINK_SGR')) -and ($srcCss -match '\.rline\.voice\{') -and ($srcCss -match '\.rline\.status\{'))
+Ok "speech plays through one global serialized queue (no overlap, item 9)" (($srcJs -match 'function enqueueAudio') -and ($srcJs -match 'function pumpAudio') -and ($srcJs -match 'audioBusy') -and (-not ($srcJs -match 'function writeOrHold')))
+# pop-out was dropped on purpose: the reporter stays IN-APP (no desktop overlay)
+Ok "pop-out / desktop overlay is fully removed" ((-not (Test-Path (Join-Path $engine 'app\overlay.py'))) -and (-not ($srcGui -match 'pop_out_gif')) -and (-not ($srcJs -match 'pop_out_gif')))
+Ok "backend passes a session number + refreshes the multi flag" (($srcGui -match '"session": session') -and ($srcGui -match 'def _refresh_multi') -and ($srcGui -match 'set_multi'))
 # the bug fixes shipped in this round
 Ok "pusher survives the shutdown poison pill" ($srcGui -match 'poisoned')
 Ok "ctrl+c respects a composer selection" ($srcJs -match 'inp\.selectionStart')
@@ -337,6 +349,19 @@ if ($pyCmd -and (Test-Path $narrPy)) {
 } else {
   Write-Host "  [skip] no python on PATH for py_compile" -ForegroundColor DarkGray
 }
+
+Write-Host "== 8i. customization settings panel =="
+$palJs  = Join-Path $appDir 'ui\palettes.js'
+$srcPal = if (Test-Path $palJs) { Get-Content $palJs -Raw } else { '' }
+Ok "palettes.js ships >= 20 curated themes" ((Test-Path $palJs) -and (@([regex]::Matches($srcPal, '\bid:\s*"')).Count -ge 20))
+Ok "index loads palettes.js BEFORE app.js" (($srcHtml.IndexOf('src="palettes.js"') -ge 0) -and ($srcHtml.IndexOf('src="palettes.js"') -lt $srcHtml.IndexOf('src="app.js"')))
+Ok "the gear sits BEFORE the window controls" (($srcHtml -match 'id="btn-settings"') -and ($srcHtml.IndexOf('btn-settings') -lt $srcHtml.IndexOf('class="wctrls')))
+Ok "settings panel has palette/name/mascot/style/model/effort/voices" (($srcHtml -match 'id="settings"') -and ($srcHtml -match 'id="set-palettes"') -and ($srcHtml -match 'id="set-name"') -and ($srcHtml -match 'id="set-mascot') -and ($srcHtml -match 'id="set-style"') -and ($srcHtml -match 'id="set-model"') -and ($srcHtml -match 'id="set-effort"') -and ($srcHtml -match 'id="set-voices"'))
+Ok "frontend applies palettes live + persists the settings" (($srcJs -match 'function applyPalette') -and ($srcJs -match 'function buildPaletteGrid') -and ($srcJs -match 'function saveSettings') -and ($srcJs -match 'save_settings') -and ($srcJs -match 'get_settings'))
+Ok "voices section is display-only (just shows the config keys)" (($srcHtml -match 'id="set-voices"') -and ($srcHtml -match 'narrator') -and ($srcHtml -match 'kokoro'))
+Ok "backend reads/writes settings + stages the mascot to a user dir (not the repo)" (($srcGui -match 'def get_settings') -and ($srcGui -match 'def save_settings') -and ($srcGui -match 'def upload_mascot') -and ($srcGui -match 'LOCALAPPDATA'))
+Ok "assistant name is DISPLAY-ONLY (never touches the engine self-short)" (($srcGui -match 'DISPLAY name only') -and (-not ($srcGui -match 'selfShort')) -and (-not ($srcJs -match 'selfShort')))
+Ok "model + effort persist under models.* (read by sonelle.ps1)" (($srcGui -match 'orchestrator') -and ($srcGui -match 'orchestratorEffort'))
 
 Write-Host "== 8g. shared knowledge base =="
 $kbIdx = Join-Path $engine 'knowledge\INDEX.md'

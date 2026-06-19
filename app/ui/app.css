@@ -11,6 +11,7 @@
   --txt:#d3d6ec;          /* soft periwinkle-white, not pure white */
   --dim:#8a90b4;
   --faint:#6b7196;
+  --moody:rgba(150,162,230,.42);   /* low-contrast "moody" text (the in-gif session label) */
   --accent:#8b96e6;       /* periwinkle indigo (gif #6070C0 / #6060D0) - NOT neon */
   --accent-soft:rgba(139,150,230,.16);
   --pink:#ff79c6;         /* narrator's voice lines - the "bypass permissions on" magenta/pink */
@@ -162,30 +163,83 @@ body{
 }
 .pane .xterm-viewport::-webkit-scrollbar-track{ background:transparent; margin:6px 0; }
 
-/* ---------- narrator reports ---------- */
-/* Narration is no longer a CSS overlay - sonelle types it STRAIGHT INTO the terminal: pink (a "> "
-   caret, the bypass-permissions magenta) for her voice (openers, check-ins, milestones, answers) and
-   soft white for the play-by-play, word-by-word so it reads like she's texting you live. See app.js
-   typeNarration / pushNarration (the colours are written as terminal SGR, not styled here). */
-
-/* ---------- brand loop (the animated mascot gif - free-floating, draggable) ---------- */
-/* The sonelle gif keeps its soft, rounded, bordered CARD look but with a TRANSPARENT fill (its own
-   transparent top shows straight through instead of a dark block). It HOMES to the bottom-right
-   corner (right:30/bottom:8, off the scrollbar lane), but that's only its home spot: app.js
-   `wireBrandloopDrag` makes it GRAB-AND-DROP (pointer-events:auto + cursor:grab), with a throw
-   (release while moving -> it flings and BOUNCES off the window edges until friction stops it), and
-   30s after it settles it drifts back home on two straight, eased, axis-aligned moves. Once dragged
-   it switches to absolute left/top. z-index lifts it above the pane + bar. */
+/* ---------- brand loop (the mascot gif) + reporter ---------- */
+/* Narration is NO LONGER typed into the terminal (claude's alt-screen TUI repainted over it, so the
+   lines vanished - that was the report bug). It now lands in the .report box below the gif: pink for
+   sonelle's voice, soft white for the play-by-play (see app.js reportLine). The #brandloop wrapper
+   holds the gif, a control row (lock . pop-out . mute . session label) and the report box. It HOMES to
+   the bottom-right corner (right:30/bottom:8, off the scrollbar lane) - only its home spot: app.js
+   `wireBrandloopDrag` makes it GRAB-AND-DROP (pointer-events:auto + cursor:grab) with a throw (release
+   while moving -> flings + BOUNCES off the edges) and a 30s drift home; LOCKED it stays put + shows the
+   report; popped it ejects to a desktop overlay. Once dragged it switches to absolute left/top. */
 .brandloop{
   position:absolute; right:30px; bottom:8px; z-index:6;   /* home corner; off the scrollbar lane */
-  height:134px; width:auto; pointer-events:auto; user-select:none; cursor:grab;
-  opacity:1;
+  width:auto; pointer-events:auto; user-select:none; cursor:grab;
+  display:flex; flex-direction:column; align-items:flex-end; gap:5px;   /* report ABOVE, gif at bottom */
   background:transparent;            /* transparent fill (the gif's own transparent top shows through) */
-  border:1px solid var(--hair);      /* keep the soft bordered card */
   border-radius:14px;                /* soft, rounded edges */
-  box-shadow:0 8px 28px rgba(0,0,0,.5);
 }
 .brandloop:active{ cursor:grabbing; }
+.brandloop .gifwrap{ position:relative; }   /* anchors the control row to the GIF, not the report box */
+.brandloop .gif{
+  display:block; height:134px; width:auto;
+  border:1px solid var(--hair);      /* the soft bordered card lives on the gif itself */
+  border-radius:14px;
+  box-shadow:0 8px 28px rgba(0,0,0,.5);
+  background:transparent;
+}
+/* control row overlaid on the gif's top edge: padlock . mute . session label. Hidden until you hover
+   (or the gif is locked) so it isn't always in the way. .nodrag (html) + the app.js mousedown guard
+   keep clicking a control from starting a window/gif drag. */
+.brandloop .loopctl{
+  position:absolute; top:5px; left:6px; right:6px;
+  display:flex; align-items:center; gap:4px;
+  opacity:0; transition:opacity .14s; pointer-events:none;   /* hidden -> don't intercept gif drags */
+}
+.brandloop .gifwrap:hover .loopctl,
+.brandloop.locked .loopctl,
+.brandloop.reportopen .loopctl{ opacity:1; pointer-events:auto; }
+.brandloop .lbtn{
+  display:flex; align-items:center; justify-content:center;
+  width:22px; height:22px; padding:0; border:0; border-radius:7px; cursor:default;
+  background:rgba(12,15,36,.66); color:var(--dim);
+}
+.brandloop .lbtn svg{ width:14px; height:14px; display:block; }
+.brandloop .lbtn:hover{ background:var(--accent-soft); color:var(--txt); }
+.brandloop .lbtn.on{ color:var(--accent); }
+.brandloop .mute .wave{ opacity:0; }                /* muted: cone only */
+.brandloop .mute.on{ color:var(--pink); }
+.brandloop .mute.on .wave{ opacity:1; }             /* speaking: pink waves */
+/* session label: moody / low-contrast (visible but not harsh) - item 10 */
+.brandloop .slabel{
+  margin-left:auto; padding:1px 5px; border-radius:6px;
+  font-size:10.5px; letter-spacing:.3px; color:var(--moody);
+  background:rgba(8,10,24,.5); white-space:nowrap;
+}
+/* report box: sonelle's lines type out here, hacker-style. It sits ABOVE the gif (so the gif stays in
+   its corner) and is shown when the gif is LOCKED or you press V; ~50% the gif height, scrolls. */
+.brandloop .report{
+  display:none;
+  width:220px; height:66px; overflow-y:auto; padding:6px 9px;
+  border-radius:10px;
+  background:linear-gradient(160deg, rgba(18,22,52,.82), rgba(9,11,30,.74));
+  border:1px solid var(--hair);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  font-size:11px; line-height:1.4;
+}
+.brandloop.locked .report,
+.brandloop.reportopen .report{ display:block; }
+/* same scrollbar as the terminal (rides its own lane, periwinkle thumb with a gap) */
+.brandloop .report::-webkit-scrollbar{ width:8px; }
+.brandloop .report::-webkit-scrollbar-thumb{
+  background:rgba(139,150,230,.42); border-radius:6px;
+  border:2px solid transparent; background-clip:content-box;
+}
+.brandloop .report::-webkit-scrollbar-track{ background:transparent; margin:6px 0; }
+.brandloop .rline{ white-space:pre-wrap; word-break:break-word; }
+.brandloop .rline.voice{ color:var(--pink); }       /* sonelle texting you */
+.brandloop .rline.status{ color:var(--dim); }        /* the quiet play-by-play */
 
 /* ---------- welcome (empty state) ---------- */
 .welcome{
@@ -253,4 +307,73 @@ body{
 .send .g-send{
   width:0;height:0;
   border-bottom:11px solid #0f0b16; border-left:6px solid transparent; border-right:6px solid transparent;
+}
+
+/* ---------- settings gear + customization panel ---------- */
+.iconbtn.gear{ color:var(--dim); font-size:0; }
+.iconbtn.gear svg{ width:17px; height:17px; display:block; }
+.iconbtn.gear:hover{ color:#efe9f8; }
+
+/* modal overlay (dim the app behind a centered glass card) */
+.modal{
+  position:absolute; inset:0; z-index:20;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(4,5,12,.5); backdrop-filter:blur(2px);
+}
+.modal[hidden]{ display:none !important; }
+.modal-card{
+  width:min(560px,92vw); max-height:86vh; display:flex; flex-direction:column;
+  border-radius:16px; overflow:hidden;
+}
+.modal-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 14px; border-bottom:1px solid var(--hair);
+}
+.modal-title{ font-size:14px; font-weight:500; color:#efe9f8; letter-spacing:.2px; }
+.modal-body{ padding:14px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; }
+.modal-foot{ padding:12px 14px; border-top:1px solid var(--hair); display:flex; justify-content:flex-end; }
+
+.set-row{ display:flex; flex-direction:column; gap:7px; }
+.set-row.two{ flex-direction:row; gap:14px; }
+.set-row.two > div{ flex:1 1 0; display:flex; flex-direction:column; gap:7px; }
+.set-label{ font-size:12px; color:var(--dim); letter-spacing:.2px; }
+.set-input{
+  height:34px; padding:0 10px; border-radius:9px;
+  background:rgba(255,255,255,.04); border:1px solid var(--hair);
+  color:var(--txt); font-family:var(--font); font-size:13px; outline:0;
+}
+.set-input:focus{ border-color:var(--hair-strong); background:var(--accent-soft); }
+select.set-input{ cursor:default; }
+.set-note{ align-self:flex-end; font-size:11px; color:var(--faint); padding-bottom:8px; }
+.set-hint{ font-size:11.5px; color:var(--faint); }
+
+/* mascot upload row */
+.set-mascot{ display:flex; align-items:center; gap:10px; }
+.set-btn{
+  padding:7px 12px; border-radius:9px; cursor:default;
+  background:var(--accent-soft); border:1px solid var(--hair-strong); color:#efe9f8;
+  font-family:var(--font); font-size:12.5px;
+}
+.set-btn:hover{ background:rgba(139,150,230,.26); }
+
+/* the 20-swatch palette grid */
+.palette-grid{ display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+.swatch{
+  height:38px; border-radius:9px; cursor:default; position:relative; overflow:hidden;
+  border:1px solid var(--hair); padding:0;
+}
+.swatch:hover{ border-color:var(--hair-strong); }
+.swatch.sel{ outline:2px solid var(--accent); outline-offset:1px; }
+.swatch .dot{ position:absolute; right:5px; bottom:5px; width:9px; height:9px; border-radius:50%; }
+.swatch .nm{
+  position:absolute; left:5px; bottom:3px; font-size:9px; color:#fff; opacity:.86;
+  text-shadow:0 1px 2px rgba(0,0,0,.7);
+}
+
+/* voices instructions: display-only, monospace, scrollable */
+.set-voices{
+  margin:0; padding:10px 12px; border-radius:9px;
+  background:rgba(8,10,24,.55); border:1px solid var(--hair);
+  color:var(--dim); font-family:var(--font); font-size:11.5px; line-height:1.5;
+  white-space:pre-wrap; overflow-x:auto;
 }

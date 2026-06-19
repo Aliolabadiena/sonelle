@@ -105,18 +105,32 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   EACH tab pill (mute per session). Data source is Claude Code HOOKS, not screen-scraping - the app
   publishes `SONELLE_NARRATE_SETTINGS` (only after probing that `claude` supports `--settings`, so a bad
   flag can never break a working app), `sonelle.ps1` attaches `--settings`, and `narrate_hook.ps1` appends
-  each event to the per-tab `SONELLE_NARRATE_FILE`; the narrator tails it, builds a warm FIRST-person line
-  tagged `voice`/`status`, and (voice on) speaks it. The line is **typed straight into the terminal**
-  (`typeNarration` in `app.js`) - pink for `voice`, soft white for `status` - and **serialized against the
-  PTY stream** (`writeOrHold`/`runNarrQueue`) so it never interleaves mid-line. **Voice engine** is
-  **Kokoro** (local neural, `app\tts.py` `_synth_kokoro`). The model is **VENDORED in the repo** at
-  `app\voice\` (the ~88 MB int8 build + voice pack - `_kokoro_files`, NO download) so the voice ships
-  with sonelle; only the `kokoro-onnx` RUNTIME installs best-effort from `app\requirements-voice.txt`
-  (never fatal), with `edge-tts` then SAPI as fallbacks. Default `af_heart` at 0.95 speed. Keep the
-  JS<->Python contract in sync on BOTH sides AND in
-  selftest 8e/8f (`set_narration`, `__narrate(tabId, text, kind, mime, b64)`). The narrator is guarded by
-  selftest 8f; keep `app\narrate_hook.ps1` pure ASCII like every `.ps1`, and the `.py` modules ASCII-clean
-  too. edge-tts is pinned `>=7.2.8` (older pins 403 on the MS handshake).
+  each event to the per-tab `SONELLE_NARRATE_FILE`; `TabNarrator` tails it and **dual-renders** each event
+  into `(display, speak, kind, important)` - a short cute `display` line for the REPORT BOX and a fuller,
+  natural, THIRD-person `speak` line for TTS (`_clean_speech`/`_strip_emoticons` keep emoticons out of
+  speech), choosing the phrase set for the configured **reporting style** (`_STYLES`: warm/terse/hacker/
+  bubbly). **Do NOT write narration into the terminal** - claude's alt-screen TUI repaints over it (that
+  was the report bug); it goes to the DOM report box (`reportLine`/`renderReport`, pink `.rline.voice` /
+  white `.rline.status`) and audio plays through ONE global serialized queue (`enqueueAudio`/`pumpAudio`).
+  **Voice engine** is **Kokoro** (local neural, `app\tts.py` `_synth_kokoro`). The model is **VENDORED in
+  the repo** at `app\voice\` (the ~88 MB int8 build + voice pack - `_kokoro_files`, NO download) so the
+  voice ships with sonelle; only the `kokoro-onnx` RUNTIME installs best-effort from
+  `app\requirements-voice.txt` (never fatal), with `edge-tts` then SAPI as fallbacks. Default `af_heart`
+  at 0.95 speed. Keep the JS<->Python contract in sync on BOTH sides AND in selftest 8e/8f
+  (`set_narration`, `__narrate(tabId, display, kind, mime, b64)`); keep `app\narrate_hook.ps1` pure ASCII
+  like every `.ps1`, and the `.py` modules ASCII-clean too. edge-tts is pinned `>=7.2.8` (older pins 403).
+- **The reporter + settings panel (`app\`):** `#brandloop` is a WRAPPER - a report box (`#loop-report`)
+  ABOVE a `.gifwrap` (gif + control row: padlock . mute . session label). Padlock pins the gif + opens the
+  report; pressing **V** (`toggleReport`, when not typing in an input) opens it WITHOUT locking; per-tab
+  gif state lives in `entry.gif` (`applyGifState` on tab switch). Narration goes to the report box (NOT the
+  terminal) and audio plays through one global serialized queue. (A desktop pop-out overlay was tried and
+  dropped on purpose - the reporter stays in-app; don't re-add it.) The **settings gear** (before the
+  `_ O X` controls) opens `#settings`: 20 palettes (`app\ui\palettes.js`, `applyPalette` rewrites the
+  `:root` vars + every xterm theme, and `activeTheme` so NEW tabs adopt it), assistant name (DISPLAY only -
+  never the engine self-short), upload-your-own mascot (`upload_mascot` -> `%LOCALAPPDATA%\sonelle`, never
+  the repo), reporting style, voices instructions (display only), and model+effort (-> `models.*`).
+  `get_settings`/`save_settings` persist to `sonelle.config.json`. Guarded by selftest 8e (reporter),
+  8f (narrator), 8i (settings); keep the JS<->Python contract synced on both sides.
 - **Docs:** keep `README.md` + `docs\ARCHITECTURE.md` honest (mechanism vs discipline), and add a
   `CHANGELOG.md` entry.
 

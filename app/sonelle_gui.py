@@ -111,6 +111,15 @@ class SessionManager:
             json.dumps(mime) if mime else "null",
             json.dumps(b64) if b64 else "null"))
 
+    def _refresh_multi(self):
+        # spoken openers prepend "session N, ..." only when more than one narrator is live (item 9)
+        try:
+            multi = len(self._narr) > 1
+            for tn in self._narr.values():
+                tn.set_multi(multi)
+        except Exception as e:
+            _dbg("refresh multi failed: %r" % e)
+
     def set_narration(self, tab_id, on):
         tn = self._narr.get(tab_id)
         if not tn:
@@ -128,6 +137,7 @@ class SessionManager:
                 tn.close()
             except Exception:
                 pass
+            self._refresh_multi()
 
     # --- the single choke-point that actually calls into WebView2 (race-safe) ---
     def _emit(self, script):
@@ -190,6 +200,7 @@ class SessionManager:
         with self._g:
             self._n += 1
             tab_id = "t%d" % self._n
+            session = self._n
         env = os.environ.copy()
         events_file = None
         if self._narr_info.get("enabled") and narrator is not None:
@@ -220,16 +231,18 @@ class SessionManager:
         if events_file is not None:
             try:
                 tn = narrator.TabNarrator(tab_id, events_file, self._narrate_emit,
-                                          self._narr_info.get("voice_cfg") or {})
+                                          self._narr_info.get("voice_cfg") or {}, session=session)
                 tn.start()
                 self._narr[tab_id] = tn
+                self._refresh_multi()
             except Exception:
                 pass
         t = threading.Thread(target=self._pump, args=(sess,), daemon=True)
         sess.thread = t
         t.start()
         return {"ok": True, "tabId": tab_id, "title": (project or "sonelle"),
-                "cols": cols, "rows": rows, "narration": bool(events_file is not None)}
+                "cols": cols, "rows": rows, "session": session,
+                "narration": bool(events_file is not None)}
 
     def _pump(self, sess):
         # Blocking read loop. read() returns decoded str with VT/ANSI intact; we just enqueue it
@@ -356,6 +369,115 @@ def _hub_dir():
     return hub
 
 
+def _config_path():
+    return os.path.join(_hub_dir(), "sonelle.config.json")
+
+
+def _read_config():
+    p = _config_path()
+    if os.path.isfile(p):
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                c = json.load(f)
+            if isinstance(c, dict):
+                return c
+        except Exception as e:
+            _dbg("config read failed: %r" % e)
+    return {}
+
+
+def _write_config(cfg):
+    p = _config_path()
+    try:
+        tmp = p + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+        os.replace(tmp, p)     # atomic on the same volume
+        return True
+    except Exception as e:
+        _dbg("config write failed: %r" % e)
+        return False
+
+
+def get_settings():
+    """Read the current customization settings the panel shows. Read-only."""
+    cfg = _read_config()
+    models = cfg.get("models") or {}
+    narr = cfg.get("narrator") or {}
+    return {
+        "paletteId": cfg.get("paletteId") or "indigo",
+        "assistantName": cfg.get("assistantName") or "sonelle",
+        "mascotPath": cfg.get("mascotPath") or "",
+        "style": narr.get("style") or "warm",
+        "model": models.get("orchestrator") or "opus",
+        "effort": models.get("orchestratorEffort") or "xhigh",
+    }
+
+
+def save_settings(obj):
+    """Merge the panel's choices into sonelle.config.json (atomic). Model/effort land under models.*
+    (already read by bin/sonelle.ps1 for --model/--effort on NEW terminals); style under narrator.*."""
+    obj = obj or {}
+    cfg = _read_config()
+    if "paletteId" in obj:
+        cfg["paletteId"] = obj["paletteId"]
+    if "assistantName" in obj:
+        # DISPLAY name only - it never changes the engine identity or self-dev shortcode.
+        cfg["assistantName"] = (obj["assistantName"] or "sonelle")
+    if "mascotPath" in obj:
+        cfg["mascotPath"] = obj["mascotPath"]
+    if "style" in obj:
+        n = cfg.get("narrator") or {}
+        n["style"] = obj["style"]
+        cfg["narrator"] = n
+    if "model" in obj or "effort" in obj:
+        m = cfg.get("models") or {}
+        if "model" in obj:
+            m["orchestrator"] = obj["model"]
+        if "effort" in obj:
+            m["orchestratorEffort"] = obj["effort"]
+        cfg["models"] = m
+    ok = _write_config(cfg)
+    return {"ok": bool(ok)}
+
+
+_MASCOT_EXTS = (".gif", ".png", ".jpg", ".jpeg", ".webp", ".bmp")
+
+
+def upload_mascot(b64, ext=".gif"):
+    """Stage an uploaded mascot image to a USER data dir (%LOCALAPPDATA%\\sonelle), NEVER the repo
+    (it may be personal data; the public repo stays clean). Records mascotPath in config + returns it."""
+    try:
+        raw = base64.b64decode(b64 or "")
+    except Exception:
+        return {"ok": False, "error": "bad image data"}
+    if not raw:
+        return {"ok": False, "error": "empty image"}
+    e = (ext or ".gif").lower()
+    if not e.startswith("."):
+        e = "." + e
+    if e == ".jpeg":
+        e = ".jpg"
+    if e not in _MASCOT_EXTS:
+        e = ".gif"
+    base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+    d = os.path.join(base, "sonelle")
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        d = tempfile.gettempdir()
+    path = os.path.join(d, "mascot" + e)
+    try:
+        with open(path, "wb") as f:
+            f.write(raw)
+    except Exception as ex:
+        return {"ok": False, "error": str(ex)}
+    cfg = _read_config()
+    cfg["mascotPath"] = path
+    _write_config(cfg)
+    return {"ok": True, "path": path}
+
+
 def parse_projects(pf):
     """The ONE Python registry parser: parse a PROJECTS.md file into [{shortcut,name,path}].
     Mirrors tools/_registry.ps1 Get-SonelleProjects exactly - selftest (section Q1) asserts the
@@ -457,7 +579,7 @@ class Api:
         return self._sm.close_tab(tabId)
 
     def set_narration(self, tabId, on):
-        # turn a tab's voice narrator on/off (the titlebar speaker toggle)
+        # turn a tab's voice narrator on/off (the per-tab speaker toggle)
         return self._sm.set_narration(tabId, on)
 
     def list_projects(self):
@@ -465,6 +587,16 @@ class Api:
 
     def save_paste_image(self, b64, ext=".png"):
         return save_paste_image(b64, ext)
+
+    # customization settings (the titlebar gear panel)
+    def get_settings(self):
+        return get_settings()
+
+    def save_settings(self, obj):
+        return save_settings(obj)
+
+    def upload_mascot(self, b64, ext=".gif"):
+        return upload_mascot(b64, ext)
 
     # window controls (no built-in JS window API -> expose wrappers)
     def win_minimize(self):

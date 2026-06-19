@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.33 — 2026-06-19 (the reporter + customization: sonelle gets a face and a settings panel)
+- **Narration moved OUT of the terminal into a report box (the report bug fixed).** sonelle used to
+  type her humanised lines straight into the xterm, but claude's TUI runs on the alternate screen and
+  repaints over them, so they vanished. Now each line lands in a **DOM report box under the mascot gif**
+  (pink for her voice, soft white for the play-by-play). The old terminal-injection machinery
+  (`typeNarration`/`writeOrHold`/`runNarrQueue`/holdback) is gone.
+- **The mascot is now a reporter you can lock, open, and mute.** `#brandloop` became a wrapper: the gif +
+  a control row (**padlock . mute . session label**) + a report box that sits ABOVE the gif (so the gif
+  stays in its home corner and the box expands upward). The padlock pins the gif (no bounce / no drift
+  home) and opens the report; pressing **V** (when not typing) opens/closes the report WITHOUT locking;
+  mute mirrors that tab's voice toggle; the session label is low-contrast "moody" text. **Per-tab gif
+  state** (position, lock, report-open, log) is saved and restored as you switch tabs, and the report box
+  uses the same scrollbar styling as the terminal.
+- **Dual-rendering narrator + queued speech.** Each event now yields a **display** line (short, with a
+  cute ASCII tag like `:)` / `<3`) for the box and a **speak** line (fuller, natural, third person, no
+  emoticons) for TTS; `_clean_speech` strips emoticons/kaomoji so they're never vocalized. All audio
+  plays through **one global serialized queue** so two sessions never talk over each other, and with 2+
+  active reporters the spoken opener announces "session N, ...".
+- **A customization settings panel (the titlebar gear).** A new gear - placed BEFORE the `_ O X`
+  window controls - opens a glass panel: **20 colour palettes** (live preview, applied to the CSS vars +
+  every xterm theme), an **assistant name** (display-only - never touches the engine self-dev shortcode),
+  **upload your own mascot** (gif/photo, staged to `%LOCALAPPDATA%\sonelle`, never the repo), **4
+  reporting styles** (warm / terse / hacker / bubbly), **other-voices instructions** (display only), and
+  the **claude model + effort** (written to `models.*`, picked up by new terminals). Saved to
+  `sonelle.config.json`; palette/name also cached in `localStorage` so they apply instantly on launch.
+- **selftest:** 8e gains the reporter-wrapper / control-row / per-tab-state / report-box (lock-or-V)
+  checks; 8f asserts the dual-rendering split, the 4 styles, emoticon stripping, the global audio queue,
+  and that the pop-out/overlay is fully removed; new **8i** (gear-before-controls, >=20 palettes, the full
+  panel, mascot staged outside the repo, name display-only, model/effort under `models.*`). All green.
+
 ## v1.32 — 2026-06-19 (engine hardening: honest heal, real behavioral tests, less drift)
 - **No more green-placeholder lie (H1+H2).** A brand-new project's `sonelle.check.ps1` is no longer a
   hollow `exit 0`; `new_project.ps1` now scaffolds an **auto-detector** that finds the project's real

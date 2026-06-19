@@ -25,12 +25,14 @@
     brightYellow: "#ead7a6", brightBlue: "#a9b6ee", brightMagenta: "#c4b8ee",
     brightCyan: "#aadcdc", brightWhite: "#efeefb"
   };
+  // the theme NEW terminals are built with - swapped by applyPalette so a chosen palette also applies
+  // to tabs opened after the switch (not just the ones already live).
+  let activeTheme = THEME;
 
-  // narration colours written straight into the terminal: PINK = sonelle texting you (bold, the
-  // "bypass permissions" magenta = --pink #ff79c6); WHITE = the quiet play-by-play of what's happening.
-  const PINK_SGR = "\x1b[1;38;2;255;121;198m";
-  const STATUS_SGR = "\x1b[38;2;176;182;224m";
-  const SGR_RESET = "\x1b[0m";
+  // Narration is NO LONGER written into the terminal: claude's TUI runs on the alternate screen and
+  // repaints constantly, so injected SGR lines got painted over and vanished (the report bug). It now
+  // lands in a DOM report box under the mascot (reportLine) - pink for sonelle's voice, white for the
+  // play-by-play (coloured via CSS .rline.voice/.status, not terminal SGR).
 
   // small speaker glyph for the per-tab voice toggle (filled when on, slashed-quiet when off via css)
   const SPK_SVG =
@@ -56,7 +58,7 @@
       // Cascadia Code makes contextual glyphs overlap into neighbours - that was the "words mashed
       // together" look. Consolas is the always-present Windows monospace fallback.
       fontFamily: '"Cascadia Mono", Consolas, "Cascadia Code", "Courier New", monospace',
-      fontSize: 13, lineHeight: 1.2, cursorBlink: true, scrollback: SCROLLBACK, theme: THEME
+      fontSize: 13, lineHeight: 1.2, cursorBlink: true, scrollback: SCROLLBACK, theme: activeTheme
     });
     const fit = new FitAddon.FitAddon();   // double name: module.FitAddon
     term.loadAddon(fit);
@@ -92,20 +94,10 @@
   }
 
   // ---------- Python -> JS push sinks (installed immediately) ----------
-  // While sonelle is typing a narration line straight into the terminal, hold back claude's own
-  // bytes so the two never interleave mid-line; the held output is flushed the instant she finishes.
-  function writeOrHold(t, data) {
-    if (t.narrating) {
-      if (!t.holdback) t.holdback = [];
-      if (t.holdback.length < 4000) t.holdback.push(data);   // capped so a long burst can't grow unbounded
-      return;
-    }
-    try { t.term.write(data); } catch (e) {}
-  }
   window.__ptyOutput = function (tabId, b64) {
     const buf = b64ToBytes(b64);
     const t = TABS.get(tabId);
-    if (t) { writeOrHold(t, buf); return; }   // Uint8Array -> xterm stitches partial UTF-8
+    if (t) { try { t.term.write(buf); } catch (e) {} return; }   // Uint8Array -> xterm stitches partial UTF-8
     let q = PENDING.get(tabId);
     if (!q) { q = []; PENDING.set(tabId, q); }
     if (q.length < 4000) q.push(buf);         // buffer pre-register output (capped so a never-registered id can't grow unbounded)
@@ -115,61 +107,64 @@
     if (!t) return;
     t.dead = true;
     const c = (code === null || code === undefined) ? "" : " (" + code + ")";
-    writeOrHold(t, "\r\n\x1b[2m[process exited" + c + "]\x1b[0m\r\n");
+    try { t.term.write("\r\n\x1b[2m[process exited" + c + "]\x1b[0m\r\n"); } catch (e) {}
     if (t.tabEl) t.tabEl.classList.add("dead");
   };
 
-  // ---------- narrator push: a humanised line typed straight INTO the terminal (+ optional audio) ----
-  // Python (narrator.py) calls this when a tab's voice is on. kind "voice" = sonelle texting you
-  // (bold pink, with a chat caret) - openers, check-ins, milestones, her answers; kind "status" =
-  // the quiet play-by-play (soft white). The line is typed word-by-word into the xterm itself so it
-  // reads like she's messaging you live; audio (if any) plays in the page (WebView2 HTML5 audio).
+  // ---------- narrator push: a humanised line into the REPORT BOX under the gif (+ serialized audio) -
+  // Python (narrator.py) calls __narrate when a tab's voice is on. The DISPLAY text (short + a cute
+  // tag) lands in the report box; the SPEAK audio plays through ONE global queue so two sessions never
+  // talk over each other. kind "voice" = sonelle texting you (pink), "status" = play-by-play (white).
   window.__narrate = function (tabId, text, kind, mime, b64) {
     const t = TABS.get(tabId);
     if (!t) return;
-    pushNarration(t, text, kind, mime, b64);
+    if (b64 && mime) enqueueAudio(mime, b64);      // global, serialized across all tabs (item 9)
+    if (text) reportLine(t, text, kind === "voice" ? "voice" : "status");
   };
-  function pushNarration(entry, text, kind, mime, b64) {
-    if (b64 && mime) playNarrationAudio(mime, b64);
-    if (!text) return;
-    if (!entry.narrq) entry.narrq = [];
-    entry.narrq.push({ text: String(text), kind: kind === "voice" ? "voice" : "status" });
-    if (!entry.narrating) runNarrQueue(entry);
+
+  // global speech queue: one clip at a time across EVERY tab (no talking over each other)
+  const AUDIOQ = [];
+  let audioBusy = false;
+  function enqueueAudio(mime, b64) {
+    if (AUDIOQ.length < 32) AUDIOQ.push({ mime, b64 });   // bounded so a backlog can't grow unbounded
+    pumpAudio();
   }
-  function runNarrQueue(entry) {
-    if (!entry.narrq || !entry.narrq.length) {
-      entry.narrating = false;                          // burst done: release any held claude output
-      const hb = entry.holdback || []; entry.holdback = [];
-      for (let i = 0; i < hb.length; i++) { try { entry.term.write(hb[i]); } catch (e) {} }
-      return;
-    }
-    entry.narrating = true;
-    const item = entry.narrq.shift();
-    typeNarration(entry, item.text, item.kind, () => runNarrQueue(entry));
-  }
-  // type one line word-by-word: pink + a "> " caret for her voice, soft white + indent for status
-  function typeNarration(entry, text, kind, done) {
-    const term = entry.term;
-    const color = (kind === "voice") ? PINK_SGR : STATUS_SGR;
-    const prefix = (kind === "voice") ? "> " : "  ";
-    const tokens = text.split(/(\s+)/);                 // keep the whitespace as its own tokens
-    let i = 0;
-    try { term.write("\r\n" + color + prefix); } catch (e) {}
-    const tick = () => {
-      if (i >= tokens.length) {
-        try { term.write(SGR_RESET + "\r\n", done); } catch (e) { done(); }
-        return;
-      }
-      const tok = tokens[i++];
-      try { term.write(tok, () => setTimeout(tick, 34)); } catch (e) { setTimeout(tick, 34); }
-    };
-    tick();
-  }
-  function playNarrationAudio(mime, b64) {
+  function pumpAudio() {
+    if (audioBusy) return;
+    const next = AUDIOQ.shift();
+    if (!next) return;
+    audioBusy = true;
+    const done = () => { audioBusy = false; pumpAudio(); };
     try {
-      const a = new Audio("data:" + mime + ";base64," + b64);
-      a.play().catch(() => {});       // autoplay can reject silently; the typed line still shows
-    } catch (e) {}
+      const a = new Audio("data:" + next.mime + ";base64," + next.b64);
+      a.addEventListener("ended", done, { once: true });
+      a.addEventListener("error", done, { once: true });
+      a.play().catch(() => done());        // autoplay can reject silently -> move to the next clip
+    } catch (e) { done(); }
+  }
+
+  // a fresh per-tab gif/reporter state (position, lock, report-open, the report log)
+  function newGifState() { return { left: null, top: null, locked: false, reportOpen: false, report: [] }; }
+
+  // append a line to a tab's report log; render it if that tab is the active one
+  function reportLine(entry, text, kind) {
+    if (!entry.gif) entry.gif = newGifState();
+    entry.gif.report.push({ text: String(text), kind: kind === "voice" ? "voice" : "status" });
+    if (entry.gif.report.length > 40) entry.gif.report.shift();    // bounded log
+    if (entry.tabId === active) renderReport(entry);
+  }
+  function renderReport(entry) {
+    const box = $("loop-report");
+    if (!box || !entry || !entry.gif) return;
+    box.textContent = "";
+    const lines = entry.gif.report.slice(-6);
+    for (const ln of lines) {
+      const d = document.createElement("div");
+      d.className = "rline " + (ln.kind === "voice" ? "voice" : "status");
+      d.textContent = ln.text;
+      box.appendChild(d);
+    }
+    box.scrollTop = box.scrollHeight;
   }
 
   // ---------- tab naming ----------
@@ -219,6 +214,7 @@
     const e = TABS.get(tabId);
     if (e) {
       if (e.tabEl) { try { e.tabEl.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (x) {} }
+      applyGifState(e);   // restore this tab's gif position / lock / report (item 6)
       requestAnimationFrame(() => {
         safeFit(e);
         if (live && !e.dead) { try { window.pywebview.api.resize(tabId, e.term.cols, e.term.rows); } catch (x) {} }
@@ -276,7 +272,7 @@
       e.stopPropagation();        // keep it from reaching xterm's mouse-report path
     }, { passive: false, capture: true });
     return { term, fit, pane, webgl, tabEl: null, ro: null, disposers: [], dead: false,
-             voice: false, narration: false, narrating: false, narrq: [], holdback: [] };
+             tabId: null, session: 0, voice: false, narration: false, gif: newGifState() };
   }
 
   // ---------- live tab (real backend) ----------
@@ -295,6 +291,7 @@
       if (res && res.tabId) { try { window.pywebview.api.close_tab(res.tabId); } catch (x) {} }
       entry.term.write("\r\n\x1b[31m[failed to start: " + ((res && res.error) || "unknown") + "]\x1b[0m\r\n");
       const did = "x" + (++tabCount);
+      entry.tabId = did;
       entry.tabEl = makeTabEl(did, "error");
       entry.dead = true;
       TABS.set(did, entry);
@@ -303,6 +300,8 @@
     }
     const tabId = res.tabId;
     tabCount++;
+    entry.tabId = tabId;
+    entry.session = (res && res.session) || tabCount;   // backend session number (gif label + spoken "session N")
     entry.narration = !!(res && res.narration);   // backend wired claude's hooks for this tab -> voice can speak
     entry.name = project || nextTabName();   // a routed project keeps its name; otherwise a plain number
     entry.tabEl = makeTabEl(tabId, entry.name);
@@ -393,25 +392,29 @@
 
   // ---------- per-tab voice narration toggle (each tab has its own speaker on its pill) ----------
   function updateTabVoiceEl(entry) {
-    if (!entry || !entry.tabEl) return;
-    const spk = entry.tabEl.querySelector(".spk");
-    if (!spk) return;
-    const on = !!entry.voice;
-    spk.classList.toggle("on", on);
-    spk.title = on ? "voice: on (sonelle speaks in this tab)" : "voice: off (muted)";
+    if (!entry) return;
+    if (entry.tabEl) {
+      const spk = entry.tabEl.querySelector(".spk");
+      if (spk) {
+        const on = !!entry.voice;
+        spk.classList.toggle("on", on);
+        spk.title = on ? "voice: on (sonelle speaks in this tab)" : "voice: off (muted)";
+      }
+    }
+    if (entry.tabId === active) updateLoopButtons(entry);   // keep the gif's mute toggle in sync too
   }
   function toggleTabVoice(tabId) {
     const e = TABS.get(tabId);
     if (!e) return;
     // turning ON but the backend never wired claude's hooks for this tab -> say so, stay off
     if (live && !e.narration && !e.voice) {
-      pushNarration(e, "voice needs a claude build with --settings hooks - staying muted.", "voice");
+      reportLine(e, "voice needs a claude build with --settings hooks - staying muted.", "voice");
       return;
     }
     e.voice = !e.voice;
     if (live) { try { window.pywebview.api.set_narration(tabId, e.voice); } catch (x) {} }
     updateTabVoiceEl(e);
-    pushNarration(e, e.voice ? "voice on - i'll talk you through it." : "voice off - going quiet here.", "voice");
+    reportLine(e, e.voice ? "voice on - i'll talk you through it." : "voice off - going quiet here.", "voice");
   }
 
   // ---------- brand-loop gif: drag with throw + edge-bounce, then drift home after idle ----------
@@ -419,13 +422,17 @@
   // BOUNCING off the window edges until friction stops it. 30s after it settles it returns to its
   // home corner on two straight, eased, axis-aligned moves (horizontal, then vertical) - never a tp.
   let loopRAF = 0, loopReturnTimer = 0;
+  function activeEntry() { return active ? TABS.get(active) : null; }
   function loopHome(el) {
     const w = el.offsetWidth || 120, h = el.offsetHeight || 120;
     return [Math.max(0, window.innerWidth - w - 30), Math.max(0, window.innerHeight - h - 8)];  // matches the CSS corner
   }
   function loopMaxX(el) { return Math.max(0, window.innerWidth - (el.offsetWidth || 120)); }
   function loopMaxY(el) { return Math.max(0, window.innerHeight - (el.offsetHeight || 120)); }
-  function setLoopPos(el, x, y) { el.style.right = "auto"; el.style.bottom = "auto"; el.style.left = x + "px"; el.style.top = y + "px"; }
+  function setLoopPos(el, x, y) {
+    el.style.right = "auto"; el.style.bottom = "auto"; el.style.left = x + "px"; el.style.top = y + "px";
+    const e = activeEntry(); if (e && e.gif) { e.gif.left = x; e.gif.top = y; }   // persist per tab
+  }
   function cancelLoopMotion() {
     if (loopRAF) { cancelAnimationFrame(loopRAF); loopRAF = 0; }
     if (loopReturnTimer) { clearTimeout(loopReturnTimer); loopReturnTimer = 0; }
@@ -437,6 +444,7 @@
     let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
     let lastX = 0, lastY = 0, lastT = 0, vx = 0, vy = 0;
     el.addEventListener("mousedown", (e) => {
+      if (e.target.closest(".loopctl, .report")) return;   // clicking a control / the report isn't a drag
       cancelLoopMotion();                 // grabbing it interrupts any throw/return in progress
       dragging = true;
       el.style.cursor = "grabbing";
@@ -459,6 +467,8 @@
       if (!dragging) return;
       dragging = false;
       el.style.cursor = "grab";
+      const ae = activeEntry();
+      if (ae && ae.gif && ae.gif.locked) return;               // locked: stays where you dropped it
       if (performance.now() - lastT > 80) { vx = 0; vy = 0; }   // paused before letting go -> no throw
       if (Math.hypot(vx, vy) > 0.05) throwLoop(el, vx, vy);     // released mid-motion -> fling + bounce
       else scheduleLoopReturn(el);                              // dropped still -> head home after 30s
@@ -514,12 +524,248 @@
     });
   }
 
+  // ---------- per-tab gif/reporter state + the control row (lock / pop-out / mute / session label) ----
+  // reset the gif to its CSS home corner (clear inline coords so right/bottom apply again)
+  function homeLoopCorner(el) { el.style.left = ""; el.style.top = ""; el.style.right = ""; el.style.bottom = ""; }
+
+  // apply a tab's saved gif state to the single #brandloop element (called on every tab switch, item 6)
+  function applyGifState(entry) {
+    const el = $("brandloop");
+    if (!el) return;
+    cancelLoopMotion();
+    if (!entry || !entry.gif) { el.style.display = "none"; return; }
+    const g = entry.gif;
+    el.style.display = "";                             // clear any inline hide -> CSS flex applies
+    el.classList.toggle("locked", !!g.locked);
+    el.classList.toggle("reportopen", !!g.reportOpen);
+    if (g.left != null && g.top != null) setLoopPos(el, g.left, g.top);
+    else homeLoopCorner(el);
+    updateLoopButtons(entry);
+    renderReport(entry);
+  }
+
+  // padlock: locked -> no bounce / no drift home, stays put, and the report box opens
+  function toggleLoopLock() {
+    const e = activeEntry(); if (!e || !e.gif) return;
+    e.gif.locked = !e.gif.locked;
+    const el = $("brandloop");
+    if (e.gif.locked) cancelLoopMotion();
+    if (el) el.classList.toggle("locked", e.gif.locked);
+    updateLoopButtons(e);
+    renderReport(e);
+  }
+
+  // press V: open/close the report box WITHOUT locking the gif (it stays free to float)
+  function toggleReport() {
+    const e = activeEntry(); if (!e || !e.gif) return;
+    e.gif.reportOpen = !e.gif.reportOpen;
+    const el = $("brandloop");
+    if (el) el.classList.toggle("reportopen", e.gif.reportOpen);
+    renderReport(e);
+  }
+
+  function updateLoopButtons(entry) {
+    const lock = document.querySelector("#brandloop .lock");
+    const mute = document.querySelector("#brandloop .mute");
+    const slab = document.querySelector("#brandloop .slabel");
+    const g = entry && entry.gif;
+    if (lock) { lock.classList.toggle("on", !!(g && g.locked)); lock.title = (g && g.locked) ? "unlock (resume floating)" : "lock in place"; }
+    if (mute) { mute.classList.toggle("on", !!(entry && entry.voice)); mute.title = (entry && entry.voice) ? "voice: on" : "voice: off"; }
+    if (slab) slab.textContent = "session " + ((entry && entry.session) || "");
+  }
+
+  function wireLoopControls() {
+    const lock = document.querySelector("#brandloop .lock");
+    const mute = document.querySelector("#brandloop .mute");
+    if (lock) lock.addEventListener("click", (e) => { e.stopPropagation(); toggleLoopLock(); });
+    if (mute) mute.addEventListener("click", (e) => { e.stopPropagation(); if (active) toggleTabVoice(active); });
+    // press V (when not typing) to pop the report box out / hide it again
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key !== "v" && e.key !== "V") return;
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT" || ae.isContentEditable)) return;
+      e.preventDefault();
+      toggleReport();
+    });
+  }
+
+  // ---------- customization: palettes, assistant name, mascot, the settings panel ----------
+  const PALETTES = window.SONELLE_PALETTES || [];
+  let CURRENT_SETTINGS = { paletteId: "indigo", assistantName: "sonelle", style: "warm",
+                           model: "opus", effort: "xhigh", mascotPath: "" };
+
+  function getPalette(id) {
+    for (const p of PALETTES) if (p.id === id) return p;
+    return PALETTES[0] || null;
+  }
+  function hx(c) {
+    c = String(c || "").replace("#", "");
+    if (c.length === 3) c = c.split("").map((x) => x + x).join("");
+    return [parseInt(c.slice(0, 2), 16) || 0, parseInt(c.slice(2, 4), 16) || 0, parseInt(c.slice(4, 6), 16) || 0];
+  }
+  function rgba(c, a) { const v = hx(c); return "rgba(" + v[0] + "," + v[1] + "," + v[2] + "," + a + ")"; }
+  function mix(c1, c2, t) { const a = hx(c1), b = hx(c2), m = (i) => Math.round(a[i] + (b[i] - a[i]) * t); return "rgb(" + m(0) + "," + m(1) + "," + m(2) + ")"; }
+
+  function xtermTheme(p) {
+    return Object.assign({}, THEME, {
+      foreground: p.txt, cursor: p.accent,
+      selectionBackground: rgba(p.accent, 0.32),
+      blue: p.accent, brightBlue: p.accent, magenta: p.pink, brightMagenta: p.pink,
+      white: p.txt, brightWhite: mix(p.txt, "#ffffff", 0.3)
+    });
+  }
+  // apply a palette: write the CSS custom props on :root, rebuild the page scene, re-theme live terms
+  function applyPalette(p) {
+    if (!p) return;
+    const r = document.documentElement.style;
+    r.setProperty("--bg0", p.bg);
+    r.setProperty("--bg1", mix(p.bg, "#ffffff", 0.03));
+    r.setProperty("--bg2", p.bg2);
+    r.setProperty("--txt", p.txt);
+    r.setProperty("--dim", mix(p.txt, p.bg, 0.42));
+    r.setProperty("--faint", mix(p.txt, p.bg, 0.6));
+    r.setProperty("--accent", p.accent);
+    r.setProperty("--accent-soft", rgba(p.accent, 0.16));
+    r.setProperty("--pink", p.pink);
+    r.setProperty("--hair", rgba(p.accent, 0.12));
+    r.setProperty("--hair-strong", rgba(p.accent, 0.22));
+    r.setProperty("--moody", rgba(p.accent, 0.42));
+    document.body.style.background =
+      "radial-gradient(70% 55% at 22% 8%, " + rgba(p.accent, 0.22) + ", transparent 60%)," +
+      "radial-gradient(60% 50% at 92% 4%, " + rgba(p.pink, 0.14) + ", transparent 62%)," +
+      "radial-gradient(75% 65% at 78% 102%, " + rgba(p.bg2, 0.38) + ", transparent 60%)," +
+      "linear-gradient(165deg, " + mix(p.bg, "#ffffff", 0.03) + ", " + p.bg + ")";
+    const th = xtermTheme(p);
+    activeTheme = th;                                            // new tabs build with this palette too
+    for (const [, e] of TABS) { try { e.term.options.theme = th; } catch (x) {} }
+  }
+
+  function setAssistantName(name) {
+    const w = document.querySelector(".brand .word");
+    if (w) w.textContent = name || "sonelle";
+  }
+  function setMascotSrc(src) {
+    const img = document.querySelector("#brandloop .gif");
+    if (img && src) img.src = src;
+  }
+
+  function buildPaletteGrid(selId) {
+    const grid = $("set-palettes");
+    if (!grid) return;
+    grid.textContent = "";
+    for (const p of PALETTES) {
+      const b = document.createElement("button");
+      b.className = "swatch" + (p.id === selId ? " sel" : "");
+      b.dataset.id = p.id;
+      b.title = p.name;
+      b.style.background = "linear-gradient(135deg," + p.bg2 + "," + p.bg + ")";
+      const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = p.accent;
+      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = p.name;
+      b.appendChild(dot); b.appendChild(nm);
+      b.addEventListener("click", () => {
+        grid.querySelectorAll(".swatch").forEach((s) => s.classList.remove("sel"));
+        b.classList.add("sel");
+        applyPalette(p);          // live preview as you click
+      });
+      grid.appendChild(b);
+    }
+  }
+
+  async function populateSettings() {
+    let s = CURRENT_SETTINGS;
+    if (live) { try { const r = await window.pywebview.api.get_settings(); if (r) s = Object.assign({}, s, r); } catch (x) {} }
+    CURRENT_SETTINGS = s;
+    const nm = $("set-name"); if (nm) nm.value = s.assistantName || "sonelle";
+    const st = $("set-style"); if (st) st.value = s.style || "warm";
+    const md = $("set-model"); if (md) md.value = s.model || "opus";
+    const ef = $("set-effort"); if (ef) ef.value = s.effort || "xhigh";
+    const mn = $("set-mascot-name");
+    if (mn) mn.textContent = s.mascotPath ? ("custom: " + s.mascotPath.split(/[\\/]/).pop()) : "using the built-in mascot";
+    buildPaletteGrid(localStorage.getItem("sonelle.palette") || s.paletteId || "indigo");
+  }
+  function openSettings() { const s = $("settings"); if (!s) return; populateSettings(); s.hidden = false; }
+  function closeSettings() { const s = $("settings"); if (s) s.hidden = true; }
+
+  async function saveSettings() {
+    const selEl = document.querySelector("#set-palettes .swatch.sel");
+    const obj = {
+      paletteId: (selEl && selEl.dataset.id) || CURRENT_SETTINGS.paletteId || "indigo",
+      assistantName: (($("set-name") && $("set-name").value) || "sonelle").trim() || "sonelle",
+      style: ($("set-style") && $("set-style").value) || "warm",
+      model: ($("set-model") && $("set-model").value) || "opus",
+      effort: ($("set-effort") && $("set-effort").value) || "xhigh"
+    };
+    if (live) { try { await window.pywebview.api.save_settings(obj); } catch (x) {} }
+    try { localStorage.setItem("sonelle.palette", obj.paletteId); localStorage.setItem("sonelle.name", obj.assistantName); } catch (x) {}
+    applyPalette(getPalette(obj.paletteId));
+    setAssistantName(obj.assistantName);
+    CURRENT_SETTINGS = Object.assign({}, CURRENT_SETTINGS, obj);
+    closeSettings();
+  }
+
+  // upload your own mascot: in-app uses the data URL directly; the backend STAGES the file (for the
+  // desktop overlay + config) outside the repo. Persist the data URL so it survives a relaunch.
+  function onMascotPick(e) {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const ext = "." + ((f.type.split("/")[1]) || "gif");
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = String(reader.result || "");
+      const b64 = dataUrl.split(",")[1] || "";
+      if (!b64) return;
+      setMascotSrc(dataUrl);
+      try { localStorage.setItem("sonelle.mascot", dataUrl); } catch (x) {}
+      if (live) { try { await window.pywebview.api.upload_mascot(b64, ext); } catch (x) {} }
+      const mn = $("set-mascot-name"); if (mn) mn.textContent = "custom: " + f.name;
+    };
+    reader.readAsDataURL(f);
+  }
+
+  function wireSettings() {
+    const g = $("btn-settings"); if (g) g.addEventListener("click", openSettings);
+    const c = $("set-close"); if (c) c.addEventListener("click", closeSettings);
+    const sv = $("set-save"); if (sv) sv.addEventListener("click", saveSettings);
+    const mb = $("set-mascot-btn"), mf = $("set-mascot-file");
+    if (mb && mf) mb.addEventListener("click", () => mf.click());
+    if (mf) mf.addEventListener("change", onMascotPick);
+    const modal = $("settings");
+    if (modal) modal.addEventListener("mousedown", (e) => { if (e.target === modal) closeSettings(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { const s = $("settings"); if (s && !s.hidden) { e.preventDefault(); closeSettings(); } }
+    });
+  }
+
+  // boot: apply the locally-cached palette / name / mascot instantly (before the bridge connects)
+  function applyStoredCustomization() {
+    const pid = localStorage.getItem("sonelle.palette");
+    if (pid) applyPalette(getPalette(pid));
+    const nm = localStorage.getItem("sonelle.name");
+    if (nm) setAssistantName(nm);
+    const ms = localStorage.getItem("sonelle.mascot");
+    if (ms) setMascotSrc(ms);
+  }
+  // boot: the backend config is the source of truth - apply it when localStorage hasn't already
+  async function loadSettingsFromBackend() {
+    if (!live) return;
+    let s = null;
+    try { s = await window.pywebview.api.get_settings(); } catch (x) { s = null; }
+    if (!s) return;
+    CURRENT_SETTINGS = Object.assign({}, CURRENT_SETTINGS, s);
+    if (!localStorage.getItem("sonelle.palette") && s.paletteId) applyPalette(getPalette(s.paletteId));
+    if (!localStorage.getItem("sonelle.name") && s.assistantName) setAssistantName(s.assistantName);
+  }
+
   // ---------- chrome wiring (safe with or without the bridge) ----------
   function wireChrome() {
     const openTab = () => { if (live) createLiveTab(null); else createDemoTab(); };
     $("btn-new").addEventListener("click", openTab);
     $("w-open").addEventListener("click", openTab);
-    wireBrandloopDrag();          // the mascot gif is grab-and-drop, and remembers where you leave it
+    wireBrandloopDrag();          // the mascot gif is grab-and-drop (throw + bounce + drift home)
+    wireLoopControls();           // the lock / pop-out / mute controls on the gif's control row
+    wireSettings();               // the titlebar gear -> customization panel
+    applyStoredCustomization();   // apply the cached palette / name / mascot instantly on boot
     // Ctrl+T opens a new terminal (the + button advertises this shortcut; WebView2 has no default for it)
     document.addEventListener("keydown", (e) => {
       if (e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === "t" || e.key === "T")) { e.preventDefault(); openTab(); }
@@ -550,6 +796,7 @@
   function initLive() {
     if (live) return;
     live = true;
+    loadSettingsFromBackend();    // backend config is the source of truth for the palette/name
     createLiveTab(null);
   }
 
@@ -558,6 +805,8 @@
     const entry = buildPane();
     for (const [, e] of TABS) e.pane.style.display = "none";
     const did = "demo" + (++tabCount);
+    entry.tabId = did;
+    entry.session = tabCount;
     entry.name = nextTabName();
     entry.tabEl = makeTabEl(did, entry.name);
     updateTabVoiceEl(entry);

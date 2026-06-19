@@ -32,13 +32,16 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
     host is still there via `:app-classic`. `bin\make_launcher.ps1` makes the `sonelle` shortcut open the
     glass app by default (`-Classic` = WinForms, `-Terminal` = a single bare console).
     Each tab has its own **voice toggle** (a speaker on the tab pill - mute the boring research tabs,
-    keep the important ones talking): turn it on and sonelle texts you her progress *straight into the
-    terminal*, word-by-word - **pink** when she's talking to you ("ok, on it.", "all green - 1666
-    passing!") and **soft white** for the play-by-play - and speaks it aloud. The voice is **Kokoro**,
-    a real local neural voice **bundled in the repo** (`app\voice\`, no download; `edge-tts` then Windows
-    SAPI as fallbacks). Powered by Claude Code hooks; off by default, tune `narrator` in `sonelle.config.json`.
-    The mascot gif in the corner has **physics** - fling it and it bounces off the edges, then drifts
-    back home after a bit.
+    keep the important ones talking): turn it on and sonelle **reports her progress in a little box under
+    the mascot** - **pink** when she's talking to you ("got it :)", "tests green :)") and **soft white**
+    for the play-by-play - and speaks it aloud. The voice is **Kokoro**, a real local neural voice
+    **bundled in the repo** (`app\voice\`, no download; `edge-tts` then Windows SAPI as fallbacks).
+    Powered by Claude Code hooks; off by default, tune `narrator` in `sonelle.config.json`.
+    The **mascot is her reporter**: drag it (it bounces off the edges, then drifts home), **lock** it in
+    place or press **V** to open the report box, and **mute** it. Each tab keeps its own mascot
+    position/state. A **settings gear** in the titlebar opens a panel for **20 colour palettes**, the
+    **assistant name**, your **own mascot** image, the **reporting style** (warm/terse/hacker/bubbly),
+    and the **claude model + effort**.
 12. Improve sonelle itself:  type `:dev` (or address the engine by its own name: `sonelle: <prompt>`) - opens a dev session in the engine, seeded with `docs\DEVELOPING.md`; keep `selftest` green before committing.
 
 ## The three capabilities (honest about what's mechanism vs discipline)
@@ -66,7 +69,8 @@ The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max
 |---|---|
 | `bin\sonelle.ps1` | the terminal (Claude-styled launcher; calm welcome card, `:help` on demand; routes to `claude`) |
 | `app\` | the liquid-glass desktop app: Python (pywebview) + xterm.js front-end; PowerShell runs behind it in a PTY (`:app`) |
-| `app\narrator.py` + `app\tts.py` + `app\narrate_hook.ps1` | the per-tab **voice narrator**: claude's hooks -> warm first-person lines typed into the terminal (pink = she's talking to you, white = play-by-play) + **Kokoro** local-neural speech (`edge-tts`/SAPI fallback) |
+| `app\narrator.py` + `app\tts.py` + `app\narrate_hook.ps1` | the per-tab **voice narrator**: claude's hooks -> dual-rendered lines (a short cute **display** for the report box + a natural **speak** line for TTS, pink = she's talking to you, white = play-by-play) + **Kokoro** local-neural speech (`edge-tts`/SAPI fallback) |
+| `app\ui\palettes.js` | the **20 colour palettes** for the settings panel (the gear) |
 | `app\voice\` | the **Kokoro voice model vendored in the repo** (int8 `.onnx` + voice pack) - so the voice ships with sonelle, no download |
 | `knowledge\` | the **shared knowledge base**: generic, reusable lessons (public, ASCII) that ship with the engine; personal/per-project memory stays in the gitignored hub `memory\` |
 | `bin\sonelle_gui.ps1` | launcher for the glass app: bootstraps `.venv` (pywebview + pywinpty + edge-tts), best-effort installs the Kokoro runtime, then runs it with `pythonw` |
