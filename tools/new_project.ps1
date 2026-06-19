@@ -37,6 +37,7 @@ function Fill($t) {
 }
 
 if ($Short -notmatch '^[a-z0-9_]+$') { Write-Host "[X] Shortcode must be a-z 0-9 _ only (got '$Short')." -ForegroundColor Red; exit 1 }
+if (@('general') -contains $Short) { Write-Host "[X] '$Short' is a reserved sonelle command (the no-project scratch lane), not a project shortcode." -ForegroundColor Red; exit 1 }
 if (-not (Test-Path $tpl))      { Write-Host "[X] templates folder not found: $tpl" -ForegroundColor Red; exit 1 }
 if (-not (Test-Path $projects)) { Write-Host "[X] registry not found: $projects" -ForegroundColor Red; exit 1 }
 
@@ -82,7 +83,12 @@ if (-not (Test-Path $hooksDir)) { New-Item -ItemType Directory -Path $hooksDir -
 Copy-Item (Join-Path $tpl 'settings.template.json')   (Join-Path $Path '.claude\settings.json')   -Force
 Copy-Item (Join-Path $tpl 'hooks\session_start.ps1')  (Join-Path $hooksDir 'session_start.ps1')   -Force
 Copy-Item (Join-Path $tpl 'hooks\stop.ps1')           (Join-Path $hooksDir 'stop.ps1')            -Force
-Write-Host "[+] $Path\.claude\settings.json (+ hooks)"
+Copy-Item (Join-Path $tpl 'hooks\pretooluse_guard.ps1') (Join-Path $hooksDir 'pretooluse_guard.ps1') -Force
+# slash commands: /selftest /heal /ship /ritual (claude picks these up from the project's .claude\commands)
+$commandsDir = Join-Path $Path '.claude\commands'
+if (-not (Test-Path $commandsDir)) { New-Item -ItemType Directory -Path $commandsDir -Force | Out-Null }
+foreach ($c in @('selftest', 'heal', 'ship', 'ritual')) { Copy-Item (Join-Path $tpl ('commands\' + $c + '.md')) (Join-Path $commandsDir ($c + '.md')) -Force }
+Write-Host "[+] $Path\.claude\settings.json (+ hooks: session_start/stop/pretooluse_guard, + commands)"
 $check = Join-Path $Path 'sonelle.check.ps1'
 $checkBody = @'
 # sonelle.check.ps1 - health check for {{NAME}}. Auto-detects a common test/build command.

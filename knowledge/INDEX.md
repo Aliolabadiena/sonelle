@@ -23,3 +23,4 @@ gitignored hub `memory/` (and your Claude auto-memory). Rule of thumb:
 - [selftest-grep-assertion-self-collision](selftest-grep-assertion-self-collision.md) - source-grep assertions can match comments / their own wording; anchor on a unique code-only token and watch negative matches.
 - [css-class-token-collision](css-class-token-collision.md) - Don't reuse a class token an existing descendant selector targets
 - [hermetic-config-test-env-override](hermetic-config-test-env-override.md) - Make config-dependent behavioral tests hermetic with an env path override
+- [ps-hook-stdin-utf8](ps-hook-stdin-utf8.md) - PS 5.1 hooks must read stdin as UTF-8; testing a stdin filter from PS mangles non-ASCII (OutputEncoding) and can throw on stderr (EAP=Stop)

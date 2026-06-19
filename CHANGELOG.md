@@ -1,5 +1,55 @@
 # Changelog
 
+## v1.37 — 2026-06-19 (onboarding primer + :adopt an existing project + the general scratch lane)
+- **The app terminal opens with a primer, not a blank prompt.** Each glass-app tab runs the terminal in
+  `-Bare` mode, which used to show nothing. It now prints a tiny NO-CLAUDE primer (`BareIntro`): make a
+  project (`:new`), bring an existing one in (`:adopt`), run a task (`<short>: <prompt>`), and connect
+  claude (install Claude Code + sign in). Typing `help` / `help:` / `?` (bare, no colon) now shows the
+  command list too - and never routes to claude, so a newcomer can't accidentally fire a prompt.
+- **`:adopt <path> [as <short>]` - convert an existing project into the workflow.** Scaffolds sonelle's
+  skeleton over an EXISTING (non-sonelle) codebase, then hands claude a best-effort AI conversion: read the
+  repo, rewrite `sonelle.check.ps1` to the project's REAL tests/build, rewrite `CLAUDE.md` to how you
+  actually work there, set the TODO/ledger to the real state, and report honestly what it could not adapt.
+  It is up-front that a very different structure may need a manual fix. NON-DESTRUCTIVE: any existing
+  `CLAUDE.md` / `sonelle.check.ps1` / `.claude\` is backed up to `*.pre-sonelle.bak` first, never clobbered.
+- **`general: <prompt>` - a one-off lane with no project and no state.** For a quick question or throwaway
+  task ("html: 10 concepts") that should not live in any project. It runs claude in a NEUTRAL scratch dir
+  (`%TEMP%\sonelle_general`, outside any hub/project tree so no `CLAUDE.md` is auto-loaded) and writes no
+  registry row, no TODO/ledger, no memory - nothing to clutter your real projects. `general` is reserved
+  (new_project refuses it as a shortcode).
+- **selftest:** new section 5f (behavioral, stubbed claude) - adopt registers + scaffolds + backs up the
+  original + routes the conversion INTO the project; general routes to the scratch dir with no registry row
+  / no state; new_project rejects the reserved word. 8b adds the bare primer, the help word, and the
+  General lane. All green.
+
+## v1.36 — 2026-06-19 (PreToolUse guard + slash commands + inherent altitude directive)
+- **PreToolUse guard hook - the guardrail yolo removed.** A `bypassPermissions` ("yolo") session skips
+  claude's own permission prompts, so the engine (and every scaffolded project) now ships
+  `.claude\hooks\pretooluse_guard.ps1`, wired in `.claude\settings.json` for `Write|Edit|Bash`. claude runs
+  it BEFORE each such call; the guard EXITS 2 to BLOCK (its message goes back to claude) or 0 to allow, and
+  fails OPEN on any read/parse error so it can never break a session. It reads claude's payload as UTF-8
+  (`OpenStandardInput`; PS 5.1's `[Console]::In` uses the console code page and would corrupt non-ASCII).
+  The **engine** guard turns invariants that selftest/the terminal only caught AFTER the fact into hard
+  pre-blocks: the house rule (no non-ASCII written to a `.ps1`) and invariant #4 (no `new_project`, no
+  plain `log_lesson` - only `-Shared` -> `knowledge\`; no `*_TODO.txt`/`*_run_STATUS.md`/`memory\` at the
+  engine root), plus blocks force-push. The **project** template guard blocks force-push and is a stub for
+  your own rules.
+- **Slash commands codify the rituals.** `.claude\commands\`: `/selftest`, `/heal`, `/ship`, `/ritual` -
+  engine versions drive `selftest`/`doctor`/the commit gate; scaffolded versions drive `sonelle.check.ps1`
+  + the project's TODO/ledger. One keystroke instead of re-explaining, and versioned with the repo.
+- **Inherent altitude directive (self-gating subagent delegation).** `bin\sonelle.ps1` now appends a
+  one-line directive to EVERY session it launches (DevSelf + Route) via `--append-system-prompt`: delegate
+  breadth-first exploration to subagents (the Task tool) on a hard / multi-file task, just-do-it on a small
+  one. So the deep approach auto-applies only when a task is genuinely difficult - best results on the hard
+  ones, no wasted effort on the easy ones. DevSelf also moves its engine framing from a user-turn seed into
+  `--append-system-prompt` (holds up better under compaction). Both gate on a cached
+  `ClaudeSupports '--append-system-prompt'` probe and fall back to folding the text into the prompt on an
+  older `claude`, so a missing flag can never break a session.
+- **selftest:** new section 8h (guard exists + reads UTF-8 + a BEHAVIORAL block/allow matrix incl. the
+  non-ASCII-into-`.ps1` case fed as raw UTF-8 bytes + the slash commands + the terminal wiring); 5d now
+  asserts routing attaches `--append-system-prompt`; T2 golden + scaffold manifest updated for the new
+  template files. All green.
+
 ## v1.35 — 2026-06-19 (model split + live settings: thinky orchestrator, separate code-writer)
 - **Separate model for the code-writer (subagents) vs the orchestrator.** The settings panel now has an
   **orchestrator model + effort** (the session you talk to -> claude's `--model`/`--effort`) AND a

@@ -141,6 +141,35 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   also how selftest 5d stays hermetic). Permission mode is NOT re-read live (it has `-Yolo`/`:yolo`
   overrides). Guarded by selftest 5d (behavioral: model/effort/code-writer + SONELLE_CONFIG), 8e
   (reporter), 8f (narrator), 8i (settings); keep the JS<->Python contract synced on both sides.
+- **Guard hook + slash commands + inherent altitude (v1.36):** the engine and every scaffolded project
+  ship a **PreToolUse guard** (`.claude\hooks\pretooluse_guard.ps1`, wired in `.claude\settings.json` for
+  `Write|Edit|Bash`). It reads claude's UTF-8 payload on stdin (`OpenStandardInput` as UTF-8 - PS 5.1's
+  `[Console]::In` uses the console code page and would corrupt non-ASCII), and on a violation EXITS 2 to
+  BLOCK the call (stderr goes back to claude); any parse/read problem EXITS 0 (a guard must never break a
+  session). This is the only guardrail left in a `bypassPermissions` session. The ENGINE guard enforces
+  the house rule (no non-ASCII written to a `.ps1`) and invariant #4 (no `new_project`, no plain
+  `log_lesson` - only `-Shared` -> `knowledge\`; no `*_TODO.txt`/`*_run_STATUS.md`/`memory\` at the engine
+  root) plus blocks force-push; the PROJECT template guard blocks force-push and is a stub to add your own
+  rules. **Slash commands** (`.claude\commands\`: `/selftest /heal /ship /ritual`) codify the rituals -
+  engine versions drive `selftest`/`doctor`/the commit gate, scaffolded versions drive `sonelle.check.ps1`
+  + the project's TODO/ledger. **Inherent altitude directive:** `bin\sonelle.ps1` appends a one-line,
+  self-gating directive (`$delegationDirective`) to EVERY session via `--append-system-prompt` - delegate
+  breadth-first exploration to subagents (the Task tool) on a hard / multi-file task, just-do-it on a small
+  one - so the deep approach auto-applies only when a task warrants it (best results on the hard ones, no
+  wasted effort on the easy ones). DevSelf also moves its engine framing into `--append-system-prompt` (the
+  system prompt survives compaction better than a user-turn seed). Both gate on a cached
+  `ClaudeSupports '--append-system-prompt'` probe and fall back to folding the text into the prompt on an
+  older `claude`. Guarded by selftest 8h (guard exists + behavioral block/allow incl. the non-ASCII case +
+  commands + wiring) and 5d (routing attaches `--append-system-prompt`).
+- **Onboarding + :adopt + general (v1.37):** the glass app runs each tab in `-Bare`, which now prints a
+  tiny no-claude primer (`BareIntro`: `:new` / `:adopt` / `<short>: <prompt>` / connect claude); bare
+  `help`/`help:`/`?` shows `ShowHelp` and never routes. **`:adopt <path> [as <short>]`** (`Adopt` in
+  `bin\sonelle.ps1`) scaffolds the skeleton over an EXISTING repo then `Route`s an AI conversion prompt
+  into it - non-destructive (existing `CLAUDE.md`/`sonelle.check.ps1`/`.claude\` are copied to
+  `*.pre-sonelle.bak` first). **`general: <prompt>`** is intercepted in `Route` -> `General`, which runs
+  claude in `%TEMP%\sonelle_general` (neutral - no `CLAUDE.md` up the tree) with NO hub state / registry
+  row / memory; `general` is a reserved shortcode (new_project refuses it). Guarded by selftest 5f
+  (behavioral) + 8b.
 - **Docs:** keep `README.md` + `docs\ARCHITECTURE.md` honest (mechanism vs discipline), and add a
   `CHANGELOG.md` entry.
 

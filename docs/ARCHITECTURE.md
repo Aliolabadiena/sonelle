@@ -158,6 +158,27 @@ the interactive `claude` TUI renders in-app. One PTY + one daemon read-thread pe
   and the glass app spawns the terminal with `-Yolo`, which runs `claude --permission-mode bypassPermissions`
   so it never asks. In any terminal you can also toggle it live with `:yolo` (or `:yolo on|off`), or set it
   permanently via `sonelle.config.json` -> `models.orchestratorPermissionMode: "bypassPermissions"`.
+- **PreToolUse guard + slash commands + inherent altitude (v1.36):** because yolo removes claude's own
+  permission prompts, the engine and every scaffolded project ship a **PreToolUse guard hook**
+  (`.claude\hooks\pretooluse_guard.ps1`, wired in `.claude\settings.json`) - claude runs it BEFORE every
+  `Write`/`Edit`/`Bash` and it EXITS 2 to block the call (feeding the reason back to claude) or 0 to allow,
+  failing open on any error so it can never break a session. The engine guard enforces the house rule
+  (pure-ASCII `.ps1`) and invariant #4 (no hub state / `new_project` / plain `log_lesson` at the engine
+  root) and blocks force-push; the project guard blocks force-push and is yours to extend. **Slash
+  commands** (`.claude\commands\`: `/selftest /heal /ship /ritual`) turn the rituals into one keystroke.
+  And `bin\sonelle.ps1` appends a one-line **altitude directive** to every session via
+  `--append-system-prompt`, so claude auto-delegates hard / multi-file tasks to subagents (the Task tool)
+  but does small ones directly - the deep approach applies itself only when a task warrants it. selftest
+  8h (+ 5d) cover all of it.
+- **Onboarding primer, :adopt, and the general lane (v1.37):** each glass-app tab runs `-Bare`, which now
+  greets you with a short no-claude primer (how to make a project, adopt an existing one, run a task,
+  connect claude) instead of a blank prompt; `help`/`?` shows the commands without ever calling claude.
+  **`:adopt <path>`** brings an existing, non-sonelle codebase into the workflow: it scaffolds the skeleton
+  over it (backing up any `CLAUDE.md`/`.claude\` to `*.pre-sonelle.bak` first), then asks claude to adapt
+  the generic scaffold to the real code - best-effort, and honest that a very different structure may need
+  a manual fix. **`general: <prompt>`** is a one-off lane for a quick question or throwaway task: it runs in
+  a neutral scratch dir (`%TEMP%\sonelle_general`) with no project, no registry row, and no saved state, so
+  it never clutters your real projects' memory or docs.
 - **Voice narrator (per-tab):** each tab pill carries its OWN speaker toggle (built in `app.js`
   `makeTabEl`; the mascot's mute button mirrors it), so you mute the boring research sessions and keep
   the important ones talking. When a tab's voice is on, sonelle **reports in the box under the mascot**

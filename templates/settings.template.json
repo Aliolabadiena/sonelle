@@ -9,6 +9,11 @@
       { "matcher": "*", "hooks": [
         { "type": "command", "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/stop.ps1" }
       ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Write|Edit|Bash", "hooks": [
+        { "type": "command", "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/pretooluse_guard.ps1" }
+      ] }
     ]
   }
 }

@@ -61,6 +61,22 @@ function RefreshOrch {
 # claude a bad flag here. Empty (no narration) for a plain terminal -> nothing changes.
 $orchSettings = ''
 if ($env:SONELLE_NARRATE_SETTINGS -and (Test-Path $env:SONELLE_NARRATE_SETTINGS)) { $orchSettings = $env:SONELLE_NARRATE_SETTINGS }
+# Probe `claude --help` ONCE (cached per process) for a flag, so a missing flag can never break a working
+# session - the same defensive contract the narrator uses before attaching --settings. Used below to gate
+# --append-system-prompt; a build without it falls back to folding the framing into the prompt.
+$script:claudeHelp = $null
+function ClaudeSupports($flag) {
+  if ($null -eq $script:claudeHelp) {
+    try { $script:claudeHelp = (& claude --help 2>$null | Out-String) } catch { $script:claudeHelp = '' }
+  }
+  return ([bool]($script:claudeHelp -match [regex]::Escape($flag)))
+}
+# Inherent altitude directive: sonelle appends this to EVERY session it launches (engine-dev + project
+# routes) via claude's --append-system-prompt. It SELF-GATES - claude takes the deep, subagent-delegating
+# path only when a task is genuinely hard, and skips it for small ones (best results on the hard tasks, no
+# wasted effort on the easy ones). One line (no newlines / cmd metacharacters) so it passes through any
+# launcher unmangled.
+$script:delegationDirective = 'Altitude - match your effort to the task: for a large or multi-file change, like a refactor or a cross-cutting edit that first needs you to understand how several files interact, delegate the breadth-first exploration to subagents via the Task tool and keep your own context for the synthesis and the edit; for a small focused change just do it directly and do not spawn subagents or over-plan a one-liner.'
 $psExe = (Get-Process -Id $PID).Path
 # (_registry.ps1 is already dot-sourced above for Get-SonelleConfig - Get-SonelleProjects comes from it too.)
 
@@ -141,9 +157,11 @@ function ShowHelp {
   Write-Host ""
   $rows = @(
     @("<short>: <prompt>",    ("run a prompt in a project  (e.g. " + $cream + "sotis: fix the build" + $dim + ")")),
+    @("general: <prompt>",    "one-off question / quick task - no project, no saved state"),
     @(":attach <path>",       ("attach an image to the next prompt (or inline " + $cream + "@path" + $dim + ")")),
     @(":projects",            "list your projects"),
     @(":new",                 "scaffold a new project"),
+    @(":adopt <path>",        "convert an existing project into the workflow (AI, best-effort)"),
     @(":heal [short]",        "health-check / heal a project"),
     @(":team <proj> <lanes>", "run up to 5 parallel lanes on one project"),
     @(":status <proj>",       "show each lane's status"),
@@ -161,6 +179,16 @@ function ShowHelp {
     $left = $row[0]; $pad = 22 - $left.Length; if ($pad -lt 1) { $pad = 1 }
     Write-Host ("    " + $cream + $left + $R + (' ' * $pad) + $dim + $row[1] + $R)
   }
+}
+# The glass app opens each tab in -Bare mode; a blank prompt is unfriendly, so show a tiny NO-CLAUDE
+# primer (make a project / bring one in / run a task / connect claude) instead of the full welcome card.
+function BareIntro {
+  Write-Host ""
+  Write-Host ("  " + $clay + $bold + "sonelle" + $R + "  " + $dim + "run your projects through one assistant  " + $dot + "  type " + $R + $cream + "help" + $R)
+  Write-Host ("  " + $dim + "make a project   " + $R + $cream + ":new" + $R + $dim + "    bring an existing one in   " + $R + $cream + ":adopt <path>" + $R)
+  Write-Host ("  " + $dim + "run a task       " + $R + $cream + "<short>: <prompt>" + $R + $dim + "   e.g.  " + $R + $cream + "myproj: fix the build" + $R)
+  Write-Host ("  " + $dim + "connect claude   install Claude Code and sign in:  https://claude.com/claude-code" + $R)
+  Write-Host ""
 }
 function ShowProjects {
   Write-Host ("  " + $bold + "projects" + $R)
@@ -201,6 +229,49 @@ function Team($rest) {
 function StatusLanes($pj) {
   if (-not $pj) { Write-Host ("  {0}usage: :status <project>{1}" -f $dim, $R); return }
   & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'bin\sonelle_team.ps1') $pj -Status -Hub $hub | Out-Host
+}
+function Adopt($rest) {
+  # bring an EXISTING (non-sonelle) project into the workflow: scaffold the skeleton over it, then hand
+  # claude an AI pass to adapt the generic scaffold to the real code. Best-effort - a very different repo
+  # structure may need a manual fix. Existing files are backed up to *.pre-sonelle.bak, never clobbered.
+  $rest = $rest.Trim()
+  if (-not $rest) { Write-Host ("  {0}usage: :adopt <path-to-existing-project> [as <shortcode>]{1}" -f $dim, $R); return }
+  $short = ''
+  if ($rest -match '^(.*?)\s+as\s+([A-Za-z0-9_]+)\s*$') { $path = $Matches[1]; $short = $Matches[2].ToLower() } else { $path = $rest }
+  $path = $path.Trim().Trim('"')
+  if (-not (Test-Path $path -PathType Container)) { Write-Host ("  {0}[!] not a folder: {1}{2}" -f $clay, $path, $R); return }
+  $path = (Resolve-Path $path).Path
+  if (-not $short) { $short = ((Split-Path $path -Leaf).ToLower() -replace '[^a-z0-9_]', ''); if (-not $short) { $short = 'proj' } }
+  $pf = Join-Path $hub 'PROJECTS.md'
+  if ((Test-Path $pf) -and @((Get-SonelleProjects $pf) | Where-Object { $_.Short -eq $short }).Count) {
+    Write-Host ("  {0}[!] '{1}' is already registered - choose another:  :adopt <path> as <short>{2}" -f $clay, $short, $R); return
+  }
+  Write-Host ("  " + $clay + $arrow + " adopt" + $R + "  " + $dim + $path + "  " + $dot + "  as " + $R + $cream + $short + $R)
+  Write-Host ("  {0}this writes sonelle's files INTO that folder (CLAUDE.md, sonelle.check.ps1, .claude\) and then{1}" -f $dim, $R)
+  Write-Host ("  {0}asks claude to adapt them to your code. BEST-EFFORT: a very different structure may need a{1}" -f $dim, $R)
+  Write-Host ("  {0}manual fix. existing files are backed up to *.pre-sonelle.bak (nothing is overwritten blind).{1}" -f $dim, $R)
+  if ((Read-Host "  adopt it now? (y/N)") -notmatch '^(y|Y)') { Write-Host ("  {0}cancelled - nothing changed.{1}" -f $dim, $R); return }
+  # non-destructive: back up anything new_project would overwrite
+  $bk = @()
+  foreach ($rel in @('CLAUDE.md', 'sonelle.check.ps1')) {
+    $fp = Join-Path $path $rel
+    if (Test-Path $fp) { Copy-Item $fp ($fp + '.pre-sonelle.bak') -Force; $bk += $rel }
+  }
+  $cdir = Join-Path $path '.claude'
+  if (Test-Path $cdir) { $bdir = $cdir + '.pre-sonelle.bak'; if (Test-Path $bdir) { Remove-Item $bdir -Recurse -Force }; Copy-Item $cdir $bdir -Recurse -Force; $bk += '.claude' }
+  if ($bk.Count) { Write-Host ("  {0}backed up: {1}  (-> *.pre-sonelle.bak){2}" -f $dim, ($bk -join ', '), $R) }
+  # scaffold the skeleton (registry row + hub state + project files)
+  & $psExe -ExecutionPolicy Bypass -File (Join-Path $root 'tools\new_project.ps1') $short (Split-Path $path -Leaf) $path -Hub $hub | Out-Host
+  if ($LASTEXITCODE -ne 0) { Write-Host ("  {0}[!] scaffold failed - skipping the AI conversion.{1}" -f $clay, $R); return }
+  # hand claude the conversion task; Route reuses the launch path (model/effort/append-system-prompt, cd in)
+  $conv = "This project was just ADOPTED into sonelle from an EXISTING codebase - it was NOT built for sonelle, so treat this as best-effort and tell me honestly what you cannot adapt. Do NOT change application code or behavior. " +
+          "Step 1: read the project to learn its REAL build/test setup. " +
+          "Step 2: rewrite sonelle.check.ps1 so it runs this project's ACTUAL tests/build - right now it is a generic auto-detect placeholder; if there is genuinely no check, say so and leave a clear TODO instead of a fake pass. " +
+          "Step 3: rewrite CLAUDE.md to describe how to actually work in THIS repo; if a CLAUDE.md.pre-sonelle.bak exists, merge anything useful from it, then you may delete the .pre-sonelle.bak files. " +
+          "Step 4: update the project's TODO and ledger to reflect the real current state. " +
+          "Step 5: finish with a short, honest report of what you adapted and what still needs my manual attention."
+  Write-Host ("  {0}scaffold done - handing claude the conversion (best-effort)...{1}" -f $dim, $R)
+  Route $short $conv @()
 }
 function AppLaunch {
   # the liquid-glass Python app (pywebview); the terminal runs inside it via a hidden PTY
@@ -251,19 +322,25 @@ function DevSelf($prompt, $images) {
     $ask = $ask + "`n`nAttached image(s) - please read them:`n" + (($images | ForEach-Object { " - $_" }) -join "`n")
     Write-Host ("  {0}+ {1} image(s) attached{2}" -f $dim, $images.Count, $R)
   }
-  $seed = "You are developing the sonelle ENGINE ITSELF (this repository = your current working directory). It is a PUBLIC repo with ZERO personal data.`n" +
+  # Engine-dev framing lives in the SYSTEM prompt (--append-system-prompt), not the user turn, so it holds
+  # up under long sessions / compaction instead of getting buried. The task itself stays the user prompt.
+  $framing = "You are developing the sonelle ENGINE ITSELF (this repository = your current working directory). It is a PUBLIC repo with ZERO personal data.`n" +
           "Read docs\DEVELOPING.md and docs\ARCHITECTURE.md FIRST, and treat docs\DEVELOPING.md as your SOLE authority for THIS session. Claude Code auto-loads the root CLAUDE.md (the dispatcher template the engine ships) - IGNORE its dispatcher / project-routing / state-reading framing here; this session develops the engine, it does not route projects or manage a hub.`n" +
-          "Honor every invariant in DEVELOPING.md: pure-ASCII PowerShell, no personal data in the repo, do NOT scaffold hub/project state (never run new_project or log_lesson at the engine root), and run tools\selftest.ps1 to ALL PASS before any commit (extend selftest for new features so the engine stays self-verifying). Everything is git-versioned, so changes are rewindable.`n`n" +
-          "Task: $ask"
+          "Honor every invariant in DEVELOPING.md: pure-ASCII PowerShell, no personal data in the repo, do NOT scaffold hub/project state (never run new_project or log_lesson at the engine root), and run tools\selftest.ps1 to ALL PASS before any commit (extend selftest for new features so the engine stays self-verifying). Everything is git-versioned, so changes are rewindable."
   RefreshOrch   # pick up any settings-panel change to model/effort/code-writer (live, no restart)
   $mline = $orchModel + " " + $dot + " " + $orchEffort; if ($orchCode) { $mline += " " + $dot + " code:" + $orchCode }
   Write-Host ("  " + $clay + $arrow + " dev" + $R + "  " + $dim + "developing the engine itself  " + $dot + "  " + $mline + $R)
   $dirty = $false
   if (Get-Command git -ErrorAction SilentlyContinue) { try { $dirty = [bool](& git -C $root status --porcelain 2>$null) } catch {} }
   if ($dirty) { Write-Host ("  {0}note: engine has uncommitted changes - commit/stash first for a clean rewind point.{1}" -f $dim, $R) }
-  $cargs = @('--model', $orchModel, '--effort', $orchEffort); if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
+  $cargs = @('--model', $orchModel, '--effort', $orchEffort)
+  # framing + the inherent altitude directive ride the system prompt when claude supports it; otherwise
+  # fold them into the prompt (older builds) so behavior degrades gracefully, never breaks.
+  if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', ($framing + "`n`n" + $script:delegationDirective)); $promptArg = $ask }
+  else { $promptArg = $framing + "`n`n" + $script:delegationDirective + "`n`nTask: " + $ask }
+  if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
   Push-Location $root
-  try { & claude @cargs $seed } finally { Pop-Location }
+  try { & claude @cargs $promptArg } finally { Pop-Location }
   # invariant #4 guard: the engine must stay clean of hub state - warn if a session left any behind
   $junk = @(Get-ChildItem $root -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue) + @(Get-ChildItem $root -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue)
   if ($junk.Count -gt 0 -or (Test-Path (Join-Path $root 'memory'))) {
@@ -271,8 +348,42 @@ function DevSelf($prompt, $images) {
   }
   $script:staged = @()   # staged images consumed
 }
+function General($prompt, $images) {
+  # one-off Q/A or quick task with NO project: run claude in a NEUTRAL scratch dir (outside any hub/project
+  # tree, so no CLAUDE.md is auto-loaded) and write NO hub state / memory / registry row - nothing to clutter.
+  $claude = Get-Command claude -ErrorAction SilentlyContinue
+  if (-not $claude) {
+    Write-Host ("  {0}[!] 'claude' not found on PATH. Install Claude Code and log into your subscription.{1}" -f $clay, $R)
+    return
+  }
+  $finalPrompt = $prompt
+  if ($images -and $images.Count -gt 0) {
+    $finalPrompt = $prompt + "`n`nAttached image(s) - please read them:`n" + (($images | ForEach-Object { " - $_" }) -join "`n")
+    Write-Host ("  {0}+ {1} image(s) attached{2}" -f $dim, $images.Count, $R)
+  }
+  # neutral ground: $env:TEMP has no CLAUDE.md up its tree, so claude starts with a clean slate
+  $scratch = Join-Path $env:TEMP 'sonelle_general'
+  if (-not (Test-Path $scratch)) { New-Item -ItemType Directory -Path $scratch -Force | Out-Null }
+  RefreshOrch
+  $mline = $orchModel + " " + $dot + " " + $orchEffort; if ($orchCode) { $mline += " " + $dot + " code:" + $orchCode }
+  if ($script:bare) {
+    Write-Host ("  " + $clay + $arrow + " " + $R + $dim + "general" + $R)
+  } else {
+    Write-Host ("  " + $clay + $arrow + " general" + $R + "  " + $dim + $mline + $R)
+    Write-Host ("    " + $dim + "scratch (no project, no saved state)" + $R)
+    Write-Host ("    " + $dim + ($finalPrompt -replace "`n", " / ") + $R)
+  }
+  $cargs = @('--model', $orchModel, '--effort', $orchEffort)
+  if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', $script:delegationDirective) }
+  else { $finalPrompt = $script:delegationDirective + "`n`n" + $finalPrompt }
+  if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
+  Push-Location $scratch
+  try { & claude @cargs $finalPrompt } finally { Pop-Location }
+  $script:staged = @()   # staged images consumed
+}
 function Route($short, $prompt, $images) {
   if ($short -eq $script:selfShort) { DevSelf $prompt $images; return }   # the engine's own name -> develop the engine
+  if ($short -eq 'general') { General $prompt $images; return }           # reserved: a neutral scratch lane (no project/state)
   $code = ResolveCode $short
   if (-not $code) {
     Write-Host ("  {0}'{1}' is not in the registry.{2}" -f $clay, $short, $R)
@@ -300,13 +411,17 @@ function Route($short, $prompt, $images) {
     Write-Host ("    " + $dim + $code + $R)
     Write-Host ("    " + $dim + ($finalPrompt -replace "`n", " / ") + $R)
   }
-  $cargs = @('--model', $orchModel, '--effort', $orchEffort); if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
+  $cargs = @('--model', $orchModel, '--effort', $orchEffort)
+  # the inherent altitude directive rides the system prompt (self-gates: deep on hard tasks, direct on easy)
+  if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', $script:delegationDirective) }
+  else { $finalPrompt = $script:delegationDirective + "`n`n" + $finalPrompt }
+  if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
   if ($code -notmatch '^[-(]' -and (Test-Path $code)) { Push-Location $code } else { Push-Location $root }
   try { & claude @cargs $finalPrompt } finally { Pop-Location }
   $script:staged = @()   # staged images consumed
 }
 
-if (-not $script:bare) { Welcome -NoClear:([bool]$Demo) }
+if (-not $script:bare) { Welcome -NoClear:([bool]$Demo) } else { BareIntro }
 if ($Demo) { Write-Host ("  " + $dim + "(demo mode - welcome only; no REPL)" + $R); return }
 
 while ($true) {
@@ -317,8 +432,10 @@ while ($true) {
   if (-not $t) { continue }
   if ($t -match '^:(q|quit|exit)$') { break }
   elseif ($t -eq ':help') { ShowHelp; continue }
+  elseif ($t -match '^\s*(help|\?)\s*:?\s*$') { ShowHelp; continue }   # bare 'help' / 'help:' / '?' -> commands, never routed to claude
   elseif ($t -eq ':projects') { ShowProjects; continue }
   elseif ($t -eq ':new') { NewProject; continue }
+  elseif ($t -match '^:adopt\b\s*(.*)$') { Adopt ($Matches[1].Trim()); continue }
   elseif ($t -match '^:heal\s*(.*)$') { Heal ($Matches[1].Trim()); continue }
   elseif ($t -match '^:team\s+(.+)$') { Team $Matches[1]; continue }
   elseif ($t -match '^:status\s*(.*)$') { StatusLanes ($Matches[1].Trim()); continue }

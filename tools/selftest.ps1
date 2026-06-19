@@ -57,15 +57,19 @@ $chkTxt = Get-Content (Join-Path $codePath 'sonelle.check.ps1') -Raw
 Ok "default check auto-detects + marks unconfigured" (($chkTxt -match 'pytest|npm test|dotnet test') -and ($chkTxt -match 'exit 2'))
 $vj = $true; try { [void](Get-Content (Join-Path $codePath '.claude\settings.json') -Raw | ConvertFrom-Json) } catch { $vj = $false }
 Ok "project settings.json is valid JSON" $vj
+# scaffold inherits the PreToolUse guard hook + the /selftest /heal /ship /ritual slash commands
+Ok "project PreToolUse guard hook created" (Test-Path (Join-Path $codePath '.claude\hooks\pretooluse_guard.ps1'))
+Ok "project settings wires PreToolUse -> guard" ((Get-Content (Join-Path $codePath '.claude\settings.json') -Raw) -match 'pretooluse_guard\.ps1')
+foreach ($c in @('selftest', 'heal', 'ship', 'ritual')) { Ok ("project /$c command created") (Test-Path (Join-Path $codePath ('.claude\commands\' + $c + '.md'))) }
 
 # T2: golden snapshot - the template SET and the scaffold MANIFEST must stay stable, so an accidental
 # template/scaffold change that would alter every new project trips this test (a conscious change updates it).
 $tplDir  = Join-Path $engine 'templates'
 $tplGot  = @(Get-ChildItem $tplDir -Recurse -File | ForEach-Object { $_.FullName.Substring($tplDir.Length + 1).Replace('\', '/') } | Sort-Object)
-$tplWant = @('CLAUDE.template.md', 'TODO.template.txt', 'hooks/session_start.ps1', 'hooks/stop.ps1', 'lesson.template.md', 'project_memory.template.md', 'run_STATUS.template.md', 'settings.template.json') | Sort-Object
+$tplWant = @('CLAUDE.template.md', 'TODO.template.txt', 'commands/heal.md', 'commands/ritual.md', 'commands/selftest.md', 'commands/ship.md', 'hooks/pretooluse_guard.ps1', 'hooks/session_start.ps1', 'hooks/stop.ps1', 'lesson.template.md', 'project_memory.template.md', 'run_STATUS.template.md', 'settings.template.json') | Sort-Object
 Ok "template set is exactly the known golden (T2)" (($tplGot -join '|') -eq ($tplWant -join '|'))
 $manifestOk = $true
-foreach ($f in @((Join-Path $tmp 'ST_TODO.txt'), (Join-Path $tmp '_st_run_STATUS.md'), (Join-Path $codePath 'CLAUDE.md'), (Join-Path $codePath 'sonelle.check.ps1'), (Join-Path $codePath '.claude\settings.json'), (Join-Path $codePath '.claude\hooks\session_start.ps1'), (Join-Path $codePath '.claude\hooks\stop.ps1'), (Join-Path $tmp 'memory\project_st.md'), (Join-Path $tmp 'memory\MEMORY.md'))) {
+foreach ($f in @((Join-Path $tmp 'ST_TODO.txt'), (Join-Path $tmp '_st_run_STATUS.md'), (Join-Path $codePath 'CLAUDE.md'), (Join-Path $codePath 'sonelle.check.ps1'), (Join-Path $codePath '.claude\settings.json'), (Join-Path $codePath '.claude\hooks\session_start.ps1'), (Join-Path $codePath '.claude\hooks\stop.ps1'), (Join-Path $codePath '.claude\hooks\pretooluse_guard.ps1'), (Join-Path $codePath '.claude\commands\selftest.md'), (Join-Path $codePath '.claude\commands\heal.md'), (Join-Path $codePath '.claude\commands\ship.md'), (Join-Path $codePath '.claude\commands\ritual.md'), (Join-Path $tmp 'memory\project_st.md'), (Join-Path $tmp 'memory\MEMORY.md'))) {
   if (-not (Test-Path $f)) { $manifestOk = $false }
 }
 Ok "scaffold produces the full golden manifest (T2)" $manifestOk
@@ -151,7 +155,14 @@ Write-Host "== 5d. routing invokes claude correctly (behavioral, T1/T4) =="
 # leak (SONELLE_YOLO / SONELLE_NARRATE_SETTINGS / a pre-set subagent model) is neutralized too.
 $stub = Join-Path $tmp 'stub'; New-Item -ItemType Directory -Path $stub -Force | Out-Null
 $cap  = Join-Path $stub 'cap.txt'
-$stubLines = @('@echo off', 'echo %*> "%SONELLE_STUB_CAP%"', 'cd >> "%SONELLE_STUB_CAP%"',
+# `claude --help` must advertise --append-system-prompt so the terminal's ClaudeSupports probe resolves
+# true and the routing actually attaches the flag (otherwise it would take the older-build fallback path).
+$stubLines = @('@echo off',
+               'if "%~1"=="--help" (',
+               '  echo --model --effort --permission-mode --settings --append-system-prompt',
+               '  exit /b 0',
+               ')',
+               'echo %*> "%SONELLE_STUB_CAP%"', 'cd >> "%SONELLE_STUB_CAP%"',
                'echo SUBMODEL=[%CLAUDE_CODE_SUBAGENT_MODEL%]>> "%SONELLE_STUB_CAP%"', 'exit 0')
 [System.IO.File]::WriteAllText((Join-Path $stub 'claude.cmd'), ($stubLines -join "`r`n") + "`r`n")
 $cfg5d = Join-Path $tmp 'orch.config.json'
@@ -167,6 +178,7 @@ try {
   Ok "routing passes --model opus --effort xhigh (from config, live)" (($capTxt -match '--model') -and ($capTxt -match 'opus') -and ($capTxt -match '--effort') -and ($capTxt -match 'xhigh'))
   Ok "code-writer routed to CLAUDE_CODE_SUBAGENT_MODEL"               ($capTxt -match 'SUBMODEL=\[sonnet\]')
   Ok "routing cd's into the project code path"                        ($capTxt -match [regex]::Escape($codePath))
+  Ok "routing appends the altitude directive via --append-system-prompt" ($capTxt -match 'append-system-prompt')
   Ok "no yolo => no bypassPermissions"                               (-not ($capTxt -match 'bypassPermissions'))
   if (Test-Path $cap) { Remove-Item $cap -Force }
   "st: hello`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare -Yolo | Out-Null
@@ -183,6 +195,44 @@ $srcTerm = Get-Content (Join-Path $engine 'bin\sonelle.ps1') -Raw
 Ok "orchestrator re-reads model/effort/code-writer per prompt (live)" (($srcTerm -match 'function RefreshOrch') -and ([regex]::Matches($srcTerm, 'RefreshOrch').Count -ge 3) -and ($srcTerm -match 'CLAUDE_CODE_SUBAGENT_MODEL'))
 $srcReg = Get-Content (Join-Path $engine 'tools\_registry.ps1') -Raw
 Ok "config resolver honors `$env:SONELLE_CONFIG override"             ($srcReg -match 'SONELLE_CONFIG')
+
+Write-Host "== 5f. adopt an existing project + the general (no-project) lane (behavioral) =="
+# a capturing stub claude that also answers --help (so ClaudeSupports resolves and the flag attaches)
+$astub = Join-Path $tmp 'astub'; New-Item -ItemType Directory -Path $astub -Force | Out-Null
+$acap  = Join-Path $astub 'cap.txt'
+$aLines = @('@echo off', 'if "%~1"=="--help" (', '  echo --model --effort --permission-mode --append-system-prompt', '  exit /b 0', ')', 'echo %*> "%SONELLE_STUB_CAP%"', 'cd >> "%SONELLE_STUB_CAP%"', 'exit 0')
+[System.IO.File]::WriteAllText((Join-Path $astub 'claude.cmd'), ($aLines -join "`r`n") + "`r`n")
+# an EXISTING, non-sonelle project: its OWN CLAUDE.md (must be preserved) + a package.json
+$adProj = Join-Path $tmp 'existing_app'; New-Item -ItemType Directory -Path $adProj -Force | Out-Null
+[System.IO.File]::WriteAllText((Join-Path $adProj 'CLAUDE.md'), 'my own onboarding doc - keep me')
+[System.IO.File]::WriteAllText((Join-Path $adProj 'package.json'), '{"name":"existing"}')
+$savedPath2 = $env:Path; $savedCap2 = $env:SONELLE_STUB_CAP; $savedYolo2 = $env:SONELLE_YOLO; $savedNarr2 = $env:SONELLE_NARRATE_SETTINGS; $savedCfg2 = $env:SONELLE_CONFIG
+$env:SONELLE_YOLO = ''; $env:SONELLE_NARRATE_SETTINGS = ''; $env:SONELLE_CONFIG = ''; $env:Path = "$astub;$env:Path"; $env:SONELLE_STUB_CAP = $acap
+try {
+  if (Test-Path $acap) { Remove-Item $acap -Force }
+  ":adopt `"$adProj`" as ad`r`ny`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare | Out-Null
+  $adcap = if (Test-Path $acap) { Get-Content $acap -Raw } else { '' }
+  Ok "adopt registers the project (registry row)"   ((Get-Content (Join-Path $tmp 'PROJECTS.md') -Raw) -match '(?m)^\|\s*ad\s*\|')
+  Ok "adopt scaffolds the project CLAUDE.md"        (Test-Path (Join-Path $adProj 'CLAUDE.md'))
+  Ok "adopt backs up the existing CLAUDE.md"        (Test-Path (Join-Path $adProj 'CLAUDE.md.pre-sonelle.bak'))
+  Ok "adopt preserves the original onboarding"      ((Get-Content (Join-Path $adProj 'CLAUDE.md.pre-sonelle.bak') -Raw) -match 'keep me')
+  Ok "adopt scaffolds the guard + commands too"     ((Test-Path (Join-Path $adProj '.claude\hooks\pretooluse_guard.ps1')) -and (Test-Path (Join-Path $adProj '.claude\commands\ship.md')))
+  Ok "adopt hands claude the conversion (ADOPTED)"  ($adcap -match 'ADOPTED')
+  Ok "adopt routes claude INTO the project dir"     ($adcap -match [regex]::Escape($adProj))
+  # general: one-off lane - neutral scratch dir, NO registry row, NO project state
+  if (Test-Path $acap) { Remove-Item $acap -Force }
+  "general: list three html tags`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare | Out-Null
+  $gcap = if (Test-Path $acap) { Get-Content $acap -Raw } else { '' }
+  Ok "general routes claude to a neutral scratch dir" ($gcap -match 'sonelle_general')
+  Ok "general adds NO registry row"                   (-not ((Get-Content (Join-Path $tmp 'PROJECTS.md') -Raw) -match '(?m)^\|\s*general\s*\|'))
+  Ok "general writes NO hub state for 'general'"      (-not (Test-Path (Join-Path $tmp 'GENERAL_TODO.txt')))
+} finally {
+  $env:Path = $savedPath2; $env:SONELLE_STUB_CAP = $savedCap2; $env:SONELLE_YOLO = $savedYolo2; $env:SONELLE_NARRATE_SETTINGS = $savedNarr2; $env:SONELLE_CONFIG = $savedCfg2
+  Remove-Item (Join-Path $env:TEMP 'sonelle_general') -Recurse -Force -ErrorAction SilentlyContinue
+}
+# new_project reserves 'general' so a project can never shadow the scratch lane
+& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') general "Should Fail" (Join-Path $tmp 'genfail') -Hub $tmp | Out-Null
+Ok "new_project rejects the reserved 'general' shortcode" ($LASTEXITCODE -eq 1)
 
 Write-Host "== 6. check_pointers DETECTS a broken pointer (negative test) =="
 Remove-Item $codePath -Recurse -Force
@@ -232,14 +282,58 @@ Ok "welcome shows the build version (A4)" (($verExp.Length -gt 0) -and ($demoStr
 Ok "terminal derives version from CHANGELOG"  (($srcTerm -match 'function SonelleVersion') -and ($srcTerm -match 'CHANGELOG\.md'))
 $bareOut = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo -Bare
 $bareStr = (($bareOut -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
-Ok "bare mode suppresses the welcome" (-not ($bareStr -match 'orchestrator'))
+Ok "bare mode suppresses the full welcome card" (-not ($bareStr -match 'orchestrator'))
+Ok "bare mode shows a no-claude primer (make/adopt/connect)" (($bareStr -match 'connect claude') -and ($bareStr -match ':adopt') -and ($bareStr -match ':new'))
+Ok "terminal has a BareIntro primer"   ($srcTerm -match 'function BareIntro')
+Ok "terminal answers bare help/? without routing to claude" ($srcTerm -match '\(help\|')
+Ok "terminal has a General no-project lane (scratch dir, reserved word)" (($srcTerm -match 'function General') -and ($srcTerm -match "short -eq 'general'") -and ($srcTerm -match 'sonelle_general'))
 Ok "terminal has a Welcome function"   ($srcTerm -match 'function Welcome')
 Ok "welcome uses runtime box glyphs"   (($srcTerm -match '0x256D') -and ($srcTerm -match '0x2570'))
-Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -and (@(':projects',':new',':heal',':team',':status',':app',':dev',':yolo',':attach',':clear',':help',':q') | Where-Object { $srcTerm -notmatch [regex]::Escape($_) }).Count -eq 0)
+Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -and (@(':projects',':new',':adopt',':heal',':team',':status',':app',':dev',':yolo',':attach',':clear',':help',':q') | Where-Object { $srcTerm -notmatch [regex]::Escape($_) }).Count -eq 0)
 # invariant #4: the engine root must stay clean of hub state (no project TODO/ledger/memory)
 $rootTodo = @(Get-ChildItem $engine -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue).Count
 $rootLedg = @(Get-ChildItem $engine -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue).Count
 Ok "engine root clean (no hub state)" (($rootTodo -eq 0) -and ($rootLedg -eq 0) -and (-not (Test-Path (Join-Path $engine 'memory'))))
+
+Write-Host "== 8h. PreToolUse guard + slash commands + inherent altitude directive =="
+$guardEng = Join-Path $engine '.claude\hooks\pretooluse_guard.ps1'
+Ok "engine PreToolUse guard hook exists" (Test-Path $guardEng)
+$srcGuard = if (Test-Path $guardEng) { Get-Content $guardEng -Raw } else { '' }
+Ok "guard reads stdin as UTF-8, can block (exit 2), and fails open (exit 0)" (($srcGuard -match 'OpenStandardInput') -and ($srcGuard -match 'UTF8') -and ($srcGuard -match 'ReadToEnd') -and ($srcGuard -match 'exit 2') -and ($srcGuard -match 'exit 0'))
+Ok "guard enforces ASCII-only .ps1 (house rule)" (($srcGuard -match '\.ps1') -and ($srcGuard -match '127'))
+Ok "guard blocks hub state at the engine root, but allows log_lesson -Shared (invariant #4)" (($srcGuard -match 'new_project') -and ($srcGuard -match 'log_lesson') -and ($srcGuard -match '-Shared') -and ($srcGuard -match 'memory'))
+Ok "guard blocks force-push" ($srcGuard -match 'force')
+# behavioral: feed the guard real PreToolUse payloads as raw UTF-8 bytes (as claude does) and assert the
+# block/allow decisions. 'cmd type' pipes the raw bytes, bypassing PS 5.1 $OutputEncoding (ASCII) which
+# would otherwise mangle non-ASCII to '?' before the guard sees it.
+$gi = Join-Path $tmp 'guard_in.json'
+$u8 = New-Object System.Text.UTF8Encoding($false)
+function Invoke-Guard($obj) {
+  [System.IO.File]::WriteAllText($gi, ($obj | ConvertTo-Json -Compress -Depth 6), $u8)
+  # discard the guard's stderr INSIDE cmd (its block message would otherwise surface as a terminating
+  # NativeCommandError under $ErrorActionPreference=Stop); cmd /c still returns the guard's exit code.
+  $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try { & cmd /c "type `"$gi`" 2>nul | `"$ps`" -NoProfile -ExecutionPolicy Bypass -File `"$guardEng`" 2>nul" | Out-Null }
+  finally { $ErrorActionPreference = $eap }
+  return $LASTEXITCODE
+}
+$gNonAscii = "Write-Host 'caf" + [char]0xE9 + "'"
+Ok "guard BLOCKS non-ASCII into a .ps1 (exit 2)" ((Invoke-Guard @{tool_name = 'Write'; tool_input = @{file_path = 'C:\x\a.ps1'; content = $gNonAscii}}) -eq 2)
+Ok "guard ALLOWS ASCII .ps1 (exit 0)"            ((Invoke-Guard @{tool_name = 'Write'; tool_input = @{file_path = 'C:\x\a.ps1'; content = 'Write-Host hi'}}) -eq 0)
+Ok "guard ALLOWS non-ASCII in a .md (only .ps1 is gated)" ((Invoke-Guard @{tool_name = 'Write'; tool_input = @{file_path = 'C:\x\a.md'; content = $gNonAscii}}) -eq 0)
+Ok "guard BLOCKS new_project (invariant #4)"     ((Invoke-Guard @{tool_name = 'Bash'; tool_input = @{command = 'powershell tools\new_project.ps1 a b c'}}) -eq 2)
+Ok "guard ALLOWS log_lesson -Shared"             ((Invoke-Guard @{tool_name = 'Bash'; tool_input = @{command = 'powershell tools\log_lesson.ps1 -Shared x'}}) -eq 0)
+Ok "guard BLOCKS git push --force"               ((Invoke-Guard @{tool_name = 'Bash'; tool_input = @{command = 'git push --force'}}) -eq 2)
+Ok "guard ALLOWS an ordinary command"            ((Invoke-Guard @{tool_name = 'Bash'; tool_input = @{command = 'git status'}}) -eq 0)
+Remove-Item $gi -Force -ErrorAction SilentlyContinue
+$engSet = Get-Content (Join-Path $engine '.claude\settings.json') -Raw
+Ok "engine settings.json wires PreToolUse -> guard" (($engSet -match 'PreToolUse') -and ($engSet -match 'pretooluse_guard\.ps1'))
+foreach ($c in @('selftest', 'heal', 'ship', 'ritual')) { Ok ("engine /$c command exists") (Test-Path (Join-Path $engine ('.claude\commands\' + $c + '.md'))) }
+Ok "/ship gates on selftest before committing" ((Get-Content (Join-Path $engine '.claude\commands\ship.md') -Raw) -match 'selftest')
+Ok "terminal probes claude for --append-system-prompt support" (($srcTerm -match 'function ClaudeSupports') -and ($srcTerm -match 'claude --help'))
+Ok "terminal defines the inherent altitude/subagent directive" (($srcTerm -match 'delegationDirective') -and ($srcTerm -match 'delegate the breadth-first exploration to subagents'))
+Ok "DevSelf framing rides --append-system-prompt, with a fold-in fallback" (($srcTerm -match '\$framing') -and ($srcTerm -match '--append-system-prompt') -and ($srcTerm -match 'ClaudeSupports'))
+Ok "both DevSelf and Route append the directive" (([regex]::Matches($srcTerm, 'delegationDirective')).Count -ge 3)
 
 Write-Host "== 8e. python glass app (sonelle_gui) =="
 $appDir = Join-Path $engine 'app'
