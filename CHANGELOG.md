@@ -68,6 +68,11 @@
   returns junk. T3 immediately caught a real bug: the parser's `\s*` matched newlines, so a malformed
   row with no closing pipe "borrowed" the next line and became a bogus project (and silently diverged
   from the line-based Python parser). Fixed to `[ \t]*` so each match stays on its own line.
+- **Faster, lighter app (P1-P3).** `:app` no longer spawns python to probe deps on every launch - it
+  writes a `.venv\.deps_ok` sentinel and re-probes only when it's missing or older than
+  `requirements.txt` (P1). xterm scrollback is now a clamped, `localStorage`-configurable constant
+  instead of a hard-coded 5000 per tab (P2). The PTY base64 decode is a single `Uint8Array.from(atob...)`
+  pass instead of a per-character loop (P3). selftest covers all three.
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a

@@ -39,11 +39,13 @@
     '<path class="wave" d="M15.5 8.5a4.5 4.5 0 0 1 0 7" fill="none" stroke="currentColor" ' +
     'stroke-width="1.8" stroke-linecap="round"/></svg>';
 
+  // P2: scrollback lines per tab are configurable (localStorage 'sonelle.scrollback'), clamped to a
+  // sane range, default 5000 - so many tabs don't pin memory and a power user can tune it.
+  const SCROLLBACK = Math.max(500, Math.min(50000, parseInt(localStorage.getItem("sonelle.scrollback"), 10) || 5000));
+
+  // P3: decode base64 in one pass (Uint8Array.from) instead of a per-char charCodeAt loop.
   function b64ToBytes(b64) {
-    const bin = atob(b64);
-    const buf = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-    return buf;
+    return Uint8Array.from(atob(b64), function (c) { return c.charCodeAt(0); });
   }
 
   function newTermObj() {
@@ -54,7 +56,7 @@
       // Cascadia Code makes contextual glyphs overlap into neighbours - that was the "words mashed
       // together" look. Consolas is the always-present Windows monospace fallback.
       fontFamily: '"Cascadia Mono", Consolas, "Cascadia Code", "Courier New", monospace',
-      fontSize: 13, lineHeight: 1.2, cursorBlink: true, scrollback: 5000, theme: THEME
+      fontSize: 13, lineHeight: 1.2, cursorBlink: true, scrollback: SCROLLBACK, theme: THEME
     });
     const fit = new FitAddon.FitAddon();   // double name: module.FitAddon
     term.loadAddon(fit);

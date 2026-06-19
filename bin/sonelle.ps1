@@ -179,8 +179,18 @@ function AppLaunch {
   $appPy = Join-Path $root 'app\sonelle_gui.py'
   $depsOk = $false
   if ((Test-Path $pyw) -and (Test-Path $py) -and (Test-Path $appPy)) {
-    & $py -c 'import webview, winpty' 2>$null   # pythonw has no stderr; probe first so a half-installed venv can't die silently
-    $depsOk = ($LASTEXITCODE -eq 0)
+    # P1: cache the import probe with a sentinel so we don't spawn python on every launch. Re-probe only
+    # when the sentinel is missing or older than requirements.txt (a deps change invalidates the cache).
+    $sentinel = Join-Path $root '.venv\.deps_ok'
+    $reqFile  = Join-Path $root 'app\requirements.txt'
+    $reqTime  = if (Test-Path $reqFile) { (Get-Item $reqFile).LastWriteTimeUtc } else { [datetime]::MinValue }
+    if ((Test-Path $sentinel) -and ((Get-Item $sentinel).LastWriteTimeUtc -ge $reqTime)) {
+      $depsOk = $true
+    } else {
+      & $py -c 'import webview, winpty' 2>$null   # pythonw has no stderr; probe first so a half-installed venv can't die silently
+      $depsOk = ($LASTEXITCODE -eq 0)
+      if ($depsOk) { try { Set-Content -Path $sentinel -Value ((Get-Date).ToUniversalTime().ToString('o')) -ErrorAction SilentlyContinue } catch {} }
+    }
   }
   if ($depsOk) {
     # deps confirmed - launch the GUI directly, no console flash
