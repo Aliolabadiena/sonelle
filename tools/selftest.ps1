@@ -281,6 +281,12 @@ Ok "explicit -MemoryDir wins"           ($r2.MemoryDir -eq $fakeMem)
 Ok "check_pointers accepts -MemoryDir"  ((Get-Content (Join-Path $PSScriptRoot 'check_pointers.ps1') -Raw) -match '\$MemoryDir')
 Ok "doctor forwards -MemoryDir"         ((Get-Content (Join-Path $PSScriptRoot 'doctor.ps1') -Raw) -match 'check_pointers\.ps1.*-MemoryDir')
 
+Write-Host "== 9b. terminal honors -Hub (Q4) =="
+Ok "sonelle.ps1 has a -Hub param that wins over config" (($srcTerm -match '\[string\]\$Hub') -and ($srcTerm -match 'hubOverride'))
+$hubDemo = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo -Hub $tmp
+$hubStr  = (($hubDemo -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
+Ok "terminal -Hub points the welcome at the override hub" ($hubStr -match '(?m)\bst\b')
+
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 
 Write-Host ""

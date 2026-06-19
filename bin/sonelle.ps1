@@ -11,10 +11,13 @@
   Source is pure ASCII; Unicode glyphs are built at runtime via [char] codepoints.
 #>
 [CmdletBinding()]
-param([switch]$Demo, [switch]$Bare, [switch]$Yolo)   # -Bare: chat-feel (glass app); -Yolo: claude skips permission prompts
+param([switch]$Demo, [switch]$Bare, [switch]$Yolo, [string]$Hub = '')   # -Bare: chat-feel (glass app); -Yolo: claude skips permission prompts; -Hub: workspace override (wins over config)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+# Capture -Hub NOW: PowerShell variable names are case-insensitive, so the param $Hub and the working
+# variable $hub are the SAME slot - the '$hub = $root' below would clobber the override otherwise.
+$hubOverride = $Hub
 $hub  = $root
 $orchModel = 'opus'; $orchEffort = 'xhigh'; $orchPerm = ''   # orchestrator (the session you talk to) is ALWAYS max
 # optional overrides from sonelle.config.json (hub for routing; models for the orchestrator)
@@ -29,6 +32,8 @@ if (Test-Path $cfg) {
     if ($c.models.orchestratorPermissionMode) { $orchPerm = $c.models.orchestratorPermissionMode }
   } catch {}
 }
+# -Hub wins over config: an explicit workspace override (mirrors every other tool; makes the terminal testable in isolation).
+if ($hubOverride) { $hub = $hubOverride }
 # -Yolo (or the env var the glass app forwards) overrides the mode so claude never asks for permission.
 # bypassPermissions is a real claude --permission-mode choice; toggle it live in the REPL with :yolo.
 if ($Yolo -or $env:SONELLE_YOLO) { $orchPerm = 'bypassPermissions' }

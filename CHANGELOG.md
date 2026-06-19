@@ -12,6 +12,13 @@
   lines of `memory\MEMORY.md`), probing the `SONELLE_MEMORY` env var and the known relative spots, and
   falls back to the reminder only when no index is found. selftest section 2 asserts the scaffolded
   hook actually reads `MEMORY.md`.
+- **The terminal takes `-Hub` now (Q4).** `bin\sonelle.ps1` gained a `-Hub <path>` parameter that wins
+  over `sonelle.config.json`, mirroring every other tool and making the terminal testable in isolation
+  (the prerequisite for the new behavioral routing test). Caught a real bug doing it: PowerShell
+  variable names are case-insensitive, so the `$Hub` param and the working `$hub` variable were the
+  same slot - `$hub = $root` silently clobbered the override. Fixed by capturing the param first.
+  selftest section 9b drives `-Demo -Hub <temphub>` and asserts the welcome lists the override hub's
+  projects (a behavioral check, not just a grep).
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a
