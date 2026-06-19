@@ -7,6 +7,11 @@
   when it finds none it exits **2 = NOT configured** instead of faking health. `doctor.ps1` understands
   exit 2 and reports `[warn] ... NOT configured (placeholder) - add real checks` instead of counting it
   as a PASS. So "HEALTHY" now means something was actually checked. selftest sections 2 + 4 cover both.
+- **Recall is now mechanism, not a nag (H3).** The per-project SessionStart hook no longer just prints
+  "remember to read your memory" - it **surfaces the memory index straight into context** (first 40
+  lines of `memory\MEMORY.md`), probing the `SONELLE_MEMORY` env var and the known relative spots, and
+  falls back to the reminder only when no index is found. selftest section 2 asserts the scaffolded
+  hook actually reads `MEMORY.md`.
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a

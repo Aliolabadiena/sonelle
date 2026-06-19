@@ -50,6 +50,8 @@ $ph = (Select-String -Path (Join-Path $tmp 'ST_TODO.txt'), (Join-Path $codePath 
 Ok "no unfilled placeholders"      ($ph -eq 0)
 Ok "project .claude/settings.json created" (Test-Path (Join-Path $codePath '.claude\settings.json'))
 Ok "project Stop+SessionStart hooks created" ((Test-Path (Join-Path $codePath '.claude\hooks\stop.ps1')) -and (Test-Path (Join-Path $codePath '.claude\hooks\session_start.ps1')))
+$ssTxt = Get-Content (Join-Path $codePath '.claude\hooks\session_start.ps1') -Raw
+Ok "session_start hook surfaces memory (not just a reminder)" (($ssTxt -match 'MEMORY\.md') -and ($ssTxt -match 'Get-Content'))
 Ok "project sonelle.check.ps1 created" (Test-Path (Join-Path $codePath 'sonelle.check.ps1'))
 $chkTxt = Get-Content (Join-Path $codePath 'sonelle.check.ps1') -Raw
 Ok "default check auto-detects + marks unconfigured" (($chkTxt -match 'pytest|npm test|dotnet test') -and ($chkTxt -match 'exit 2'))
