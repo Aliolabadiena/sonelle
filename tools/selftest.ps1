@@ -66,13 +66,20 @@ foreach ($c in @('selftest', 'heal', 'ship', 'ritual')) { Ok ("project /$c comma
 # template/scaffold change that would alter every new project trips this test (a conscious change updates it).
 $tplDir  = Join-Path $engine 'templates'
 $tplGot  = @(Get-ChildItem $tplDir -Recurse -File | ForEach-Object { $_.FullName.Substring($tplDir.Length + 1).Replace('\', '/') } | Sort-Object)
-$tplWant = @('CLAUDE.template.md', 'TODO.template.txt', 'commands/heal.md', 'commands/ritual.md', 'commands/selftest.md', 'commands/ship.md', 'hooks/pretooluse_guard.ps1', 'hooks/session_start.ps1', 'hooks/stop.ps1', 'lesson.template.md', 'project_memory.template.md', 'run_STATUS.template.md', 'settings.template.json') | Sort-Object
+$tplWant = @('CLAUDE.template.md', 'TODO.template.txt', 'commands/heal.md', 'commands/ritual.md', 'commands/selftest.md', 'commands/ship.md', 'hooks/pretooluse_guard.ps1', 'hooks/session_start.ps1', 'hooks/stop.ps1', 'lesson.template.md', 'mcp.template.json', 'project_memory.template.md', 'run_STATUS.template.md', 'settings.template.json', 'skills/accessibility-audit/SKILL.md', 'skills/design-review/SKILL.md', 'skills/frontend-design/SKILL.md', 'skills/plan-before-build/SKILL.md', 'skills/systematic-debugging/SKILL.md', 'skills/verification-before-completion/SKILL.md') | Sort-Object
 Ok "template set is exactly the known golden (T2)" (($tplGot -join '|') -eq ($tplWant -join '|'))
 $manifestOk = $true
-foreach ($f in @((Join-Path $tmp 'ST_TODO.txt'), (Join-Path $tmp '_st_run_STATUS.md'), (Join-Path $codePath 'CLAUDE.md'), (Join-Path $codePath 'sonelle.check.ps1'), (Join-Path $codePath '.claude\settings.json'), (Join-Path $codePath '.claude\hooks\session_start.ps1'), (Join-Path $codePath '.claude\hooks\stop.ps1'), (Join-Path $codePath '.claude\hooks\pretooluse_guard.ps1'), (Join-Path $codePath '.claude\commands\selftest.md'), (Join-Path $codePath '.claude\commands\heal.md'), (Join-Path $codePath '.claude\commands\ship.md'), (Join-Path $codePath '.claude\commands\ritual.md'), (Join-Path $tmp 'memory\project_st.md'), (Join-Path $tmp 'memory\MEMORY.md'))) {
+foreach ($f in @((Join-Path $tmp 'ST_TODO.txt'), (Join-Path $tmp '_st_run_STATUS.md'), (Join-Path $codePath 'CLAUDE.md'), (Join-Path $codePath 'sonelle.check.ps1'), (Join-Path $codePath '.claude\settings.json'), (Join-Path $codePath '.claude\hooks\session_start.ps1'), (Join-Path $codePath '.claude\hooks\stop.ps1'), (Join-Path $codePath '.claude\hooks\pretooluse_guard.ps1'), (Join-Path $codePath '.claude\commands\selftest.md'), (Join-Path $codePath '.claude\commands\heal.md'), (Join-Path $codePath '.claude\commands\ship.md'), (Join-Path $codePath '.claude\commands\ritual.md'), (Join-Path $codePath '.claude\skills\frontend-design\SKILL.md'), (Join-Path $codePath '.claude\skills\systematic-debugging\SKILL.md'), (Join-Path $tmp 'memory\project_st.md'), (Join-Path $tmp 'memory\MEMORY.md'))) {
   if (-not (Test-Path $f)) { $manifestOk = $false }
 }
 Ok "scaffold produces the full golden manifest (T2)" $manifestOk
+# opt-in MCP (-Mcp): scaffolds a project .mcp.json with the recommended servers; default omits it
+$mcpPath = Join-Path $tmp 'code_mc'
+& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') mc "MCP Proj" $mcpPath -Hub $tmp -Mcp | Out-Null
+Ok "new_project -Mcp scaffolds .mcp.json"       (Test-Path (Join-Path $mcpPath '.mcp.json'))
+Ok "default scaffold (no -Mcp) omits .mcp.json" (-not (Test-Path (Join-Path $codePath '.mcp.json')))
+$mcpValid = $false; try { $mj = Get-Content (Join-Path $mcpPath '.mcp.json') -Raw | ConvertFrom-Json; $mcpValid = [bool]$mj.mcpServers } catch {}
+Ok ".mcp.json is valid JSON with an mcpServers block" $mcpValid
 
 Write-Host "== 3. check_pointers on temp hub =="
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $tmp | Out-Null
@@ -184,6 +191,11 @@ try {
   "st: hello`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare -Yolo | Out-Null
   $capYolo = if (Test-Path $cap) { Get-Content $cap -Raw } else { '' }
   Ok "yolo => --permission-mode bypassPermissions" (($capYolo -match '--permission-mode') -and ($capYolo -match 'bypassPermissions'))
+  # graded autonomy: :auto <level> maps a named level to claude's --permission-mode (full == the old yolo)
+  if (Test-Path $cap) { Remove-Item $cap -Force }
+  ":auto edits`r`nst: hi`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare | Out-Null
+  $capAuto = if (Test-Path $cap) { Get-Content $cap -Raw } else { '' }
+  Ok ":auto edits => --permission-mode acceptEdits" (($capAuto -match '--permission-mode') -and ($capAuto -match 'acceptEdits'))
 } finally {
   $env:Path = $savedPath; $env:SONELLE_YOLO = $savedYolo; $env:SONELLE_NARRATE_SETTINGS = $savedNarr
   $env:SONELLE_CONFIG = $savedCfg; $env:CLAUDE_CODE_SUBAGENT_MODEL = $savedSub
@@ -241,7 +253,7 @@ Ok "check_pointers exit 1 on a missing code path" ($LASTEXITCODE -eq 1)
 
 Write-Host "== 7. .gitignore ignores the private paths =="
 if (Get-Command git -ErrorAction SilentlyContinue) {
-  foreach ($f in @('sonelle.config.json', 'memory/x.md', 'FOO_TODO.txt')) {
+  foreach ($f in @('sonelle.config.json', 'memory/x.md', 'FOO_TODO.txt', 'REPOMAP.md')) {
     Ok "gitignored: $f" ([bool](git -C $engine check-ignore $f))
   }
 } else { Write-Host "  [skip] git not on PATH" -ForegroundColor DarkGray }
@@ -289,7 +301,7 @@ Ok "terminal answers bare help/? without routing to claude" ($srcTerm -match '\(
 Ok "terminal has a General no-project lane (scratch dir, reserved word)" (($srcTerm -match 'function General') -and ($srcTerm -match "short -eq 'general'") -and ($srcTerm -match 'sonelle_general'))
 Ok "terminal has a Welcome function"   ($srcTerm -match 'function Welcome')
 Ok "welcome uses runtime box glyphs"   (($srcTerm -match '0x256D') -and ($srcTerm -match '0x2570'))
-Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -and (@(':projects',':new',':adopt',':heal',':team',':status',':app',':dev',':yolo',':attach',':clear',':help',':q') | Where-Object { $srcTerm -notmatch [regex]::Escape($_) }).Count -eq 0)
+Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -and (@(':projects',':new',':adopt',':heal',':team',':status',':app',':dev',':yolo',':auto',':cost',':map',':attach',':clear',':help',':q') | Where-Object { $srcTerm -notmatch [regex]::Escape($_) }).Count -eq 0)
 # invariant #4: the engine root must stay clean of hub state (no project TODO/ledger/memory)
 $rootTodo = @(Get-ChildItem $engine -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue).Count
 $rootLedg = @(Get-ChildItem $engine -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue).Count
@@ -483,10 +495,42 @@ foreach ($rel in @('knowledge\powershell-commit-heredoc.md', 'knowledge\powershe
 }
 $srcKbIdx = if (Test-Path $kbIdx) { Get-Content $kbIdx -Raw } else { '' }
 Ok "index links its seed lessons"       (($srcKbIdx -match 'powershell-commit-heredoc') -and ($srcKbIdx -match 'powershell-pure-ascii'))
+Ok "knowledge: /rewind undo lesson is in the brain (committed + indexed)" ((Test-Path (Join-Path $engine 'knowledge\claude-rewind-undo.md')) -and ($srcKbIdx -match 'claude-rewind-undo'))
 $srcLog = Get-Content (Join-Path $engine 'tools\log_lesson.ps1') -Raw
 Ok "log_lesson -Shared targets knowledge/" (($srcLog -match '\[switch\]\$Shared') -and ($srcLog -match "Join-Path .* 'knowledge'"))
 $srcSs = Get-Content (Join-Path $engine '.claude\hooks\session_start.ps1') -Raw
 Ok "SessionStart recalls the knowledge base" ($srcSs -match 'knowledge/INDEX\.md')
+
+Write-Host "== 8j. reusable Agent Skills (the project brain) =="
+$skillTpl = Join-Path $engine 'templates\skills'
+$skillEng = Join-Path $engine '.claude\skills'
+# the project template ships all six skills (discipline + web); the engine itself carries the three
+# DISCIPLINE skills so engine-dev sessions get the same investigate / verify / plan gates.
+foreach ($s in @('systematic-debugging', 'verification-before-completion', 'plan-before-build', 'frontend-design', 'design-review', 'accessibility-audit')) {
+  Ok ("template skill: " + $s) (Test-Path (Join-Path $skillTpl ($s + '\SKILL.md')))
+}
+foreach ($s in @('systematic-debugging', 'verification-before-completion', 'plan-before-build')) {
+  Ok ("engine skill: " + $s)   (Test-Path (Join-Path $skillEng ($s + '\SKILL.md')))
+}
+# every skill must be model-invocable (name: + description: + a "Use when" trigger) and pure ASCII
+$skillBad = @()
+foreach ($f in (Get-ChildItem $skillTpl -Recurse -Filter 'SKILL.md')) {
+  $sc = Get-Content $f.FullName -Raw
+  $na = ([System.IO.File]::ReadAllBytes($f.FullName) | Where-Object { $_ -gt 127 }).Count
+  if (-not (($sc -match '(?m)^name:\s*\S') -and ($sc -match '(?m)^description:\s*\S') -and ($sc -match 'Use (when|before)'))) { $skillBad += $f.FullName }
+  if ($na -gt 0) { $skillBad += ($f.FullName + ' (non-ascii)') }
+}
+Ok "every template skill has name/description/Use-when frontmatter + is ASCII" ($skillBad.Count -eq 0)
+# one source of truth: the engine's discipline skills stay byte-identical to the templates
+$drift = @()
+foreach ($s in @('systematic-debugging', 'verification-before-completion', 'plan-before-build')) {
+  if ((Get-Content (Join-Path $skillTpl ($s + '\SKILL.md')) -Raw) -ne (Get-Content (Join-Path $skillEng ($s + '\SKILL.md')) -Raw)) { $drift += $s }
+}
+Ok "engine discipline skills match the templates (no drift)" ($drift.Count -eq 0)
+# the flagship web skill carries its load-bearing substance
+$fd = Get-Content (Join-Path $skillTpl 'frontend-design\SKILL.md') -Raw
+Ok "frontend-design carries its substance (two-pass plan + banned defaults)" (($fd -match 'Design plan') -and ($fd -match 'Inter') -and ($fd -match 'prefers-reduced-motion'))
+Ok "new_project scaffolds the skills tree into a project" ((Get-Content (Join-Path $engine 'tools\new_project.ps1') -Raw) -match 'skillsSrc')
 
 Write-Host "== 9. config resolver (hub + memoryDir) =="
 . (Join-Path $PSScriptRoot '_registry.ps1')
@@ -559,6 +603,65 @@ Ok "parser keeps only valid lowercase shorts" (($fzShorts -contains 'good') -and
 $spacedRow = $fz | Where-Object { $_.Short -eq 'spaced' } | Select-Object -First 1
 Ok "parser trims cells" (($spacedRow.Name -eq 'Trimmed') -and ($spacedRow.CodePath -eq 'C:\s\path'))
 Remove-Item $fuzzReg -Force -ErrorAction SilentlyContinue
+
+Write-Host "== 10. cost report (reads local transcript usage) =="
+# hermetic: point cost.ps1 at a FAKE ~/.claude/projects via SONELLE_CLAUDE_PROJECTS and drop one
+# usage line in the encoded folder for the 'mc' project, then assert the tallies + dollar estimate.
+$fakeProj = Join-Path $tmp 'claude_projects'
+$encMc = ($mcpPath -replace '[:\\/]', '-')
+$encDir = Join-Path $fakeProj $encMc
+New-Item -ItemType Directory -Path $encDir -Force | Out-Null
+$usageLine = '{"type":"assistant","message":{"model":"claude-opus-4-x","usage":{"input_tokens":1000,"output_tokens":500,"cache_creation_input_tokens":0,"cache_read_input_tokens":200}}}'
+[System.IO.File]::WriteAllText((Join-Path $encDir 'sess.jsonl'), $usageLine + "`n")
+$savedCP = $env:SONELLE_CLAUDE_PROJECTS
+$env:SONELLE_CLAUDE_PROJECTS = $fakeProj
+try {
+  $costOut  = (& $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'tools\cost.ps1') -Short mc -Hub $tmp) -join "`n"
+  $costOut2 = (& $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'tools\cost.ps1') -Short st -Hub $tmp) -join "`n"
+} finally { $env:SONELLE_CLAUDE_PROJECTS = $savedCP }
+Ok "cost reports the project + token totals"    (($costOut -match '(?m)\bmc\b') -and ($costOut -match '1,000') -and ($costOut -match '500'))
+Ok "cost estimates a dollar figure (opus rates)" ($costOut -match '\$0\.05')
+Ok "cost handles a project with no transcript"   ($costOut2 -match 'no transcript')
+
+Write-Host "== 11. repo map (structural primer) =="
+$rmDir = Join-Path $tmp 'repomap_src'
+New-Item -ItemType Directory -Path (Join-Path $rmDir 'sub') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $rmDir 'node_modules') -Force | Out-Null
+[System.IO.File]::WriteAllText((Join-Path $rmDir 'app.py'), "class Server:`n    def handle(self):`n        pass`ndef main():`n    pass`n")
+[System.IO.File]::WriteAllText((Join-Path $rmDir 'sub\util.js'), "export function parse(x) {`n  return x`n}`nconst run = () => 1`n")
+[System.IO.File]::WriteAllText((Join-Path $rmDir 'tool.ps1'), "function Get-Thing { 'x' }`n")
+[System.IO.File]::WriteAllText((Join-Path $rmDir 'README.md'), "# not code`n")
+[System.IO.File]::WriteAllText((Join-Path $rmDir 'node_modules\dep.js'), "function shouldBeSkipped() {}`n")
+$rmOut = (& $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'tools\repomap.ps1') -Path $rmDir) -join "`n"
+Ok "repomap finds python defs/classes"  (($rmOut -match 'app\.py') -and ($rmOut -match 'class Server') -and ($rmOut -match 'def main'))
+Ok "repomap finds js functions"         (($rmOut -match 'util\.js') -and ($rmOut -match 'parse'))
+Ok "repomap finds powershell functions" (($rmOut -match 'tool\.ps1') -and ($rmOut -match 'Get-Thing'))
+Ok "repomap skips non-code (README.md)" (-not ($rmOut -match 'README\.md'))
+Ok "repomap prunes node_modules"        (-not ($rmOut -match 'shouldBeSkipped'))
+$rmFile = Join-Path $tmp 'RM.md'
+& $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'tools\repomap.ps1') -Path $rmDir -Out $rmFile | Out-Null
+Ok "repomap -Out writes a map file"     ((Test-Path $rmFile) -and ((Get-Content $rmFile -Raw) -match 'app\.py'))
+
+Write-Host "== 12. Claude Code plugin (portable skills, installable via marketplace) =="
+$plugRoot = Join-Path $engine 'plugin'
+$mkt = Join-Path $engine '.claude-plugin\marketplace.json'
+Ok "repo is a plugin marketplace"                  (Test-Path $mkt)
+$mktObj = $null; try { $mktObj = Get-Content $mkt -Raw | ConvertFrom-Json } catch {}
+Ok "marketplace.json valid + lists sonelle-skills" ($mktObj -and $mktObj.name -and (@($mktObj.plugins | Where-Object { $_.name -eq 'sonelle-skills' }).Count -eq 1))
+$pm = $null; try { $pm = Get-Content (Join-Path $plugRoot '.claude-plugin\plugin.json') -Raw | ConvertFrom-Json } catch {}
+Ok "plugin.json valid + has the required name"     ($pm -and $pm.name)
+Ok "plugin bundles all six skills"                 (@(Get-ChildItem (Join-Path $plugRoot 'skills') -Directory -ErrorAction SilentlyContinue).Count -eq 6)
+# single source of truth: the committed plugin skills must equal a fresh build from templates\skills
+$built = Join-Path $tmp 'plugin_build'
+& $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'tools\build_plugin.ps1') -Out $built | Out-Null
+$pdrift = @()
+foreach ($sk in (Get-ChildItem (Join-Path $engine 'templates\skills') -Directory)) {
+  $a = Join-Path $plugRoot ('skills\' + $sk.Name + '\SKILL.md')
+  $b = Join-Path $built ('skills\' + $sk.Name + '\SKILL.md')
+  if (-not (Test-Path $a)) { $pdrift += ($sk.Name + ' missing'); continue }
+  if ((Get-Content $a -Raw) -ne (Get-Content $b -Raw)) { $pdrift += $sk.Name }
+}
+Ok "committed plugin matches a fresh build (run build_plugin to resync)" ($pdrift.Count -eq 0)
 
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 

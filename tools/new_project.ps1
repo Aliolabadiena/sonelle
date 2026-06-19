@@ -19,6 +19,7 @@ param(
   [Parameter(Mandatory = $true, Position = 0)][string]$Short,
   [Parameter(Mandatory = $true, Position = 1)][string]$Name,
   [Parameter(Mandatory = $true, Position = 2)][string]$Path,
+  [switch]$Mcp,
   [string]$Hub = ''
 )
 
@@ -89,6 +90,23 @@ $commandsDir = Join-Path $Path '.claude\commands'
 if (-not (Test-Path $commandsDir)) { New-Item -ItemType Directory -Path $commandsDir -Force | Out-Null }
 foreach ($c in @('selftest', 'heal', 'ship', 'ritual')) { Copy-Item (Join-Path $tpl ('commands\' + $c + '.md')) (Join-Path $commandsDir ($c + '.md')) -Force }
 Write-Host "[+] $Path\.claude\settings.json (+ hooks: session_start/stop/pretooluse_guard, + commands)"
+# reusable Agent Skills: claude auto-loads these from .claude\skills when a task matches a skill's
+# description (debugging / verifying / planning / building or reviewing UI), so the project brain
+# travels with the repo. Copied as a tree - each skill is a folder with a SKILL.md.
+$skillsSrc = Join-Path $tpl 'skills'
+if (Test-Path $skillsSrc) {
+  Copy-Item $skillsSrc (Join-Path $Path '.claude\skills') -Recurse -Force
+  $created.Add((Join-Path $Path '.claude\skills'))
+  Write-Host "[+] $Path\.claude\skills (debug / verify / plan / frontend-design / design-review / a11y)"
+}
+# opt-in MCP servers (-Mcp): a project .mcp.json claude reads for extra tools. Default set is
+# sequential-thinking (planning) + git - both no-API-key. Needs Node (npx) and uv (uvx) present;
+# left out by default so a new project takes on no extra dependency unless it is asked for.
+if ($Mcp) {
+  Copy-Item (Join-Path $tpl 'mcp.template.json') (Join-Path $Path '.mcp.json') -Force
+  $created.Add((Join-Path $Path '.mcp.json'))
+  Write-Host "[+] $Path\.mcp.json (opt-in MCP: sequential-thinking / git)"
+}
 $check = Join-Path $Path 'sonelle.check.ps1'
 $checkBody = @'
 # sonelle.check.ps1 - health check for {{NAME}}. Auto-detects a common test/build command.

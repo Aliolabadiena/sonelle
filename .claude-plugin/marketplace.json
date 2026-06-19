@@ -1,0 +1,11 @@
+{
+  "name": "sonelle",
+  "owner": { "name": "sonelle" },
+  "plugins": [
+    {
+      "name": "sonelle-skills",
+      "source": "./plugin",
+      "description": "Reusable Claude Code skills from the sonelle engine: debugging, verification, planning, and web design / review / accessibility. Model-invocable - they auto-load when a task matches."
+    }
+  ]
+}

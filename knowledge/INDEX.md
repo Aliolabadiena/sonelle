@@ -24,3 +24,4 @@ gitignored hub `memory/` (and your Claude auto-memory). Rule of thumb:
 - [css-class-token-collision](css-class-token-collision.md) - Don't reuse a class token an existing descendant selector targets
 - [hermetic-config-test-env-override](hermetic-config-test-env-override.md) - Make config-dependent behavioral tests hermetic with an env path override
 - [ps-hook-stdin-utf8](ps-hook-stdin-utf8.md) - PS 5.1 hooks must read stdin as UTF-8; testing a stdin filter from PS mangles non-ASCII (OutputEncoding) and can throw on stderr (EAP=Stop)
+- [claude-rewind-undo](claude-rewind-undo.md) - /rewind undoes Claude's own Write/Edit checkpoints (code/convo/both); it does NOT track bash/PowerShell or external changes - use git for those.

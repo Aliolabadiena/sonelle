@@ -14,6 +14,9 @@ memory/
 _*_run_STATUS.md
 state/
 
+# generated repo maps (tools\repomap.ps1 / :map) - regenerable + go stale; don't commit
+REPOMAP.md
+
 # python app: local virtualenv + bytecode caches (deps install on first run)
 .venv/
 __pycache__/

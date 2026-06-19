@@ -1,0 +1,4 @@
+{
+    "name":  "sonelle-skills",
+    "description":  "Reusable Claude Code skills from the sonelle engine: systematic-debugging, verification-before-completion, plan-before-build, frontend-design, design-review, accessibility-audit. Model-invocable - they auto-load when a task matches."
+}

@@ -73,6 +73,9 @@ The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max
 | `app\ui\palettes.js` | the **20 colour palettes** for the settings panel (the gear) |
 | `app\voice\` | the **Kokoro voice model vendored in the repo** (int8 `.onnx` + voice pack) - so the voice ships with sonelle, no download |
 | `knowledge\` | the **shared knowledge base**: generic, reusable lessons (public, ASCII) that ship with the engine; personal/per-project memory stays in the gitignored hub `memory\` |
+| `.claude\skills\` + `templates\skills\` | reusable **Agent Skills** claude auto-loads by task: `systematic-debugging` / `verification-before-completion` / `plan-before-build` (in the engine + every project) and `frontend-design` / `design-review` / `accessibility-audit` (scaffolded into every project) |
+| `.claude-plugin\marketplace.json` + `plugin\` | this repo is also a **Claude Code plugin marketplace**: `plugin\` packages sonelle's portable **skills** so anyone can `claude plugin marketplace add <owner>/<repo>` then `claude plugin install sonelle-skills@sonelle` into their own Claude Code (no engine clone) |
+| `tools\build_plugin.ps1` | regenerate `plugin\` from `templates\skills` (single source of truth; selftest enforces no drift) |
 | `bin\sonelle_gui.ps1` | launcher for the glass app: bootstraps `.venv` (pywebview + pywinpty + edge-tts), best-effort installs the Kokoro runtime, then runs it with `pythonw` |
 | `bin\sonelle_app.ps1` | the classic WinForms app host (`:app-classic`, `make_launcher -Classic`) |
 | `CLAUDE.md` | the dispatcher — how a session orients + routes |
@@ -83,6 +86,8 @@ The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max
 | `tools\log_lesson.ps1` | capture a lesson into memory (self-improve) |
 | `tools\selftest.ps1` | end-to-end self-test (dogfoods scaffold/heal into a temp hub) |
 | `tools\statusline.ps1` | usage status line: 5h/7d rate-limit %, context % |
+| `tools\cost.ps1` | estimate Claude token use + cost from local transcripts, per project (`:cost`) |
+| `tools\repomap.ps1` | structural repo map - top-level symbols per file, a primer for large repos (`:map`) |
 | `sonelle.check.ps1` | the engine's own health check (runs the self-test) |
 | `bin\make_launcher.ps1` | create a pinnable taskbar shortcut (`sonelle.lnk`) with the icon |
 | `bin\sonelle_team.ps1` | run up to 5 parallel lanes on one project (multi-instance) |

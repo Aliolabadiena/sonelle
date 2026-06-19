@@ -1,5 +1,42 @@
 # Changelog
 
+## v1.39 - 2026-06-19 (graded autonomy, a skills brain, cost + repo-map, opt-in MCP - from an ecosystem research pass)
+First wave of improvements drawn from a deep research pass over the Claude Code ecosystem and competing
+AI coding tools (what high-value capabilities sonelle was missing). All in this one repo, pure-ASCII
+PowerShell, no API key.
+- **Graded autonomy (`:auto plan|safe|edits|full`).** The binary `:yolo` toggle becomes a spectrum: `:auto`
+  maps named levels to claude's `--permission-mode` (plan / default / acceptEdits / bypassPermissions),
+  applied to the next prompt. `:yolo` stays as the quick on/off alias. (selftest 5d behavioral.)
+- **A reusable skills "brain" (Agent Skills).** New `.claude\skills\` (engine) + `templates\skills\`
+  (scaffolded into EVERY new project) so claude auto-loads the right skill when a task matches its
+  description. Three DISCIPLINE skills that fit sonelle's self-driving model - `systematic-debugging`,
+  `verification-before-completion`, `plan-before-build` - ride in both the engine and every project; three
+  WEB skills - `frontend-design` (distinctive UI, not templated defaults), `design-review`,
+  `accessibility-audit` (WCAG 2.2 AA) - ship into every project, dormant until a UI task triggers them.
+  All pure-ASCII, model-invocable (name + trigger description), authored in-house (not vendored).
+  (selftest 8j: existence, frontmatter, ASCII, engine<->template no-drift, flagship substance.)
+- **`:cost [short]` - token + cost report with no API key.** `tools\cost.ps1` reads Claude Code's OWN local
+  session transcripts (`~/.claude/projects/<encoded-cwd>/*.jsonl`), sums input/output/cache tokens per
+  project (and the engine), and estimates USD from an editable price table. `-Days N` to window it.
+  (selftest 10, hermetic via `SONELLE_CLAUDE_PROJECTS`.)
+- **`:map [short]` - structural repo map.** `tools\repomap.ps1` lists each source file's top-level symbols
+  (functions / classes / types) so claude can grasp a large repo without reading every file - a cheap,
+  pure-PowerShell, regex-based primer (no tree-sitter / Python dependency) that prunes build/dep dirs and
+  writes `REPOMAP.md` at the project root. (selftest 11.)
+- **Opt-in MCP scaffold (`new_project.ps1 -Mcp`).** Writes a project `.mcp.json` with no-API-key servers
+  (sequential-thinking + git); off by default so a new project takes on no extra dependency unless asked.
+  (selftest 2.)
+- **`/rewind` captured in the knowledge brain.** New `knowledge\claude-rewind-undo.md` (recalled at
+  SessionStart) documents Claude Code's native undo AND its limit - it does NOT track bash/PowerShell or
+  external changes, so git stays the real safety net for shell-driven work. (selftest 8g.)
+- **Installable as a plugin (inside this repo).** The repo is now a Claude Code plugin marketplace
+  (`.claude-plugin\marketplace.json`); `plugin\` packages the portable SKILLS so anyone can
+  `claude plugin marketplace add <owner>/<repo>` then `claude plugin install sonelle-skills@sonelle`
+  into their own Claude Code without cloning the engine. `tools\build_plugin.ps1` regenerates it from
+  `templates\skills` (selftest 12 enforces no drift). The terminal / dispatcher / GUI stay engine-only -
+  skills are the portable layer, which is what a plugin is for.
+- **selftest extended to cover every feature above; all green.**
+
 ## v1.38 — 2026-06-19 (the injected directive becomes a proactive operating policy: claude self-drives the workflow)
 - **You state the goal; claude decides which workflow to use.** The one-line directive sonelle injects into
   every project/engine session (`--append-system-prompt`) grew from just the altitude rule into a full

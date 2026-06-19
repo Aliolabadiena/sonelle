@@ -167,10 +167,13 @@ function ShowHelp {
     @(":heal [short]",        "health-check / heal a project"),
     @(":team <proj> <lanes>", "run up to 5 parallel lanes on one project"),
     @(":status <proj>",       "show each lane's status"),
+    @(":cost [short]",        "estimate Claude token use + cost (local transcripts)"),
+    @(":map [short]",         "structural repo map (symbols per file) -> REPOMAP.md"),
     @(":app",                 "open the liquid-glass app (many terminals, one window)"),
     @(":app-classic",         "open the classic WinForms app (fallback)"),
     @(":dev [prompt]",        ("improve sonelle itself (or  " + $cream + $script:selfShort + ": ..." + $dim + ")")),
     @(":yolo [on|off]",       "toggle claude skipping permission prompts (bypassPermissions)"),
+    @(":auto <level>",        "autonomy: plan / safe / edits / full (how much claude does unasked)"),
     @(":clear",               "clear staged images"),
     @(":help   :q",           "this help / quit")
   )
@@ -463,6 +466,49 @@ while ($true) {
     } else {
       Write-Host ("  {0}yolo {1}OFF{0} - claude asks before risky actions (default){2}" -f $dim, $cream, $R)
     }
+    continue
+  }
+  elseif ($t -match '^:auto\b\s*(.*)$') {
+    # graded autonomy: choose how much claude may do unasked. Named levels map to claude's --permission-mode
+    # (plan / default / acceptEdits / bypassPermissions); applies to the NEXT prompt. (:yolo is the quick
+    # alias - yolo on == :auto full, yolo off == :auto safe.)
+    $a = $Matches[1].Trim().ToLower()
+    $lvl = @{ plan = 'plan'; safe = 'default'; edits = 'acceptEdits'; full = 'bypassPermissions' }
+    if (-not $a) {
+      $cur = if ($orchPerm) { $orchPerm } else { 'default' }
+      Write-Host ("  {0}autonomy is {1}{2}{0} - set with :auto plan|safe|edits|full{3}" -f $dim, $cream, $cur, $R)
+    } elseif ($lvl.ContainsKey($a)) {
+      $orchPerm = $lvl[$a]
+      Write-Host ("  {0}autonomy -> {1}{2}{0} ({3}){4}" -f $dim, $clay, $a, $orchPerm, $R)
+    } else {
+      Write-Host ("  {0}[!] unknown level '{1}' - use plan, safe, edits, or full{2}" -f $clay, $a, $R)
+    }
+    continue
+  }
+  elseif ($t -match '^:cost\b\s*(.*)$') {
+    # estimate Claude token use + cost from local transcripts (tools\cost.ps1). :cost <short> for one.
+    $arg = $Matches[1].Trim()
+    $costArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'tools\cost.ps1'))
+    if ($arg) { $costArgs += @('-Short', $arg) }
+    if ($hubOverride) { $costArgs += @('-Hub', $hubOverride) }
+    try { & $psExe @costArgs } catch { Write-Host ("  {0}[!] cost failed: {1}{2}" -f $clay, $_.Exception.Message, $R) }
+    continue
+  }
+  elseif ($t -match '^:map\b\s*(.*)$') {
+    # structural repo map (tools\repomap.ps1): list each source file's top-level symbols. :map <short>
+    # maps that project (writes REPOMAP.md at its root); bare :map maps the engine itself.
+    $arg = $Matches[1].Trim(); $code = $root
+    if ($arg) {
+      $pf = Join-Path $hub 'PROJECTS.md'
+      $proj = if (Test-Path $pf) { Get-SonelleProjects $pf | Where-Object { $_.Short -eq $arg.ToLower() } | Select-Object -First 1 } else { $null }
+      if ($proj -and $proj.CodePath -and (Test-Path $proj.CodePath)) { $code = $proj.CodePath }
+      else { Write-Host ("  {0}[!] unknown or missing project '{1}'{2}" -f $clay, $arg, $R); continue }
+    }
+    $mapOut = Join-Path $code 'REPOMAP.md'
+    try {
+      & $psExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tools\repomap.ps1') -Path $code -Out $mapOut | Out-Null
+      Write-Host ("  {0}repo map written: {1}{2}" -f $dim, $mapOut, $R)
+    } catch { Write-Host ("  {0}[!] map failed: {1}{2}" -f $clay, $_.Exception.Message, $R) }
     continue
   }
   else {
