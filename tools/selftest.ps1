@@ -227,6 +227,7 @@ Ok "backend claims its taskbar identity" ($srcGui -match 'SetCurrentProcessExpli
 Ok "backend saves pasted images"      ($srcGui -match 'def save_paste_image')
 Ok "backend setwinsize(rows, cols)"   ($srcGui -match 'setwinsize\(rows, cols\)')
 Ok "backend forwards -Yolo on SONELLE_YOLO" (($srcGui -match 'SONELLE_YOLO') -and ($srcGui -match '"-Yolo"'))
+Ok "backend has a _dbg trail at swallow sites (R4)" (($srcGui -match 'def _dbg') -and (@([regex]::Matches($srcGui, '_dbg\(')).Count -ge 6))
 $srcJs = Get-Content (Join-Path $appDir 'ui\app.js') -Raw
 Ok "frontend has output sink + ready gate" (($srcJs -match 'window\.__ptyOutput') -and ($srcJs -match 'pywebviewready'))
 Ok "frontend uses FitAddon.FitAddon"  ($srcJs -match 'new FitAddon\.FitAddon\(\)')

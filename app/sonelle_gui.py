@@ -48,6 +48,16 @@ ICON_ICO = os.path.join(ENGINE, "assets", "icon", "sonelle.ico")
 CREATE_NO_WINDOW = 0x08000000
 
 
+def _dbg(msg):
+    # Leave a trail at otherwise-silent swallow sites when SONELLE_DEBUG is set, so a harder/unattended
+    # session is debuggable instead of blind. Never raises (a logger must not become a new failure).
+    if os.environ.get("SONELLE_DEBUG"):
+        try:
+            sys.stderr.write("sonelle[dbg]: %s\n" % msg)
+        except Exception:
+            pass
+
+
 def _powershell_exe():
     import shutil
     exe = shutil.which("powershell.exe")
@@ -125,8 +135,9 @@ class SessionManager:
             return
         try:
             self.window.run_js(script)   # fire-and-forget; lower overhead than evaluate_js
-        except Exception:
+        except Exception as e:
             # window torn down between the check and the call -> swallow + latch closed
+            _dbg("run_js failed (window gone?): %r" % e)
             self._window_open = False
 
     # --- one pusher thread: drains the queue, coalesces consecutive same-tab output into one
@@ -231,7 +242,8 @@ class SessionManager:
                     data = proc.read(4096)
                 except EOFError:
                     break
-                except Exception:
+                except Exception as e:
+                    _dbg("pty read failed on %s: %r" % (tab, e))
                     break
                 if data:
                     self._q.put(("out", tab, data))
@@ -240,7 +252,8 @@ class SessionManager:
             code = None
             try:
                 code = proc.exitstatus
-            except Exception:
+            except Exception as e:
+                _dbg("exitstatus read failed on %s: %r" % (tab, e))
                 code = None
             self._q.put(("exit", tab, "null" if code is None else int(code)))
 
@@ -251,8 +264,8 @@ class SessionManager:
         with sess.lock:
             try:
                 sess.proc.write(data)   # verbatim: '\r', '\x03', '\x1b[A', ...
-            except Exception:
-                pass
+            except Exception as e:
+                _dbg("pty write failed on %s: %r" % (tab_id, e))
         return None
 
     def resize(self, tab_id, cols, rows):
@@ -269,8 +282,8 @@ class SessionManager:
         with sess.lock:
             try:
                 sess.proc.setwinsize(rows, cols)   # NOTE: (rows, cols)
-            except Exception:
-                pass
+            except Exception as e:
+                _dbg("setwinsize failed on %s: %r" % (tab_id, e))
         return None
 
     def close_tab(self, tab_id):
@@ -286,7 +299,8 @@ class SessionManager:
         with sess.lock:
             try:
                 pid = sess.proc.pid
-            except Exception:
+            except Exception as e:
+                _dbg("pid read failed: %r" % e)
                 pid = None
         # Kill the WHOLE tree FIRST, while the head PowerShell is still alive and owns its children
         # (ConPTY has no signal tree). Doing this before close() avoids orphaned claude/node and a
@@ -298,13 +312,13 @@ class SessionManager:
                     creationflags=CREATE_NO_WINDOW,
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                _dbg("taskkill failed for pid %s: %r" % (pid, e))
         with sess.lock:
             try:
                 sess.proc.close(force=True)
-            except Exception:
-                pass
+            except Exception as e:
+                _dbg("pty close failed: %r" % e)
 
     def shutdown_all(self):
         self._window_open = False
@@ -322,8 +336,8 @@ class SessionManager:
             self._kill(sess)
         try:
             self._q.put_nowait(None)   # stop the pusher thread
-        except Exception:
-            pass
+        except Exception as e:
+            _dbg("pusher poison-pill enqueue failed: %r" % e)
 
 
 def _hub_dir():
@@ -337,8 +351,8 @@ def _hub_dir():
             h = c.get("hub")
             if h and h != ".":
                 hub = h if os.path.isabs(h) else os.path.join(ENGINE, h)
-        except Exception:
-            pass
+        except Exception as e:
+            _dbg("config read failed, using engine root as hub: %r" % e)
     return hub
 
 
@@ -353,7 +367,8 @@ def parse_projects(pf):
     try:
         with open(pf, "r", encoding="utf-8") as f:
             lines = f.read().splitlines()
-    except Exception:
+    except Exception as e:
+        _dbg("registry read failed for %s: %r" % (pf, e))
         return out
     for ln in lines:
         s = ln.strip()
@@ -455,8 +470,8 @@ class Api:
     def win_minimize(self):
         try:
             self._window.minimize()
-        except Exception:
-            pass
+        except Exception as e:
+            _dbg("win_minimize failed: %r" % e)
         return None
 
     def win_toggle_max(self):
@@ -467,15 +482,15 @@ class Api:
             else:
                 self._window.maximize()
                 self._max = True
-        except Exception:
-            pass
+        except Exception as e:
+            _dbg("win_toggle_max failed: %r" % e)
         return {"maximized": self._max}
 
     def win_close(self):
         try:
             self._window.destroy()
-        except Exception:
-            pass
+        except Exception as e:
+            _dbg("win_close failed: %r" % e)
         return None
 
 
@@ -491,8 +506,8 @@ def _set_taskbar_identity():
     try:
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("sonelle.glass.app")
-    except Exception:
-        pass
+    except Exception as e:
+        _dbg("set taskbar identity failed: %r" % e)
 
 
 def main():
@@ -530,8 +545,8 @@ def main():
     def _on_closing():
         try:
             api._sm.shutdown_all()
-        except Exception:
-            pass
+        except Exception as e:
+            _dbg("shutdown_all failed: %r" % e)
         return True
 
     win.events.closing += _on_closing

@@ -55,6 +55,12 @@
   the paths/globs, and reports any two lanes that claim the same file or an ancestor directory of it,
   exiting 1 so it can gate a launch. selftest section 5b asserts it flags an overlap and passes when
   ownership is disjoint.
+- **The glass app stops debugging blind (R4).** `app\sonelle_gui.py` swallowed ~20 exceptions silently.
+  A tiny `_dbg(msg)` (gated on `SONELLE_DEBUG`, never itself raises) now leaves a trail at the
+  non-narrator swallow sites - PTY read/write/resize/kill, `run_js`, config + registry reads, the window
+  controls and shutdown - so a harder unattended session is diagnosable instead of mute. The behaviour
+  is unchanged (still swallows); it just records why. selftest section 8e asserts the logger exists and
+  is used. (The narrator's own except blocks are left untouched.)
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a
