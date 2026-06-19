@@ -46,13 +46,22 @@ if ($registry -match ('(?m)^\|\s*' + [regex]::Escape($Short) + '\s*\|')) {
   Write-Host "[!] Shortcode '$Short' already in PROJECTS.md - stopping (nothing changed)." -ForegroundColor Yellow; exit 1
 }
 
+# --- transactional scaffold: track every file/dir we create and snapshot the two append-targets, so a
+# failure midway (bad path, permission, full disk) rolls back cleanly - no orphan files, no dangling
+# registry row or memory-index line. Either the whole project lands or nothing does. ---
+$created    = New-Object System.Collections.Generic.List[string]
+$memIndex   = Join-Path $memDir 'MEMORY.md'
+$memDirNew  = -not (Test-Path $memDir)
+$memIdxPrev = if (Test-Path $memIndex) { [System.IO.File]::ReadAllText($memIndex) } else { $null }
+$projPrev   = [System.IO.File]::ReadAllText($projects)   # registry exists (guarded above)
+
+try {
 # ensure memory dir + index
-if (-not (Test-Path $memDir)) { New-Item -ItemType Directory -Path $memDir -Force | Out-Null }
-$memIndex = Join-Path $memDir 'MEMORY.md'
-if (-not (Test-Path $memIndex)) { Write-Utf8 $memIndex "# Memory index" }
+if ($memDirNew) { New-Item -ItemType Directory -Path $memDir -Force | Out-Null; $created.Add($memDir) }
+if ($null -eq $memIdxPrev) { Write-Utf8 $memIndex "# Memory index"; $created.Add($memIndex) }
 
 # create code dir
-if (-not (Test-Path $Path)) { New-Item -ItemType Directory -Path $Path -Force | Out-Null; Write-Host "[+] created code dir: $Path" }
+if (-not (Test-Path $Path)) { New-Item -ItemType Directory -Path $Path -Force | Out-Null; $created.Add($Path); Write-Host "[+] created code dir: $Path" }
 
 # write skeleton
 $todoFile   = Join-Path $hub ($shortUpper + '_TODO.txt')
@@ -60,13 +69,15 @@ $statusFile = Join-Path $hub ('_' + $Short + '_run_STATUS.md')
 $claudeFile = Join-Path $Path 'CLAUDE.md'
 $memFile    = Join-Path $memDir ('project_' + $Short + '.md')
 
-Write-Utf8 $todoFile   (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'TODO.template.txt'))));        Write-Host "[+] $todoFile"
-Write-Utf8 $statusFile (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'run_STATUS.template.md'))));   Write-Host "[+] $statusFile"
-Write-Utf8 $claudeFile (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'CLAUDE.template.md'))));       Write-Host "[+] $claudeFile"
-Write-Utf8 $memFile    (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'project_memory.template.md')))); Write-Host "[+] $memFile"
+Write-Utf8 $todoFile   (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'TODO.template.txt'))));        $created.Add($todoFile);   Write-Host "[+] $todoFile"
+Write-Utf8 $statusFile (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'run_STATUS.template.md'))));   $created.Add($statusFile); Write-Host "[+] $statusFile"
+Write-Utf8 $claudeFile (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'CLAUDE.template.md'))));       $created.Add($claudeFile); Write-Host "[+] $claudeFile"
+Write-Utf8 $memFile    (Fill ([System.IO.File]::ReadAllText((Join-Path $tpl 'project_memory.template.md')))); $created.Add($memFile);  Write-Host "[+] $memFile"
 
 # project hooks (Stop -> heal/check + lesson reminder; SessionStart -> recall) + a starter health check
-$hooksDir = Join-Path $Path '.claude\hooks'
+$claudeDir = Join-Path $Path '.claude'
+$hooksDir  = Join-Path $Path '.claude\hooks'
+if (-not (Test-Path $claudeDir)) { $created.Add($claudeDir) }   # remember the .claude root so rollback removes the whole tree
 if (-not (Test-Path $hooksDir)) { New-Item -ItemType Directory -Path $hooksDir -Force | Out-Null }
 Copy-Item (Join-Path $tpl 'settings.template.json')   (Join-Path $Path '.claude\settings.json')   -Force
 Copy-Item (Join-Path $tpl 'hooks\session_start.ps1')  (Join-Path $hooksDir 'session_start.ps1')   -Force
@@ -96,7 +107,7 @@ try {
   exit 2
 } finally { Pop-Location }
 '@
-Write-Utf8 $check (Fill $checkBody)
+Write-Utf8 $check (Fill $checkBody); $created.Add($check)
 Write-Host "[+] $check (auto-detecting starter)"
 
 # memory index line (clean append)
@@ -110,6 +121,16 @@ $row = "| $Short | $Name | $Path | yes | {{U}}_TODO.txt + _{{S}}_run_STATUS.md +
 $exReg = ([System.IO.File]::ReadAllText($projects) -replace "`r`n", "`n").TrimEnd("`n")
 Write-Utf8 $projects ($exReg + "`n" + $row + "`n")
 Write-Host "[+] PROJECTS.md registry row added"
+} catch {
+  Write-Host "[X] scaffold failed: $($_.Exception.Message) - rolling back (no orphans)." -ForegroundColor Red
+  # restore the two append-targets to their pre-run state (registry always existed; index may not have)
+  try { Write-Utf8 $projects $projPrev } catch {}
+  if ($null -ne $memIdxPrev) { try { Write-Utf8 $memIndex $memIdxPrev } catch {} }
+  elseif (Test-Path $memIndex) { Remove-Item $memIndex -Force -ErrorAction SilentlyContinue }
+  # delete everything we created (reverse = deepest/newest first); -Recurse handles dirs we made
+  for ($i = $created.Count - 1; $i -ge 0; $i--) { Remove-Item $created[$i] -Recurse -Force -ErrorAction SilentlyContinue }
+  exit 1
+}
 
 Write-Host ""
 Write-Host "OK - '$Short' ($Name) created. Open it: $Short`: <prompt>" -ForegroundColor Green

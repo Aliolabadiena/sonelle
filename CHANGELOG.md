@@ -38,6 +38,12 @@
   third parser outside the two sanctioned files. Fixed a latent divergence in passing: the Python
   parser would have listed a lower-cased `shortcode` header row as a project; it now skips it like the
   PowerShell parser does.
+- **`new_project` is transactional now (R1).** The scaffold writes a TODO, ledger, project CLAUDE.md,
+  memory file, hooks, a health check, a memory-index line and a registry row - if any step failed
+  partway it used to leave orphans (e.g. a memory-index line with no registry row). It now tracks every
+  file/dir it creates and snapshots the two append-targets, and on ANY failure it rolls everything back:
+  either the whole project lands or nothing does. selftest section 5e forces a mid-scaffold failure and
+  asserts no TODO/ledger/registry-row/index-line is left behind.
 
 ## v1.31 — 2026-06-19 (glass app: a real voice in the repo, in the terminal, per tab; a gif with physics; a shared knowledge base)
 - **A real, human voice - VENDORED in the repo.** The narrator's primary engine is now **Kokoro**, a

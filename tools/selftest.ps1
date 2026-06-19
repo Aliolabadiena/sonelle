@@ -94,6 +94,24 @@ $appOut = & $ps -NoProfile -Sta -ExecutionPolicy Bypass -File $appPath -SelfTest
 Ok "app -SelfTest exit 0"        ($LASTEXITCODE -eq 0)
 Ok "app -SelfTest builds the UI" (($appOut -join "`n") -match 'SELFTEST (OK|SKIP)')
 
+Write-Host "== 5e. new_project rolls back a partial scaffold (R1) =="
+# Point the code path at an existing FILE: the dir/index appends succeed, but writing CLAUDE.md INSIDE a
+# file path fails mid-scaffold - so the run must roll back (delete the TODO/ledger it already wrote, no row).
+$rbHub = Join-Path $env:TEMP 'sonelle_selftest_rb'
+if (Test-Path $rbHub) { Remove-Item $rbHub -Recurse -Force }
+New-Item -ItemType Directory -Path $rbHub -Force | Out-Null
+Copy-Item (Join-Path $engine 'PROJECTS.md') (Join-Path $rbHub 'PROJECTS.md') -Force
+$rbBad = Join-Path $rbHub 'iam_a_file'
+Set-Content -Path $rbBad -Value 'x'
+& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') rb "Rollback Proj" $rbBad -Hub $rbHub | Out-Null
+Ok "scaffold fails on a bad code path (exit 1)" ($LASTEXITCODE -eq 1)
+Ok "rollback left no TODO orphan"        (-not (Test-Path (Join-Path $rbHub 'RB_TODO.txt')))
+Ok "rollback left no ledger orphan"      (-not (Test-Path (Join-Path $rbHub '_rb_run_STATUS.md')))
+Ok "rollback left no registry row"       (-not ((Get-Content (Join-Path $rbHub 'PROJECTS.md') -Raw) -match '(?m)^\|\s*rb\s*\|'))
+$rbIdx = Join-Path $rbHub 'memory\MEMORY.md'
+Ok "rollback left no memory index line"  ((-not (Test-Path $rbIdx)) -or (-not ((Get-Content $rbIdx -Raw) -match 'project_rb')))
+if (Test-Path $rbHub) { Remove-Item $rbHub -Recurse -Force }
+
 Write-Host "== 5d. routing invokes claude correctly (behavioral, T1/T4) =="
 # Put a fake `claude` on PATH that records its argv + cwd, drive the terminal over stdin, and assert it
 # handed claude the right model/effort, cd'd into the project, and honored -Yolo. Env that would leak
