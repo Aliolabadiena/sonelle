@@ -25,6 +25,17 @@
       <!-- voice narration is now a PER-TAB toggle: each tab pill carries its own speaker (built in
            app.js makeTabEl), so you mute the boring research tabs and keep the important ones talking. -->
       <div class="spacer"></div>
+      <!-- WATCHER toggle ("Live"): shows/hides the right-docked watcher dashboard panel (the live
+           sensor board served at http://localhost:8787/dashboard/index.html). Purely additive - it
+           never touches the terminal/tab plumbing. Sits BEFORE the gear + the _ O X window controls. -->
+      <button id="btn-watch" class="nodrag iconbtn watch" title="live watcher (W)" aria-label="toggle live watcher panel">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 17l5-6 4 4 5-7 4 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="8" cy="11" r="1.3" fill="currentColor"/>
+          <circle cx="17" cy="8" r="1.3" fill="currentColor"/>
+        </svg>
+        <span class="watch-lbl">Live</span>
+      </button>
       <!-- settings (gear): sits BEFORE the _ O X window controls. Opens the customization panel. -->
       <button id="btn-settings" class="nodrag iconbtn gear" title="settings" aria-label="settings">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -52,6 +63,27 @@
       </svg>
       <button id="w-open" class="primary nodrag">open a terminal</button>
     </section>
+
+    <!-- WATCHER panel: a right-docked glass panel that embeds the EXISTING polished watcher dashboard
+         (served at http://localhost:8787/dashboard/index.html) in an iframe - we do NOT rebuild the
+         dashboard, just frame it. Toggled by the titlebar "Live" button (or the W key). When open,
+         #app gets the .watch-open class which reserves a right band on #stack and #bar so the terminal
+         reflows to the LEFT of the panel (purely additive: terminal/tab plumbing is untouched). The
+         localhost http iframe is allowed by WebView2. A small reload button re-points the iframe in case
+         the http.server wasn't up yet when the app launched. -->
+    <aside id="watcher" class="watcher glass" hidden aria-label="live watcher dashboard">
+      <header class="watch-head nodrag">
+        <span class="watch-title">live watcher</span>
+        <button id="watch-reload" class="watch-mini" title="reload dashboard" aria-label="reload dashboard">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-1.2 4.2M20 5v6h-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="watch-close" class="watch-mini" title="hide (W)" aria-label="hide watcher"><span class="g-close"></span></button>
+      </header>
+      <!-- the iframe reuses the dashboard the user already liked. data-src so we only load it the first
+           time it's actually shown (no background polling against localhost while it's hidden). -->
+      <iframe id="watch-frame" class="watch-frame" title="watcher dashboard"
+              data-src="http://localhost:8787/dashboard/index.html" referrerpolicy="no-referrer"></iframe>
+    </aside>
 
     <!-- the ONE place you type; it forwards to the terminal running behind the scenes -->
     <footer id="bar">

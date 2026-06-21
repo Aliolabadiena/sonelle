@@ -18,6 +18,15 @@ $root = Split-Path $PSScriptRoot -Parent
 # Capture -Hub NOW: PowerShell variable names are case-insensitive, so the param $Hub and the working
 # variable $hub are the SAME slot - any later '$hub = ...' would clobber the override otherwise.
 $hubOverride = $Hub
+# LOCKED MODE (generic): when $env:SONELLE_LOCKED is set to a project shortcode, this terminal serves ONE
+# project - it BYPASSES the dispatcher entirely (no "<short>:" parsing, no :new / project picker), and EVERY
+# user input is a bare prompt for that project. $env:SONELLE_HUB points the engine at the instance's
+# PROJECTS.md + CLAUDE.md (the personal launcher sets both env vars; the engine stays generic + info-free).
+# Both are no-ops when unset, so the normal multi-project path is byte-for-byte unchanged.
+$script:lockedShort = if ($env:SONELLE_LOCKED) { ([string]$env:SONELLE_LOCKED).Trim().ToLower() } else { '' }
+# Hub precedence stays: explicit -Hub param > $env:SONELLE_HUB > config > engine default. An empty -Hub lets
+# the env var (if any) supply the hub; an explicit -Hub still wins. Unset env -> $hubOverride is untouched.
+if (-not $hubOverride -and $env:SONELLE_HUB) { $hubOverride = [string]$env:SONELLE_HUB }
 . (Join-Path $root 'tools\_registry.ps1')
 # ONE config resolver (Get-SonelleConfig): hub (-Hub override wins) + the raw models block. No ad-hoc parse here.
 $resolved  = Get-SonelleConfig -Engine $root -HubOverride $hubOverride
@@ -81,6 +90,58 @@ function ClaudeSupports($flag) {
 # (no-project) lane gets its own minimal directive instead, since there is no project state to maintain.
 $script:operatingPolicy = "Operating policy - you decide WHICH of our workflows to use and WHEN; I describe the goal, I do not name the tool, so act on your own judgment instead of waiting for me to say run-this or use-that. Match effort to the task: for a large or multi-file change, which first needs you to understand how several files interact, delegate the breadth-first exploration to subagents via the Task tool and keep your own context for the synthesis and the edit; for a small focused change just do it directly. After any code change VERIFY it yourself before you call it done by running the right health check - the engine selftest, or a project sonelle.check.ps1 - and do not wait to be asked; if it fails, HEAL it: find the root cause, fix it, and re-run until green. When you finish a real task do the end-of-task ritual on your own - update the project TODO and ledger and capture any reusable lesson. The slash commands selftest, heal, ship and ritual bundle these routines if you want to run one as a unit. Scale the ceremony to the task - never over-process a one-line change or a plain question."
 $script:generalDirective = "This is a one-off task with NO project and no saved state. Answer or do it directly, and reach for subagents via the Task tool only if it is genuinely large. Do not create or modify any project files, TODO, ledger, or memory, and do not run the project rituals - there is nothing here to maintain."
+# WATCHER INJECTION (generic): if $env:SONELLE_WATCHER points at a watcher state dir, read every <sensor>.json
+# (one snapshot per sensor) + the alerts.jsonl tail and fold them into a compact "## LIVE WATCHER STATE"
+# markdown block. The caller APPENDS this to the existing --append-system-prompt content (it never replaces
+# the operating policy - they concatenate) so the assistant gets live visibility into everything the watcher
+# sees, every turn. Returns '' when the env var is unset or the dir is missing - skipped silently, so the
+# normal path is unaffected. The personal launcher sets SONELLE_WATCHER; the engine hardcodes no path.
+function Get-WatcherState {
+  $dir = if ($env:SONELLE_WATCHER) { [string]$env:SONELLE_WATCHER } else { '' }
+  if (-not $dir -or -not (Test-Path -LiteralPath $dir)) { return '' }
+  $lines = @()
+  # one line per sensor: source + ok/stale + age + the metrics blob (compact JSON), best-effort per file so a
+  # single corrupt snapshot can never break the launch.
+  $jsons = @(Get-ChildItem -LiteralPath $dir -Filter '*.json' -File -ErrorAction SilentlyContinue | Sort-Object Name)
+  foreach ($f in $jsons) {
+    try {
+      $o = Get-Content -LiteralPath $f.FullName -Raw -ErrorAction Stop | ConvertFrom-Json
+      $src = if ($o.source) { [string]$o.source } else { [System.IO.Path]::GetFileNameWithoutExtension($f.Name) }
+      $state = if ($null -ne $o.ok) { if ($o.ok) { 'ok' } else { 'FAIL' } } else { '?' }
+      # staleness: fetched_epoch + stale_after_s vs now (UTC); flag STALE so the assistant trusts fresh data only.
+      $age = ''
+      if ($o.fetched_epoch) {
+        $ageS = [int]((Get-Date).ToUniversalTime() - [datetimeoffset]::FromUnixTimeSeconds([int64]$o.fetched_epoch).UtcDateTime).TotalSeconds
+        $age = "${ageS}s ago"
+        if ($o.stale_after_s -and $ageS -gt [int]$o.stale_after_s) { $state = "$state/STALE" }
+      } elseif ($o.fetched_at) { $age = [string]$o.fetched_at }
+      $extra = ''
+      if ($o.reason) { $extra = " reason=$($o.reason)" }
+      $metrics = if ($o.metrics) { ($o.metrics | ConvertTo-Json -Compress -Depth 4) } else { '' }
+      $lines += ("- {0}: {1} ({2}){3} {4}" -f $src, $state, $age, $extra, $metrics).TrimEnd()
+    } catch {
+      $lines += ("- {0}: <unreadable: {1}>" -f [System.IO.Path]::GetFileNameWithoutExtension($f.Name), $_.Exception.Message)
+    }
+  }
+  # recent alerts: tail of alerts.jsonl (most recent last); cap so the system prompt can't balloon.
+  $alertFile = Join-Path $dir 'alerts.jsonl'
+  $alerts = @()
+  if (Test-Path -LiteralPath $alertFile) {
+    try {
+      $tail = @(Get-Content -LiteralPath $alertFile -Tail 12 -ErrorAction Stop) | Where-Object { $_.Trim() }
+      foreach ($ln in $tail) {
+        try { $a = $ln | ConvertFrom-Json; $alerts += ("- [{0}] {1}: {2}" -f $a.level, $a.source, $a.message) }
+        catch { $alerts += "- $ln" }   # not JSON -> keep the raw line
+      }
+    } catch {}
+  }
+  if ($lines.Count -eq 0 -and $alerts.Count -eq 0) { return '' }
+  $now = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+  $block = "## LIVE WATCHER STATE (snapshot at $now UTC; read-only telemetry the background watcher collected)`nSensors:`n" + ($lines -join "`n")
+  if ($alerts.Count -gt 0) { $block += "`nRecent alerts (newest last):`n" + ($alerts -join "`n") }
+  $block += "`n(This is live observability for your awareness; it does not itself ask for any action.)"
+  return $block
+}
 $psExe = (Get-Process -Id $PID).Path
 # (_registry.ps1 is already dot-sourced above for Get-SonelleConfig - Get-SonelleProjects comes from it too.)
 
@@ -195,6 +256,22 @@ function BareIntro {
   Write-Host ("  " + $dim + "make a project   " + $R + $cream + ":new" + $R + $dim + "    bring an existing one in   " + $R + $cream + ":adopt <path>" + $R)
   Write-Host ("  " + $dim + "run a task       " + $R + $cream + "<short>: <prompt>" + $R + $dim + "   e.g.  " + $R + $cream + "myproj: fix the build" + $R)
   Write-Host ("  " + $dim + "connect claude   install Claude Code and sign in:  https://claude.com/claude-code" + $R)
+  Write-Host ""
+}
+# LOCKED MODE intro: one project, no dispatcher. Show what's locked + that you just type; no project list,
+# no :new / picker. Resolves the locked project's display name + code dir from the instance PROJECTS.md.
+function LockedIntro {
+  $name = $script:lockedShort; $code = ''
+  $pf = Join-Path $hub 'PROJECTS.md'
+  if (Test-Path $pf) {
+    $p = (Get-SonelleProjects $pf) | Where-Object { $_.Short -eq $script:lockedShort } | Select-Object -First 1
+    if ($p) { if ($p.Name) { $name = $p.Name }; $code = $p.CodePath }
+  }
+  Write-Host ""
+  Write-Host ("  " + $clay + $bold + "sonelle" + $R + "  " + $dim + "locked to " + $R + $cream + $name + $R)
+  if ($code) { Write-Host ("  " + $dim + $code + $R) }
+  $wtag = if ($env:SONELLE_WATCHER -and (Test-Path -LiteralPath $env:SONELLE_WATCHER)) { "  " + $dot + "  watcher: live" } else { "" }
+  Write-Host ("  " + $dim + "just type - every line runs here  " + $dot + "  @path attaches an image  " + $dot + "  :help" + $wtag + $R)
   Write-Host ""
 }
 function ShowProjects {
@@ -394,6 +471,13 @@ function Route($short, $prompt, $images) {
   if ($short -eq 'general') { General $prompt $images; return }           # reserved: a neutral scratch lane (no project/state)
   $code = ResolveCode $short
   if (-not $code) {
+    # LOCKED MODE never offers to create a project - the locked short MUST exist in the instance PROJECTS.md.
+    # Surface a clear config error instead of a create prompt (the contract forbids new-project prompts here).
+    if ($script:lockedShort) {
+      Write-Host ("  {0}[!] locked project '{1}' is not in the registry at hub: {2}{3}" -f $clay, $short, $hub, $R)
+      Write-Host ("  {0}    check SONELLE_LOCKED / SONELLE_HUB and the instance PROJECTS.md.{1}" -f $dim, $R)
+      return
+    }
     Write-Host ("  {0}'{1}' is not in the registry.{2}" -f $clay, $short, $R)
     if ((Read-Host "  create new project '$short'? (y/N)") -match '^(y|Y)') { NewProject }
     return
@@ -420,16 +504,23 @@ function Route($short, $prompt, $images) {
     Write-Host ("    " + $dim + ($finalPrompt -replace "`n", " / ") + $R)
   }
   $cargs = @('--model', $orchModel, '--effort', $orchEffort)
-  # the inherent operating policy rides the system prompt: claude decides which workflow to apply, proactively
-  if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', $script:operatingPolicy) }
-  else { $finalPrompt = $script:operatingPolicy + "`n`n" + $finalPrompt }
+  # the inherent operating policy rides the system prompt: claude decides which workflow to apply, proactively.
+  # CONCATENATE (never replace) the live watcher state after it, so the assistant gets current telemetry every
+  # turn; Get-WatcherState returns '' (no-op) when no watcher is configured, keeping the normal path identical.
+  $sysPrompt = $script:operatingPolicy
+  $watcher = Get-WatcherState
+  if ($watcher) { $sysPrompt = $sysPrompt + "`n`n" + $watcher }
+  if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', $sysPrompt) }
+  else { $finalPrompt = $sysPrompt + "`n`n" + $finalPrompt }
   if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
   if ((Test-SonelleCodePath $code) -and (Test-Path -LiteralPath $code)) { Push-Location -LiteralPath $code } else { Push-Location -LiteralPath $root }
   try { & claude @cargs $finalPrompt } finally { Pop-Location }
   $script:staged = @()   # staged images consumed
 }
 
-if (-not $script:bare) { Welcome -NoClear:([bool]$Demo) } else { BareIntro }
+# Intro: locked -> single-project banner; else the normal welcome card / bare primer (unchanged paths).
+if ($script:lockedShort) { LockedIntro }
+elseif (-not $script:bare) { Welcome -NoClear:([bool]$Demo) } else { BareIntro }
 if ($Demo) { Write-Host ("  " + $dim + "(demo mode - welcome only; no REPL)" + $R); return }
 
 while ($true) {
@@ -439,6 +530,22 @@ while ($true) {
   $t = $in.Trim()
   if (-not $t) { continue }
   if ($t -match '^:(q|quit|exit)$') { break }
+  # --- LOCKED MODE intercept (generic; active only when $env:SONELLE_LOCKED is set) ---------------------
+  # The whole input is a bare prompt for the locked project: NO "<short>:" parse, NO :new / :adopt / project
+  # picker, NO project-switching. Only a tiny set of project-AGNOSTIC meta-commands stay live (quit handled
+  # above; help / yolo / auto / attach / clear / cost) so the terminal is still usable. Everything else -
+  # including any text that merely looks like "<short>: ..." - is routed verbatim to the one locked project.
+  elseif ($script:lockedShort -and ($t -notmatch '^(:help|:yolo\b|:auto\b|:attach\b|:clear|:cost\b)' -and $t -notmatch '^\s*(help|\?)\s*:?\s*$')) {
+    $bodyText = $t
+    $imgs = @() + $script:staged
+    foreach ($mm in [regex]::Matches($bodyText, '@"([^"]+)"|@(\S+)')) {
+      $p = if ($mm.Groups[1].Value) { $mm.Groups[1].Value } else { $mm.Groups[2].Value }
+      if (Test-Path $p) { $imgs += (Resolve-Path $p).Path; $bodyText = $bodyText.Replace($mm.Value, '') }
+    }
+    $bodyText = $bodyText.Trim()
+    if ($bodyText) { Route $script:lockedShort $bodyText $imgs }
+    continue
+  }
   elseif ($t -eq ':help') { ShowHelp; continue }
   elseif ($t -match '^\s*(help|\?)\s*:?\s*$') { ShowHelp; continue }   # bare 'help' / 'help:' / '?' -> commands, never routed to claude
   elseif ($t -eq ':projects') { ShowProjects; continue }

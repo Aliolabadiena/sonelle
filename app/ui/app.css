@@ -131,6 +131,53 @@ body{
 .wbtn:hover .g-min,.wbtn:hover .g-max{ border-color:var(--txt); }
 .wbtn:hover .g-close::before,.wbtn:hover .g-close::after{ background:#fff; }
 
+/* ---------- live watcher: titlebar toggle + right-docked dashboard panel ---------- */
+/* "Live" button: a small chart glyph + label that shows/hides the watcher panel. Pill-shaped so the
+   label reads; turns accent-tinted when the panel is open. Matches the other .iconbtn chrome. */
+.iconbtn.watch{
+  width:auto; gap:6px; padding:0 9px; font-size:0;     /* font-size:0 kills inline whitespace; label re-sizes below */
+}
+.iconbtn.watch svg{ width:16px; height:16px; display:block; }
+.iconbtn.watch .watch-lbl{ font-size:11.5px; font-weight:500; letter-spacing:.2px; }
+.iconbtn.watch.on{ background:var(--accent-soft); color:#efe9f8; border-color:var(--hair-strong); }
+
+/* the panel itself: docked to the right edge of the #app column, spanning between the titlebar and the
+   composer. position:absolute keeps the existing flex column (titlebar / #stack / #bar) untouched; the
+   .watch-open reflow (below) insets #stack + #bar so the terminal sits to the LEFT of it. */
+.watcher{
+  position:absolute; z-index:7;
+  top:60px;                          /* below the 44px titlebar + its 8px gap + 8px app padding */
+  right:8px; bottom:8px;
+  width:clamp(320px, 32vw, 460px);
+  border-radius:var(--pane-radius);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.watcher[hidden]{ display:none !important; }
+.watch-head{
+  display:flex; align-items:center; gap:8px;
+  padding:8px 8px 8px 12px; flex:0 0 auto;
+  border-bottom:1px solid var(--hair);
+}
+.watch-title{ font-size:12px; font-weight:500; color:#efe9f8; letter-spacing:.2px; flex:1 1 auto; }
+.watch-mini{
+  display:flex; align-items:center; justify-content:center;
+  width:24px; height:24px; padding:0; border:0; border-radius:7px; cursor:default;
+  background:transparent; color:var(--dim);
+}
+.watch-mini svg{ width:15px; height:15px; display:block; }
+.watch-mini:hover{ background:rgba(255,255,255,.07); color:var(--txt); }
+/* the iframe reuses the polished dashboard; transparent + no border so the glass panel frames it */
+.watch-frame{
+  flex:1 1 auto; width:100%; border:0; background:transparent; display:block;
+}
+
+/* reflow: when the panel is open, reserve a band on the right of the terminal + composer so nothing is
+   drawn under the panel. Width = panel width (clamp) + its 8px right margin + an 8px gap. */
+#app.watch-open #stack{ margin-right:calc(clamp(320px, 32vw, 460px) + 16px); }
+/* the composer already reserves a right band for the gif (190px); when the watcher is open it needs the
+   wider panel band instead - take the larger of the two so the cmdbar always clears whatever's there. */
+#app.watch-open #bar{ padding-right:calc(clamp(320px, 32vw, 460px) + 16px); }
+
 /* ---------- terminal stack ---------- */
 #stack{ position:relative; flex:1 1 auto; min-height:0; }
 .pane{
