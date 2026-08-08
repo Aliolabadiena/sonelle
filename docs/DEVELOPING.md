@@ -74,7 +74,9 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   the channel (and `$env:SONELLE_CONFIG` can repoint that file; the resolver in `tools\_registry.ps1`
   honors it, which is also how selftest 5d stays hermetic). Permission mode is NOT re-read live (it
   has `-Yolo`/`:yolo` overrides). Guarded by selftest 5d (behavioral: model/effort/code-writer +
-  SONELLE_CONFIG).
+  SONELLE_CONFIG). NOTE (2026-08): `CLAUDE_CODE_SUBAGENT_MODEL` still works but is no longer
+  prominent in the docs - the modern per-subagent mechanism is a `model:` field in
+  `.claude/agents/<name>.md` frontmatter. If the env var ever stops routing, migrate there.
 - **Guard hook + slash commands + inherent altitude (v1.36):** the engine and every scaffolded project
   ship a **PreToolUse guard** (`.claude\hooks\pretooluse_guard.ps1`, wired in `.claude\settings.json` for
   `Write|Edit|Bash`). It reads claude's UTF-8 payload on stdin (`OpenStandardInput` as UTF-8 - PS 5.1's

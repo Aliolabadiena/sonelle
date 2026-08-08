@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.45 - 2026-08-08 (currency pass: August-2026 Claude Code alignment)
+An audit against the current Claude Code docs (August 2026) after two idle months. The engine's core
+integration points all still hold (CLI flags, hooks exit-code-2 contract, SKILL.md frontmatter, the
+plugin marketplace format, `--append-system-prompt`) - the fixes are edges:
+- **Config example** now lists the current model aliases (`fable`, `best` alongside haiku/sonnet/opus;
+  aliases resolve to the newest version), the full effort ladder (`low..xhigh` + **`max`**), and the
+  new permission modes (`auto`, `dontAsk`).
+- **`statusline.ps1`** reads BOTH payload shapes: `effort.level` OR the newer `reasoning_effort`,
+  `context_window.used_percentage` OR `context.used_percentage` - so a schema drift can't blank the line.
+- **DEVELOPING.md** notes that `CLAUDE_CODE_SUBAGENT_MODEL` (the code-writer split) is no longer
+  prominent in the docs; the modern per-subagent mechanism is `model:` frontmatter in
+  `.claude/agents/*.md` - migration path documented, behavior unchanged while the env var works.
+- Not adopted (documented decision): agent-teams/`.claude/agents` for lanes (sonelle lanes are whole
+  Claude Code SESSIONS with disjoint file ownership - a different tool than in-session subagents),
+  and Routines (cloud scheduling; the terminal is local-first).
+
 ## v1.44 - 2026-08-08 (the GUI app is gone - sonelle is a terminal + Claude Code tool)
 v1.43 dropped the watcher dashboard; this completes the move. The glass desktop app (pywebview +
 xterm.js), the classic WinForms host, the voice narrator (Kokoro/edge-tts/SAPI), the mascot/reporter,

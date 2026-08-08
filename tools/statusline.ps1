@@ -15,7 +15,9 @@ function Col($p) { if ($p -ge 85) { "$E[38;2;222;90;70m" } elseif ($p -ge 60) { 
 $parts = @("$clay" + 'sonelle' + $R)
 
 $model = if ($j.model.display_name) { $j.model.display_name } else { 'claude' }
-$eff = if ($j.effort.level) { ' ' + $j.effort.level } else { '' }
+# effort: older payloads use effort.level; newer ones may expose reasoning_effort - accept both
+$effVal = if ($j.effort.level) { $j.effort.level } elseif ($j.reasoning_effort) { $j.reasoning_effort } else { '' }
+$eff = if ($effVal) { ' ' + $effVal } else { '' }
 $parts += "$dim$model$eff$R"
 
 if ($null -ne $j.rate_limits.five_hour.used_percentage) {
@@ -26,8 +28,11 @@ if ($null -ne $j.rate_limits.seven_day.used_percentage) {
   $p = [math]::Round([double]$j.rate_limits.seven_day.used_percentage)
   $parts += (Col $p) + "7d ${p}%" + $R
 }
-if ($null -ne $j.context_window.used_percentage) {
-  $parts += "$dim" + ('ctx ' + [math]::Round([double]$j.context_window.used_percentage) + '%') + $R
+# context: older payloads use context_window.used_percentage; newer ones may use context.used_percentage
+$ctx = if ($null -ne $j.context_window.used_percentage) { $j.context_window.used_percentage }
+       elseif ($null -ne $j.context.used_percentage) { $j.context.used_percentage } else { $null }
+if ($null -ne $ctx) {
+  $parts += "$dim" + ('ctx ' + [math]::Round([double]$ctx) + '%') + $R
 }
 
 Write-Output (($parts) -join "$dim | $R")
