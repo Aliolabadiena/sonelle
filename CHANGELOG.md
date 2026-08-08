@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.43 - 2026-08-08 (terminal-first: the GUI drops the watcher dashboard; Claude 5 price refresh)
+Sonelle is used through the plain terminal and Claude Code, so a GUI dashboard duplicated telemetry
+that the engine already injects into every prompt. The panel goes; the architecture stays.
+- **Watcher dashboard panel removed** from the glass app (the titlebar "Live" toggle + the right-docked
+  iframe panel and its reflow CSS). The plumbing is untouched: locked mode (`SONELLE_LOCKED`) and the
+  live watcher-state injection (`SONELLE_WATCHER` -> "## LIVE WATCHER STATE" block in the system prompt)
+  keep working exactly as before - the assistant still sees live telemetry in-context, in any terminal.
+- **`cost.ps1` price table refreshed for the Claude 5 family**: `fable` row added ($10/$50 per MTok),
+  `opus` updated to the Opus 5 list price ($5/$25, down from $15/$75); `sonnet`/`haiku` unchanged
+  (Sonnet 5 promo noted in a comment). The selftest dollar-figure assertion follows the new rates.
+- **Neutral example prompt** in the terminal help (`myapp: fix the build` instead of a real project name).
+
 ## v1.42 - 2026-06-19 (a new project is self-contained by default - it can never pollute the engine)
 Standing up a new project surfaced a real trap: `new_project.ps1` resolved its hub differently from every
 other tool. With no `-Hub`, it defaulted to the ENGINE folder, so running it bare dumped a project's TODO/

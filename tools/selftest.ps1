@@ -711,7 +711,7 @@ try {
   $costOut2 = (& $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'tools\cost.ps1') -Short st -Hub $tmp) -join "`n"
 } finally { $env:SONELLE_CLAUDE_PROJECTS = $savedCP }
 Ok "cost reports the project + token totals"    (($costOut -match '(?m)\bmc\b') -and ($costOut -match '1,000') -and ($costOut -match '500'))
-Ok "cost estimates a dollar figure (opus rates)" ($costOut -match '\$0\.05')
+Ok "cost estimates a dollar figure (opus rates)" ($costOut -match '\$0\.0176')
 Ok "cost handles a project with no transcript"   ($costOut2 -match 'no transcript')
 
 Write-Host "== 11. repo map (structural primer) =="

@@ -765,74 +765,6 @@
     if (!localStorage.getItem("sonelle.name") && s.assistantName) setAssistantName(s.assistantName);
   }
 
-  // ---------- live watcher panel (right-docked iframe of the existing dashboard) ----------
-  // Purely additive: toggles a glass panel that embeds http://localhost:8787/dashboard/index.html.
-  // Opening adds .watch-open to #app (CSS insets #stack + #bar so the terminal reflows left of it),
-  // then we refit the active terminal because its width just changed. The iframe src is lazy-loaded on
-  // first show (data-src -> src) so we don't poll localhost while it's hidden.
-  const WATCH_MIN_W = 1000;   // auto-show on boot only when the window is at least this wide
-  function watchEnsureLoaded() {
-    const f = $("watch-frame");
-    if (f && !f.src && f.dataset.src) f.src = f.dataset.src;
-  }
-  function watchReflow() {
-    // the terminal's box changed size -> refit the active tab (and let the backend PTY follow)
-    const e = activeEntry();
-    if (!e) return;
-    requestAnimationFrame(() => {
-      safeFit(e);
-      if (live && !e.dead) { try { window.pywebview.api.resize(e.tabId, e.term.cols, e.term.rows); } catch (x) {} }
-    });
-  }
-  function isWatchOpen() { return document.getElementById("app").classList.contains("watch-open"); }
-  function setWatch(open) {
-    const panel = $("watcher"), btn = $("btn-watch"), app = $("app");
-    if (!panel || !app) return;
-    if (open) {
-      watchEnsureLoaded();
-      panel.hidden = false;
-      app.classList.add("watch-open");
-      if (btn) btn.classList.add("on");
-    } else {
-      panel.hidden = true;
-      app.classList.remove("watch-open");
-      if (btn) btn.classList.remove("on");
-    }
-    try { localStorage.setItem("sonelle.watch", open ? "1" : "0"); } catch (x) {}
-    watchReflow();
-  }
-  function toggleWatch() { setWatch(!isWatchOpen()); }
-  function reloadWatch() {
-    const f = $("watch-frame");
-    if (!f) return;
-    const src = f.dataset.src || f.src;
-    if (src) { f.src = "about:blank"; requestAnimationFrame(() => { f.src = src; }); }   // hard reload
-  }
-  function wireWatcher() {
-    const btn = $("btn-watch");
-    if (btn) btn.addEventListener("click", toggleWatch);
-    const cl = $("watch-close"); if (cl) cl.addEventListener("click", () => setWatch(false));
-    const rl = $("watch-reload"); if (rl) rl.addEventListener("click", reloadWatch);
-    // W toggles the panel (when not typing in an input/select)
-    document.addEventListener("keydown", (e) => {
-      if (e.ctrlKey || e.altKey || e.metaKey) return;
-      if (e.key !== "w" && e.key !== "W") return;
-      const ae = document.activeElement;
-      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT" || ae.isContentEditable)) return;
-      e.preventDefault();
-      toggleWatch();
-    });
-    // a window resize while the panel is open changes the terminal box (clamp width) -> refit
-    window.addEventListener("resize", () => { if (isWatchOpen()) watchReflow(); });
-    // default: respect a saved choice; otherwise show it when the window is wide enough to fit both
-    let open;
-    const saved = (() => { try { return localStorage.getItem("sonelle.watch"); } catch (x) { return null; } })();
-    if (saved === "1") open = true;
-    else if (saved === "0") open = false;
-    else open = window.innerWidth >= WATCH_MIN_W;
-    setWatch(open);
-  }
-
   // ---------- chrome wiring (safe with or without the bridge) ----------
   function wireChrome() {
     const openTab = () => { if (live) createLiveTab(null); else createDemoTab(); };
@@ -841,7 +773,6 @@
     wireBrandloopDrag();          // the mascot gif is grab-and-drop (throw + bounce + drift home)
     wireLoopControls();           // the lock / pop-out / mute controls on the gif's control row
     wireSettings();               // the titlebar gear -> customization panel
-    wireWatcher();                // the titlebar "Live" button -> right-docked watcher dashboard panel
     applyStoredCustomization();   // apply the cached palette / name / mascot instantly on boot
     // Ctrl+T opens a new terminal (the + button advertises this shortcut; WebView2 has no default for it)
     document.addEventListener("keydown", (e) => {

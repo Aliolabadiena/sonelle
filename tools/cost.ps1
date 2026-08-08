@@ -22,8 +22,9 @@ $hub = $resolved.Hub
 # price table: USD per 1,000,000 tokens. cache-write counts as 1.25x input, cache-read as 0.1x input.
 # list prices, approximate - matched by a substring of the model id. Edit freely.
 $prices = @(
-  @{ key = 'opus';   inp = 15.0; outp = 75.0 },
-  @{ key = 'sonnet'; inp = 3.0;  outp = 15.0 },
+  @{ key = 'fable';  inp = 10.0; outp = 50.0 },
+  @{ key = 'opus';   inp = 5.0;  outp = 25.0 },
+  @{ key = 'sonnet'; inp = 3.0;  outp = 15.0 },   # Sonnet 5 promo $2/$10 through 2026-08-31; list rate kept here
   @{ key = 'haiku';  inp = 1.0;  outp = 5.0 }
 )
 function Get-Price($model) {

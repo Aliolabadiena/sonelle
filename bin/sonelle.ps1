@@ -221,7 +221,7 @@ function ShowHelp {
   Write-Host ("  " + $bold + "commands" + $R + $hver)
   Write-Host ""
   $rows = @(
-    @("<short>: <prompt>",    ("run a prompt in a project  (e.g. " + $cream + "sotis: fix the build" + $dim + ")")),
+    @("<short>: <prompt>",    ("run a prompt in a project  (e.g. " + $cream + "myapp: fix the build" + $dim + ")")),
     @("general: <prompt>",    "one-off question / quick task - no project, no saved state"),
     @(":attach <path>",       ("attach an image to the next prompt (or inline " + $cream + "@path" + $dim + ")")),
     @(":projects",            "list your projects"),
