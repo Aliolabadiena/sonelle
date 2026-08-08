@@ -1,5 +1,5 @@
 {
-  "_comment": "Copy to sonelle.config.json (gitignored). 'hub' = your workspace path (default '.' = the sonelle folder; point it at your real registry to route those projects). 'memoryDir' = where your project memory files live, used by check_pointers/doctor to validate memory pointers (empty string \"\" or omitted = the default <hub>/memory; set an absolute path if your memory lives elsewhere, e.g. a Claude Code memory dir). 'models': the ORCHESTRATOR (the session you talk to) is ALWAYS your max model+effort. LANES (workers) default to laneDefault/laneEffort and a permission mode; per-lane override via :team proj bugs=opus,triage=haiku:medium. Models: haiku | sonnet | opus | claude-fable-5. Effort: low | medium | high | xhigh. Permission mode: default | acceptEdits | bypassPermissions | plan (lanePermissionMode for workers; optional orchestratorPermissionMode for the boss - unset = inherit your global default). The glass app's settings GEAR writes the rest: 'paletteId' (1 of the 20 themes), 'assistantName' (DISPLAY name only), 'mascotPath' (your own gif/photo, staged outside the repo), and 'narrator' (voice + reporting 'style': warm | terse | hacker | bubbly).",
+  "_comment": "Copy to sonelle.config.json (gitignored). 'hub' = your workspace path (default '.' = the sonelle folder; point it at your real registry to route those projects). 'memoryDir' = where your project memory files live, used by check_pointers/doctor to validate memory pointers (empty string \"\" or omitted = the default <hub>/memory; set an absolute path if your memory lives elsewhere, e.g. a Claude Code memory dir). 'models': the ORCHESTRATOR (the session you talk to) is ALWAYS your max model+effort. LANES (workers) default to laneDefault/laneEffort and a permission mode; per-lane override via :team proj bugs=opus,triage=haiku:medium. 'codeWriter' (optional) routes claude's file-editing subagents to their own model via CLAUDE_CODE_SUBAGENT_MODEL. Models: haiku | sonnet | opus | claude-fable-5. Effort: low | medium | high | xhigh. Permission mode: default | acceptEdits | bypassPermissions | plan (lanePermissionMode for workers; optional orchestratorPermissionMode for the boss - unset = inherit your global default).",
   "hub": ".",
   "memoryDir": "",
   "models": {
@@ -8,15 +8,5 @@
     "laneDefault": "opus",
     "laneEffort": "high",
     "lanePermissionMode": "acceptEdits"
-  },
-  "paletteId": "indigo",
-  "assistantName": "sonelle",
-  "mascotPath": "",
-  "narrator": {
-    "enabled": true,
-    "engine": "kokoro",
-    "voice": "af_heart",
-    "speed": 0.95,
-    "style": "warm"
   }
 }

@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.44 - 2026-08-08 (the GUI app is gone - sonelle is a terminal + Claude Code tool)
+v1.43 dropped the watcher dashboard; this completes the move. The glass desktop app (pywebview +
+xterm.js), the classic WinForms host, the voice narrator (Kokoro/edge-tts/SAPI), the mascot/reporter,
+the palettes/settings panel, and the ~120 MB of vendored voice models are all REMOVED (`app\`,
+`bin\sonelle_gui.ps1`, `bin\sonelle_app.ps1`). sonelle is used through the plain terminal
+(`bin\sonelle.ps1`) or Claude Code directly - the engine architecture (dispatcher, registry, scaffold/
+heal/self-improve, lanes, hooks, skills, plugin, locked mode + watcher injection) is untouched.
+- Terminal: `:app` / `:app-classic` commands and the narrator `--settings` attach removed; `-Bare`,
+  `-Yolo`, the model split (`models.codeWriter` -> `CLAUDE_CODE_SUBAGENT_MODEL`), and everything else stay.
+- `make_launcher.ps1` now always creates a TERMINAL shortcut (Windows Terminal if installed).
+- Docs (README / ARCHITECTURE / DEVELOPING), CI (no Python setup needed), and the config example are
+  trimmed to match; selftest drops the GUI sections (5c / 8e / 8f / 8i, the Python parser-equivalence
+  check) and instead asserts the GUI is fully gone.
+
 ## v1.43 - 2026-08-08 (terminal-first: the GUI drops the watcher dashboard; Claude 5 price refresh)
 Sonelle is used through the plain terminal and Claude Code, so a GUI dashboard duplicated telemetry
 that the engine already injects into every prompt. The panel goes; the architecture stays.

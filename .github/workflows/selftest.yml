@@ -2,8 +2,7 @@ name: selftest
 
 # Run the engine self-test on every push / PR. selftest.ps1 is the gate (it must exit 0):
 # it parses + ASCII-checks every .ps1, scaffolds into a throwaway hub, drives the terminal with a
-# stub `claude`, fuzzes the registry parser, and more. Tests that need the local .venv (the PS<->Python
-# parser-equivalence check, the launcher dep check) self-skip in CI - everything else runs.
+# stub `claude`, fuzzes the registry parser, and more.
 
 on:
   push:
@@ -16,11 +15,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python (for py_compile + the narrator behavioral probe)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
 
       - name: Run engine selftest (Windows PowerShell 5.1)
         shell: powershell

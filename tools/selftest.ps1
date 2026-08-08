@@ -156,19 +156,6 @@ $qe = $null; $qt = $null
 if (Test-Path $qStart) { [void][System.Management.Automation.Language.Parser]::ParseFile($qStart, [ref]$qt, [ref]$qe) }
 Ok "lane start script still parses with an apostrophe in the code path (escaped)" ($qe.Count -eq 0)
 
-Write-Host "== 5c. app (multi-terminal shell) =="
-$appPath = Join-Path $engine 'bin\sonelle_app.ps1'
-Ok "sonelle_app.ps1 exists"      (Test-Path $appPath)
-$srcApp = if (Test-Path $appPath) { Get-Content $appPath -Raw } else { '' }
-Ok "app embeds via SetParent"    ($srcApp -match 'SetParent')
-Ok "app hosts the sonelle terminal" ($srcApp -match "bin\\\\sonelle\.ps1|'bin\\\\sonelle\.ps1'|sonelle\.ps1")
-Ok "app has New-Terminal"        ($srcApp -match 'function New-Terminal')
-Ok "app has a -SelfTest mode"    ($srcApp -match '\[switch\]\$SelfTest')
-Ok "app themed clay accent"      ($srcApp -match '204,\s*120,\s*92')
-$appOut = & $ps -NoProfile -Sta -ExecutionPolicy Bypass -File $appPath -SelfTest 2>&1
-Ok "app -SelfTest exit 0"        ($LASTEXITCODE -eq 0)
-Ok "app -SelfTest builds the UI" (($appOut -join "`n") -match 'SELFTEST (OK|SKIP)')
-
 Write-Host "== 5e. new_project rolls back a partial scaffold (R1) =="
 # Point the code path at an existing FILE: the dir/index appends succeed, but writing CLAUDE.md INSIDE a
 # file path fails mid-scaffold - so the run must roll back (delete the TODO/ledger it already wrote, no row).
@@ -193,14 +180,14 @@ Write-Host "== 5d. routing invokes claude correctly (behavioral, T1/T4) =="
 # CLAUDE_CODE_SUBAGENT_MODEL, cd'd into the project, and honored -Yolo. The models come from a HERMETIC
 # config we point $env:SONELLE_CONFIG at (NOT the dev's real engine-root config) so the test is
 # deterministic AND proves the values are read from config, not the hardcoded defaults. Env that would
-# leak (SONELLE_YOLO / SONELLE_NARRATE_SETTINGS / a pre-set subagent model) is neutralized too.
+# leak (SONELLE_YOLO / a pre-set subagent model) is neutralized too.
 $stub = Join-Path $tmp 'stub'; New-Item -ItemType Directory -Path $stub -Force | Out-Null
 $cap  = Join-Path $stub 'cap.txt'
 # `claude --help` must advertise --append-system-prompt so the terminal's ClaudeSupports probe resolves
 # true and the routing actually attaches the flag (otherwise it would take the older-build fallback path).
 $stubLines = @('@echo off',
                'if "%~1"=="--help" (',
-               '  echo --model --effort --permission-mode --settings --append-system-prompt',
+               '  echo --model --effort --permission-mode --append-system-prompt',
                '  exit /b 0',
                ')',
                'echo %*> "%SONELLE_STUB_CAP%"', 'cd >> "%SONELLE_STUB_CAP%"',
@@ -208,9 +195,9 @@ $stubLines = @('@echo off',
 [System.IO.File]::WriteAllText((Join-Path $stub 'claude.cmd'), ($stubLines -join "`r`n") + "`r`n")
 $cfg5d = Join-Path $tmp 'orch.config.json'
 [System.IO.File]::WriteAllText($cfg5d, '{ "models": { "orchestrator": "opus", "orchestratorEffort": "xhigh", "codeWriter": "sonnet" } }')
-$savedPath = $env:Path; $savedYolo = $env:SONELLE_YOLO; $savedNarr = $env:SONELLE_NARRATE_SETTINGS
+$savedPath = $env:Path; $savedYolo = $env:SONELLE_YOLO
 $savedCfg = $env:SONELLE_CONFIG; $savedSub = $env:CLAUDE_CODE_SUBAGENT_MODEL
-$env:SONELLE_YOLO = ''; $env:SONELLE_NARRATE_SETTINGS = ''; $env:CLAUDE_CODE_SUBAGENT_MODEL = ''
+$env:SONELLE_YOLO = ''; $env:CLAUDE_CODE_SUBAGENT_MODEL = ''
 $env:SONELLE_CONFIG = $cfg5d; $env:Path = "$stub;$env:Path"; $env:SONELLE_STUB_CAP = $cap
 try {
   if (Test-Path $cap) { Remove-Item $cap -Force }
@@ -231,7 +218,7 @@ try {
   $capAuto = if (Test-Path $cap) { Get-Content $cap -Raw } else { '' }
   Ok ":auto edits => --permission-mode acceptEdits" (($capAuto -match '--permission-mode') -and ($capAuto -match 'acceptEdits'))
 } finally {
-  $env:Path = $savedPath; $env:SONELLE_YOLO = $savedYolo; $env:SONELLE_NARRATE_SETTINGS = $savedNarr
+  $env:Path = $savedPath; $env:SONELLE_YOLO = $savedYolo
   $env:SONELLE_CONFIG = $savedCfg; $env:CLAUDE_CODE_SUBAGENT_MODEL = $savedSub
   Remove-Item Env:\SONELLE_STUB_CAP -ErrorAction SilentlyContinue
 }
@@ -252,8 +239,8 @@ $aLines = @('@echo off', 'if "%~1"=="--help" (', '  echo --model --effort --perm
 $adProj = Join-Path $tmp 'existing_app'; New-Item -ItemType Directory -Path $adProj -Force | Out-Null
 [System.IO.File]::WriteAllText((Join-Path $adProj 'CLAUDE.md'), 'my own onboarding doc - keep me')
 [System.IO.File]::WriteAllText((Join-Path $adProj 'package.json'), '{"name":"existing"}')
-$savedPath2 = $env:Path; $savedCap2 = $env:SONELLE_STUB_CAP; $savedYolo2 = $env:SONELLE_YOLO; $savedNarr2 = $env:SONELLE_NARRATE_SETTINGS; $savedCfg2 = $env:SONELLE_CONFIG
-$env:SONELLE_YOLO = ''; $env:SONELLE_NARRATE_SETTINGS = ''; $env:SONELLE_CONFIG = ''; $env:Path = "$astub;$env:Path"; $env:SONELLE_STUB_CAP = $acap
+$savedPath2 = $env:Path; $savedCap2 = $env:SONELLE_STUB_CAP; $savedYolo2 = $env:SONELLE_YOLO; $savedCfg2 = $env:SONELLE_CONFIG
+$env:SONELLE_YOLO = ''; $env:SONELLE_CONFIG = ''; $env:Path = "$astub;$env:Path"; $env:SONELLE_STUB_CAP = $acap
 try {
   if (Test-Path $acap) { Remove-Item $acap -Force }
   ":adopt `"$adProj`" as ad`r`ny`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare | Out-Null
@@ -273,7 +260,7 @@ try {
   Ok "general adds NO registry row"                   (-not ((Get-Content (Join-Path $tmp 'PROJECTS.md') -Raw) -match '(?m)^\|\s*general\s*\|'))
   Ok "general writes NO hub state for 'general'"      (-not (Test-Path (Join-Path $tmp 'GENERAL_TODO.txt')))
 } finally {
-  $env:Path = $savedPath2; $env:SONELLE_STUB_CAP = $savedCap2; $env:SONELLE_YOLO = $savedYolo2; $env:SONELLE_NARRATE_SETTINGS = $savedNarr2; $env:SONELLE_CONFIG = $savedCfg2
+  $env:Path = $savedPath2; $env:SONELLE_STUB_CAP = $savedCap2; $env:SONELLE_YOLO = $savedYolo2; $env:SONELLE_CONFIG = $savedCfg2
   Remove-Item (Join-Path $env:TEMP 'sonelle_general') -Recurse -Force -ErrorAction SilentlyContinue
 }
 # new_project reserves 'general' so a project can never shadow the scratch lane
@@ -301,19 +288,12 @@ Ok "dispatcher points to self-dev" ((Get-Content (Join-Path $engine 'CLAUDE.md')
 Ok "DevSelf seeds + guards engine"  (($srcTerm -match 'IGNORE its dispatcher') -and ($srcTerm -match 'hub-state'))
 Ok "self shortcode from folder name" ($srcTerm -match 'selfShort\s*=\s*\(Split-Path')
 Ok "self-name routes to engine dev"  ($srcTerm -match '\$short -eq \$script:selfShort')
-Ok "terminal has an :app handler"    ($srcTerm -match "'?:app'?")
-Ok "terminal has AppLaunch function" ($srcTerm -match 'function AppLaunch')
-Ok "AppLaunch opens the glass app"   ($srcTerm -match 'sonelle_gui\.ps1')
-Ok "AppLaunch caches the dep probe (P1)" (($srcTerm -match '\.deps_ok') -and ($srcTerm -match 'requirements\.txt'))
-Ok "terminal has an :app-classic handler" ($srcTerm -match ':app-classic')
-Ok "AppLaunchClassic opens WinForms -Sta" (($srcTerm -match 'function AppLaunchClassic') -and ($srcTerm -match 'sonelle_app\.ps1') -and ($srcTerm -match "'-Sta'"))
+Ok "the GUI app is fully removed (terminal-first)" ((-not ($srcTerm -match 'AppLaunch')) -and (-not ($srcTerm -match 'sonelle_gui')) -and (-not (Test-Path (Join-Path $engine 'app'))) -and (-not (Test-Path (Join-Path $engine 'bin\sonelle_gui.ps1'))) -and (-not (Test-Path (Join-Path $engine 'bin\sonelle_app.ps1'))))
 Ok "terminal has a -Yolo switch"      ($srcTerm -match '\[switch\]\$Yolo')
 Ok "terminal has a :yolo toggle"      ($srcTerm -match '\^:yolo')
 Ok "-Yolo / SONELLE_YOLO sets bypass" (($srcTerm -match '\$Yolo -or \$env:SONELLE_YOLO') -and ($srcTerm -match 'bypassPermissions'))
 $srcLnk = Get-Content (Join-Path $engine 'bin\make_launcher.ps1') -Raw
-Ok "make_launcher default opens the glass app" ($srcLnk -match 'sonelle_gui\.ps1')
-Ok "make_launcher -Classic opens WinForms" ($srcLnk -match 'sonelle_app\.ps1')
-Ok "make_launcher has -Terminal + -Classic" (($srcLnk -match '\[switch\]\$Terminal') -and ($srcLnk -match '\[switch\]\$Classic'))
+Ok "make_launcher opens the terminal (no GUI targets)" (($srcLnk -match 'sonelle\.ps1') -and (-not ($srcLnk -match 'sonelle_gui')) -and (-not ($srcLnk -match 'sonelle_app')))
 
 Write-Host "== 8b. terminal welcome + help (UI) =="
 $demoOut = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo
@@ -335,7 +315,7 @@ Ok "terminal answers bare help/? without routing to claude" ($srcTerm -match '\(
 Ok "terminal has a General no-project lane (scratch dir, reserved word)" (($srcTerm -match 'function General') -and ($srcTerm -match "short -eq 'general'") -and ($srcTerm -match 'sonelle_general'))
 Ok "terminal has a Welcome function"   ($srcTerm -match 'function Welcome')
 Ok "welcome uses runtime box glyphs"   (($srcTerm -match '0x256D') -and ($srcTerm -match '0x2570'))
-Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -and (@(':projects',':new',':adopt',':heal',':team',':status',':app',':dev',':yolo',':auto',':cost',':map',':attach',':clear',':help',':q') | Where-Object { $srcTerm -notmatch [regex]::Escape($_) }).Count -eq 0)
+Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -and (@(':projects',':new',':adopt',':heal',':team',':status',':dev',':yolo',':auto',':cost',':map',':attach',':clear',':help',':q') | Where-Object { $srcTerm -notmatch [regex]::Escape($_) }).Count -eq 0)
 # invariant #4: the engine root must stay clean of hub state (no project TODO/ledger/memory)
 $rootTodo = @(Get-ChildItem $engine -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue).Count
 $rootLedg = @(Get-ChildItem $engine -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue).Count
@@ -382,186 +362,6 @@ Ok "policy makes claude proactively verify + heal + run the ritual unasked" (($s
 Ok "the general lane uses a minimal no-state directive, not the project policy" (($srcTerm -match 'function General') -and ($srcTerm -match 'generalDirective') -and ($srcTerm -match 'nothing here to maintain'))
 Ok "DevSelf framing rides --append-system-prompt, with a fold-in fallback" (($srcTerm -match '\$framing') -and ($srcTerm -match '--append-system-prompt') -and ($srcTerm -match 'ClaudeSupports'))
 Ok "both DevSelf and Route append the operating policy" (([regex]::Matches($srcTerm, 'operatingPolicy')).Count -ge 3)
-
-Write-Host "== 8e. python glass app (sonelle_gui) =="
-$appDir = Join-Path $engine 'app'
-$guiPy  = Join-Path $appDir 'sonelle_gui.py'
-foreach ($rel in @(
-  'app\sonelle_gui.py', 'app\requirements.txt', 'app\ui\index.html', 'app\ui\app.js', 'app\ui\app.css',
-  'app\ui\vendor\xterm.js', 'app\ui\vendor\xterm.css', 'app\ui\vendor\addon-fit.js', 'app\ui\vendor\addon-webgl.js',
-  'bin\sonelle_gui.ps1', 'assets\icon\sonelle.ico')) {
-  Ok ("exists: " + $rel) (Test-Path (Join-Path $engine $rel))
-}
-$srcGui = if (Test-Path $guiPy) { Get-Content $guiPy -Raw } else { '' }
-Ok "backend exposes the api contract" (($srcGui -match 'def new_tab') -and ($srcGui -match 'def send_input') -and ($srcGui -match 'def resize') -and ($srcGui -match 'def close_tab') -and ($srcGui -match 'def list_projects'))
-Ok "backend pushes via __ptyOutput"   ($srcGui -match '__ptyOutput')
-Ok "backend spawns sonelle.ps1 -Bare" ($srcGui -match '"-Bare"')
-Ok "backend kills the process tree"   ($srcGui -match 'taskkill')
-Ok "backend brands window with sonelle icon" (($srcGui -match 'sonelle\.ico') -and ($srcGui -match '"icon"'))
-Ok "backend claims its taskbar identity" ($srcGui -match 'SetCurrentProcessExplicitAppUserModelID')
-Ok "backend saves pasted images"      ($srcGui -match 'def save_paste_image')
-Ok "backend setwinsize(rows, cols)"   ($srcGui -match 'setwinsize\(rows, cols\)')
-Ok "backend forwards -Yolo on SONELLE_YOLO" (($srcGui -match 'SONELLE_YOLO') -and ($srcGui -match '"-Yolo"'))
-Ok "backend has a _dbg trail at swallow sites (R4)" (($srcGui -match 'def _dbg') -and (@([regex]::Matches($srcGui, '_dbg\(')).Count -ge 6))
-$srcJs = Get-Content (Join-Path $appDir 'ui\app.js') -Raw
-Ok "frontend has output sink + ready gate" (($srcJs -match 'window\.__ptyOutput') -and ($srcJs -match 'pywebviewready'))
-Ok "frontend uses FitAddon.FitAddon"  ($srcJs -match 'new FitAddon\.FitAddon\(\)')
-Ok "frontend mounts the WebGL renderer" (($srcJs -match 'WebglAddon\.WebglAddon') -and ($srcJs -match 'function mountWebgl'))
-Ok "frontend debounces resize fits"   ($srcJs -match 'function scheduleFit')
-Ok "frontend scrollback is configurable (P2)" (($srcJs -match 'const SCROLLBACK') -and ($srcJs -match "localStorage\.getItem\(`"sonelle\.scrollback`"\)") -and ($srcJs -match 'scrollback: SCROLLBACK') -and (-not ($srcJs -match 'scrollback: 5000')))
-Ok "frontend decodes base64 in one pass (P3)" (($srcJs -match 'Uint8Array\.from\(atob') -and (-not ($srcJs -match 'for \(let i = 0; i < bin\.length')))
-Ok "frontend numbers tabs (1, 2, 3...)" (($srcJs -match 'function nextTabName') -and ($srcJs -match 'String\(\+\+tabSeq\)') -and (-not ($srcJs -match 'pickName')) -and (-not ($srcJs -match 'SONELLE_NAMES')))
-Ok "frontend pastes images via save_paste_image" (($srcJs -match 'save_paste_image') -and ($srcJs -match '"paste"'))
-Ok "frontend guards titlebar drag"    ($srcJs -match "closest\(`"\.nodrag`"\)")
-$srcCss = Get-Content (Join-Path $appDir 'ui\app.css') -Raw
-Ok "css gives the terminal a scrollbar gutter" (($srcCss -match '\.pane \.xterm\{ padding-right') -and ($srcCss -match 'xterm-viewport::-webkit-scrollbar'))
-$srcHtml = Get-Content (Join-Path $appDir 'ui\index.html') -Raw
-Ok "index loads vendored xterm + app.js" (($srcHtml -match 'vendor/xterm\.js') -and ($srcHtml -match 'app\.js'))
-Ok "index loads the WebGL addon"      ($srcHtml -match 'vendor/addon-webgl\.js')
-Ok "the women's-name pool is gone"    ((-not (Test-Path (Join-Path $appDir 'ui\names.js'))) -and (-not ($srcHtml -match 'names\.js')))
-Ok "titlebar is a pywebview drag region" ($srcHtml -match 'pywebview-drag-region')
-Ok "brand marks render the app icon (svg, not gradient cubes)" (($srcHtml -match '<svg class="mark"') -and ($srcHtml -match '<svg class="w-mark"') -and ($srcHtml -match 'stroke="#FF9B85"') -and (-not ($srcCss -match '\.brand \.mark\{[^}]*linear-gradient')) -and (-not ($srcCss -match '\.welcome \.w-mark\{[^}]*linear-gradient')))
-Ok "brand loop gif is a transparent-fill, soft bordered card" (($srcHtml -match 'id="brandloop"') -and ($srcHtml -match 'src="brandloop\.gif"') -and (Test-Path (Join-Path $appDir 'ui\brandloop.gif')) -and ($srcCss -match '\.brandloop\{') -and ($srcCss -match '\.brandloop\{[^}]*background:transparent') -and ($srcCss -match '\.brandloop\{[^}]*border-radius') -and ($srcCss -match '\.brandloop\{[^}]*pointer-events:auto'))
-Ok "brand loop drags with throw/bounce + drifts home" (($srcJs -match 'function wireBrandloopDrag') -and ($srcJs -match 'function throwLoop') -and ($srcJs -match 'RESTITUTION') -and ($srcJs -match 'function returnLoopHome') -and ($srcJs -match 'function scheduleLoopReturn'))
-# the gif sits LOW (small bottom, over the send-button corner) and the pane reserves a big bottom band
-# so the terminal grid stops ABOVE it (text stops before the gif, never drawn/hidden under it). It is
-# also pulled IN off the right edge (right > scrollbar lane) so the scrollbar is never under it.
-$loopLow = ($srcCss -match '\.brandloop\{[^}]*bottom:\s*(\d+)px') -and ([int]$Matches[1] -le 24)
-$loopOffScrollbar = ($srcCss -match '\.brandloop\{[^}]*right:\s*(\d+)px') -and ([int]$Matches[1] -ge 24)
-$paneReserve = ($srcCss -match '\.pane\{[^}]*padding:\s*\d+px\s+\d+px\s+(\d+)px\s+\d+px') -and ([int]$Matches[1] -ge 40)
-Ok "terminal reserves a bottom band so text stops above the low brand loop" ($loopLow -and $paneReserve)
-Ok "brand loop is pulled in off the scrollbar lane" $loopOffScrollbar
-# the command-bar PANEL stops before the gif: #bar reserves a right band so the whole glass cmdbar
-# (input + send button) parks to the LEFT of the gif - it sits in its own corner, nothing under it
-$barReserve = ($srcCss -match '#bar\{[^}]*padding-right:\s*(\d+)px') -and ([int]$Matches[1] -ge 120)
-Ok "command bar panel stops before the brand loop (its own clear corner)" $barReserve
-# the brand loop is now a WRAPPER (gif + control row + report box) - sonelle's in-app REPORTER
-Ok "brand loop wraps the gif + a control row + a report box" (($srcHtml -match '<div id="brandloop"') -and ($srcHtml -match 'class="gif" src="brandloop\.gif"') -and ($srcHtml -match 'id="loop-report"') -and ($srcHtml -match 'class="loopctl'))
-Ok "gif control row has report-arrow / padlock / mute / session label" (($srcHtml -match 'lbtn arrow') -and ($srcHtml -match 'lbtn lock') -and ($srcHtml -match 'lbtn mute') -and ($srcHtml -match 'class="slabel"') -and (-not ($srcHtml -match 'lbtn pop')))
-Ok "frontend keeps per-tab gif state + restores it on tab switch (item 6)" (($srcJs -match 'function newGifState') -and ($srcJs -match 'function applyGifState') -and ($srcJs -match 'entry\.gif'))
-Ok "gif controls wired: lock pins only; report opens on the arrow OR V" (($srcJs -match 'function toggleLoopLock') -and ($srcJs -match 'function wireLoopControls') -and ($srcJs -match 'function toggleReport') -and ($srcJs -match '#brandloop \.arrow') -and ($srcJs -match 'reportopen') -and ($srcJs -match 'e\.key !== "v"'))
-Ok "report box opens on the arrow/V only; lock is decoupled; session label is moody (item 10)" (($srcCss -match '\.brandloop \.report\{') -and ($srcCss -match '\.brandloop\.reportopen \.report') -and (-not ($srcCss -match '\.brandloop\.locked \.report')) -and ($srcCss -match '\.brandloop\.reportopen \.lbtn\.arrow svg') -and ($srcCss -match '\.brandloop \.slabel\{') -and ($srcCss -match '--moody'))
-$srcGuiPs = Get-Content (Join-Path $engine 'bin\sonelle_gui.ps1') -Raw
-Ok "launcher installs deps + runs pythonw" (($srcGuiPs -match 'requirements\.txt') -and ($srcGuiPs -match 'pythonw'))
-$pyCmd = Get-Command py -ErrorAction SilentlyContinue
-if (-not $pyCmd) { $pyCmd = Get-Command python -ErrorAction SilentlyContinue }
-if ($pyCmd -and (Test-Path $guiPy)) {
-  $pyArgs = @(); if ($pyCmd.Source -match '\\py\.exe$') { $pyArgs += '-3' }
-  & $pyCmd.Source @pyArgs -m py_compile $guiPy 2>$null
-  Ok "sonelle_gui.py compiles"        ($LASTEXITCODE -eq 0)
-} else {
-  Write-Host "  [skip] no python on PATH for py_compile" -ForegroundColor DarkGray
-}
-$venvPy = Join-Path $engine '.venv\Scripts\python.exe'
-if (Test-Path $venvPy) {
-  & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle_gui.ps1') -NoLaunch | Out-Null
-  Ok "launcher -NoLaunch verifies deps (exit 0)" ($LASTEXITCODE -eq 0)
-} else {
-  Write-Host "  [skip] no .venv for launcher -NoLaunch check" -ForegroundColor DarkGray
-}
-
-Write-Host "== 8f. voice narrator =="
-$narrPy = Join-Path $engine 'app\narrator.py'
-$ttsPy  = Join-Path $engine 'app\tts.py'
-$hookPs = Join-Path $engine 'app\narrate_hook.ps1'
-foreach ($rel in @('app\narrator.py', 'app\tts.py', 'app\narrate_hook.ps1')) {
-  Ok ("exists: " + $rel) (Test-Path (Join-Path $engine $rel))
-}
-$srcHook = if (Test-Path $hookPs) { Get-Content $hookPs -Raw } else { '' }
-Ok "hook appends events to SONELLE_NARRATE_FILE" (($srcHook -match 'SONELLE_NARRATE_FILE') -and ($srcHook -match 'Add-Content') -and ($srcHook -match 'exit 0'))
-$srcNarr = if (Test-Path $narrPy) { Get-Content $narrPy -Raw } else { '' }
-Ok "narrator builds hooks settings, gated on --settings support" (($srcNarr -match 'def setup') -and ($srcNarr -match '_claude_supports_settings') -and ($srcNarr -match '--settings'))
-Ok "narrator splits each event into display + speak (dual rendering)" (($srcNarr -match 'class TabNarrator') -and ($srcNarr -match 'def build_line') -and ($srcNarr -match 'display, speak, kind, important = item') -and ($srcNarr -match '_VOICE_CATS'))
-Ok "narrator has 4 reporting styles (warm/terse/hacker/bubbly)" (($srcNarr -match '_STYLES') -and ($srcNarr -match '"warm"') -and ($srcNarr -match '"terse"') -and ($srcNarr -match '"hacker"') -and ($srcNarr -match '"bubbly"') -and ($srcNarr -match 'def _milestone'))
-Ok "narrator lines carry direction (file/command subject) + variety pools" (($srcNarr -match 'def _subject') -and ($srcNarr -match 'def _render') -and ($srcNarr -match '\{s\}') -and ($srcNarr -match '"d":') -and ($srcNarr -match '"s":') -and ($srcNarr -match '_OPEN') -and ($srcNarr -match '_REACT'))
-Ok "narrator speaks first-person with a name sign-on, not 'sonelle is ...'" (($srcNarr -match 'def _decorate') -and ($srcNarr -match 'here-- ') -and (-not ($srcNarr -match 'sonelle is ')))
-Ok "speak text never vocalizes emoticons/kaomoji" (($srcNarr -match 'def _strip_emoticons') -and ($srcNarr -match 's = _strip_emoticons\(s\)'))
-Ok "spoken openers announce the session when 2+ talk (item 9)" (($srcNarr -match 'def set_multi') -and ($srcNarr -match 'session %d,'))
-Ok "narrator maps the claude hook events"  (($srcNarr -match 'PreToolUse') -and ($srcNarr -match 'PostToolUse') -and ($srcNarr -match 'Notification') -and ($srcNarr -match 'Stop') -and ($srcNarr -match 'def events_file_for'))
-Ok "narrator speaks short answers (last_assistant_message)" (($srcNarr -match 'last_assistant_message') -and ($srcNarr -match 'def _clean_speech'))
-$srcTts = if (Test-Path $ttsPy) { Get-Content $ttsPy -Raw } else { '' }
-Ok "tts has kokoro (local neural) + edge + sapi engines" (($srcTts -match 'def synth') -and ($srcTts -match '_synth_kokoro') -and ($srcTts -match '_synth_edge') -and ($srcTts -match '_synth_sapi'))
-Ok "tts loads the kokoro model bundled in the repo (no download)" (($srcTts -match 'def _kokoro_files') -and ($srcTts -match 'kokoro-v1\.0\.int8\.onnx') -and (-not ($srcTts -match 'urllib')) -and (-not ($srcTts -match 'def _download')))
-Ok "kokoro voice model is vendored in the repo" ((Test-Path (Join-Path $engine 'app\voice\kokoro-v1.0.int8.onnx')) -and (Test-Path (Join-Path $engine 'app\voice\voices-v1.0.bin')))
-Ok "tts comment matches the code (vendored, not the old 'downloaded once' lie)" (-not ($srcTts -match 'downloaded once'))
-Ok "backend imports + wires the narrator" (($srcGui -match 'import narrator') -and ($srcGui -match 'def set_narration') -and ($srcGui -match 'def _narrate_emit') -and ($srcGui -match '__narrate'))
-Ok "backend passes the voice/status kind to __narrate" ($srcGui -match '__narrate\(%s,%s,%s,%s,%s\)')
-Ok "backend sets the per-tab events env"  ($srcGui -match 'SONELLE_NARRATE_FILE')
-Ok "backend runs narrator.setup + publishes settings" (($srcGui -match 'narrator\.setup') -and ($srcGui -match 'SONELLE_NARRATE_SETTINGS'))
-Ok "terminal attaches --settings on the narrate env" (($srcTerm -match 'SONELLE_NARRATE_SETTINGS') -and ($srcTerm -match "'--settings'"))
-Ok "frontend has the narrate sink + per-tab voice toggle" (($srcJs -match 'window\.__narrate') -and ($srcJs -match 'function toggleTabVoice') -and ($srcJs -match 'function updateTabVoiceEl') -and ($srcJs -match 'set_narration'))
-Ok "voice toggle is per-tab (speaker on each pill)" (($srcJs -match 'spk\.className = "spk"') -and ($srcCss -match '\.tab \.spk\{') -and (-not ($srcHtml -match 'id="btn-voice"')))
-Ok "narration lands in the DOM report box, not the terminal (the bug fix)" (($srcJs -match 'function reportLine') -and ($srcJs -match 'function renderReport') -and ($srcJs -match 'loop-report') -and (-not ($srcJs -match 'function typeNarration')) -and (-not ($srcJs -match 'PINK_SGR')) -and ($srcCss -match '\.rline\.voice\{') -and ($srcCss -match '\.rline\.status\{'))
-Ok "speech plays through one global serialized queue (no overlap, item 9)" (($srcJs -match 'function enqueueAudio') -and ($srcJs -match 'function pumpAudio') -and ($srcJs -match 'audioBusy') -and (-not ($srcJs -match 'function writeOrHold')))
-# pop-out was dropped on purpose: the reporter stays IN-APP (no desktop overlay)
-Ok "pop-out / desktop overlay is fully removed" ((-not (Test-Path (Join-Path $engine 'app\overlay.py'))) -and (-not ($srcGui -match 'pop_out_gif')) -and (-not ($srcJs -match 'pop_out_gif')))
-Ok "backend passes a session number + refreshes the multi flag" (($srcGui -match '"session": session') -and ($srcGui -match 'def _refresh_multi') -and ($srcGui -match 'set_multi'))
-# the bug fixes shipped in this round
-Ok "pusher survives the shutdown poison pill" ($srcGui -match 'poisoned')
-Ok "ctrl+c respects a composer selection" ($srcJs -match 'inp\.selectionStart')
-Ok "ctrl+t opens a new terminal"          ($srcJs -match 'key === "t"')
-Ok "read-only pane wheel scrolls scrollback" (($srcJs -match '"wheel"') -and ($srcJs -match 'scrollLines') -and ($srcJs -match 'capture: true'))
-Ok "requirements pin edge-tts"            ((Get-Content (Join-Path $engine 'app\requirements.txt') -Raw) -match 'edge-tts')
-Ok "kokoro voice req exists + launcher installs it" ((Test-Path (Join-Path $engine 'app\requirements-voice.txt')) -and ((Get-Content (Join-Path $engine 'app\requirements-voice.txt') -Raw) -match 'kokoro-onnx') -and ($srcGuiPs -match 'requirements-voice'))
-if ($pyCmd -and (Test-Path $narrPy)) {
-  $pyArgs = @(); if ($pyCmd.Source -match '\\py\.exe$') { $pyArgs += '-3' }
-  & $pyCmd.Source @pyArgs -m py_compile $narrPy $ttsPy 2>$null
-  Ok "narrator.py + tts.py compile"       ($LASTEXITCODE -eq 0)
-  # behavioral: the reworked phrasing names the file/count (DIRECTION), collapses a repeat of the
-  # same thing but re-announces a new one, varies its openers, and never speaks an emoticon tag.
-  $probe = @'
-import sys
-sys.path.insert(0, sys.argv[1])
-import narrator as N
-cfg = {"style": "warm", "name": "sonelle"}
-o = N.build_line({}, {"hook_event_name": "PreToolUse", "tool_name": "Edit",
-                      "tool_input": {"file_path": "C:/x/narrator.py"}}, cfg)
-assert o and ("narrator.py" in o[0] or "narrator.py" in o[1]), ("no direction", o)
-st = {}
-a = N.build_line(st, {"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "a.py"}}, cfg)
-b = N.build_line(st, {"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "a.py"}}, cfg)
-c = N.build_line(st, {"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "b.py"}}, cfg)
-assert a and (b is None) and c, ("dedup", a, b, c)
-g = N.build_line({}, {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_response": "1666 passing"}, cfg)
-assert g and ("1666" in g[0]) and ("1666" in g[1]) and g[2] == "voice" and g[3] is True, ("milestone", g)
-seen = set()
-LONG = "rework the narrator phrasing engine so the spoken reports carry direction and emotion " * 2  # >140 so the start opener fires
-for i in range(40):
-    r = N.build_line({}, {"hook_event_name": "UserPromptSubmit", "prompt": LONG}, cfg)
-    if r:
-        seen.add(r[1])
-assert len(seen) >= 3, ("not varied", len(seen))
-for stl in ("warm", "terse", "hacker", "bubbly"):
-    for ev in ({"hook_event_name": "PreToolUse", "tool_name": "Edit", "tool_input": {"file_path": "x.py"}},
-               {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_response": "9 passing"},
-               {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_response": "9 failed"}):
-        r = N.build_line({}, ev, {"style": stl})
-        if r:
-            for tag in (":)", "<3", ":o", ":D", ":/", ":*", ":(", "!!"):
-                assert tag not in r[1], ("emoticon in speech", stl, r[1])
-print("NARRATOR_OK")
-'@
-  $probeFile = Join-Path $env:TEMP 'sonelle_narrator_probe.py'
-  Set-Content -Path $probeFile -Value $probe -Encoding ASCII
-  $probeOut = & $pyCmd.Source @pyArgs $probeFile (Join-Path $engine 'app') 2>&1
-  Ok "narrator: direction + dedup + milestone + variety (behavioral)" (($LASTEXITCODE -eq 0) -and ($probeOut -match 'NARRATOR_OK'))
-  Remove-Item $probeFile -ErrorAction SilentlyContinue
-} else {
-  Write-Host "  [skip] no python on PATH for py_compile" -ForegroundColor DarkGray
-}
-
-Write-Host "== 8i. customization settings panel =="
-$palJs  = Join-Path $appDir 'ui\palettes.js'
-$srcPal = if (Test-Path $palJs) { Get-Content $palJs -Raw } else { '' }
-Ok "palettes.js ships >= 20 curated themes" ((Test-Path $palJs) -and (@([regex]::Matches($srcPal, '\bid:\s*"')).Count -ge 20))
-Ok "index loads palettes.js BEFORE app.js" (($srcHtml.IndexOf('src="palettes.js"') -ge 0) -and ($srcHtml.IndexOf('src="palettes.js"') -lt $srcHtml.IndexOf('src="app.js"')))
-Ok "the gear sits BEFORE the window controls" (($srcHtml -match 'id="btn-settings"') -and ($srcHtml.IndexOf('btn-settings') -lt $srcHtml.IndexOf('class="wctrls')))
-Ok "settings panel has palette/name/mascot/style/model/effort/code-writer/voices" (($srcHtml -match 'id="settings"') -and ($srcHtml -match 'id="set-palettes"') -and ($srcHtml -match 'id="set-name"') -and ($srcHtml -match 'id="set-mascot') -and ($srcHtml -match 'id="set-style"') -and ($srcHtml -match 'id="set-model"') -and ($srcHtml -match 'id="set-effort"') -and ($srcHtml -match 'id="set-code"') -and ($srcHtml -match 'id="set-voices"'))
-Ok "frontend applies palettes live + persists the settings" (($srcJs -match 'function applyPalette') -and ($srcJs -match 'function buildPaletteGrid') -and ($srcJs -match 'function saveSettings') -and ($srcJs -match 'save_settings') -and ($srcJs -match 'get_settings'))
-Ok "voices section is display-only (just shows the config keys)" (($srcHtml -match 'id="set-voices"') -and ($srcHtml -match 'narrator') -and ($srcHtml -match 'kokoro'))
-Ok "backend reads/writes settings + stages the mascot to a user dir (not the repo)" (($srcGui -match 'def get_settings') -and ($srcGui -match 'def save_settings') -and ($srcGui -match 'def upload_mascot') -and ($srcGui -match 'LOCALAPPDATA'))
-Ok "assistant name is DISPLAY-ONLY (never touches the engine self-short)" (($srcGui -match 'DISPLAY name only') -and (-not ($srcGui -match 'selfShort')) -and (-not ($srcJs -match 'selfShort')))
-Ok "model + effort + code-writer persist under models.* (read by sonelle.ps1)" (($srcGui -match 'orchestrator') -and ($srcGui -match 'orchestratorEffort') -and ($srcGui -match 'codeWriter') -and ($srcJs -match 'codeModel'))
 
 Write-Host "== 8g. shared knowledge base =="
 $kbIdx = Join-Path $engine 'knowledge\INDEX.md'
@@ -642,28 +442,16 @@ try {
   Ok "malformed config emits a visible warning, not silent" ($rbWarn -match 'malformed|ignoring')
 } finally { $env:SONELLE_CONFIG = $savedCfgB; Remove-Item $badCfg -Force -ErrorAction SilentlyContinue }
 
-Write-Host "== 9a. one registry parser: PS == Python, and no third (Q1/Q2) =="
-# Q1: the PowerShell parser (Get-SonelleProjects) and the Python parser (parse_projects) must agree on
-# the SAME registry, or they will silently drift. Compare their shorts on the temp hub's PROJECTS.md.
-$regPath = Join-Path $tmp 'PROJECTS.md'
-$venvPy = Join-Path $engine '.venv\Scripts\python.exe'
-if (Test-Path $venvPy) {
-  $psShorts = ((Get-SonelleProjects $regPath) | ForEach-Object { $_.Short }) -join ','
-  $pyCode = "import sys; sys.path.insert(0, r'{0}'); import sonelle_gui as g; print(','.join(p['shortcut'] for p in g.parse_projects(r'{1}')))" -f (Join-Path $engine 'app'), $regPath
-  $pyShorts = (& $venvPy -c $pyCode 2>$null | Out-String).Trim()
-  Ok "PS and Python registry parsers agree (Q1)" (($psShorts -eq $pyShorts) -and ($psShorts.Length -gt 0))
-} else {
-  Write-Host "  [skip] no .venv python for the cross-parser equivalence test" -ForegroundColor DarkGray
-}
-# Q2: nobody adds a THIRD parser. Grep every .ps1/.py (minus .venv) for the registry-row regex signature;
-# the only PS file allowed to carry it is _registry.ps1, and the only Python file is sonelle_gui.py.
+Write-Host "== 9a. one registry parser, and no second (Q2) =="
+# Q2: nobody adds a SECOND parser. Grep every .ps1/.py (minus .venv) for the registry-row regex signature;
+# the only file allowed to carry it is _registry.ps1.
 $scanFiles = @(Get-ChildItem $engine -Recurse -Include *.ps1, *.py | Where-Object { $_.FullName -notmatch '\\\.venv\\' })
 $psParserHits = @(Select-String -Path $scanFiles.FullName -Pattern '\^\\\|.*\(\[a-z0-9_' -ErrorAction SilentlyContinue | Where-Object { $_.Path -notmatch 'selftest\.ps1' })
 $psUnsanctioned = @($psParserHits | Where-Object { $_.Path -notmatch '_registry\.ps1' })
 Ok "the sanctioned PS registry parser exists" (@($psParserHits | Where-Object { $_.Path -match '_registry\.ps1' }).Count -ge 1)
 Ok "no unsanctioned PS registry parser (Q2)" ($psUnsanctioned.Count -eq 0)
-$pyParserHits = @(Select-String -Path $scanFiles.FullName -Pattern 'startswith\("\|"\)' -ErrorAction SilentlyContinue | Where-Object { $_.Path -notmatch 'sonelle_gui\.py' })
-Ok "no unsanctioned Python registry parser (Q2)" ($pyParserHits.Count -eq 0)
+$pyParserHits = @(Select-String -Path $scanFiles.FullName -Pattern 'startswith\("\|"\)' -ErrorAction SilentlyContinue)
+Ok "no Python registry parser at all (Q2)" ($pyParserHits.Count -eq 0)
 
 Write-Host "== 9b. terminal honors -Hub (Q4) =="
 Ok "sonelle.ps1 has a -Hub param that wins over config" (($srcTerm -match '\[string\]\$Hub') -and ($srcTerm -match 'hubOverride'))

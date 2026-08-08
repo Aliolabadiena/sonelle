@@ -11,7 +11,7 @@
   Source is pure ASCII; Unicode glyphs are built at runtime via [char] codepoints.
 #>
 [CmdletBinding()]
-param([switch]$Demo, [switch]$Bare, [switch]$Yolo, [string]$Hub = '')   # -Bare: chat-feel (glass app); -Yolo: claude skips permission prompts; -Hub: workspace override (wins over config)
+param([switch]$Demo, [switch]$Bare, [switch]$Yolo, [string]$Hub = '')   # -Bare: minimal chat-feel (no welcome card); -Yolo: claude skips permission prompts; -Hub: workspace override (wins over config)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -42,13 +42,13 @@ if ($cm) {
   if ($cm.orchestratorPermissionMode) { $orchPerm = $cm.orchestratorPermissionMode }
   if ($cm.codeWriter)                 { $orchCode = [string]$cm.codeWriter }
 }
-# -Yolo (or the env var the glass app forwards) overrides the mode so claude never asks for permission.
+# -Yolo (or the SONELLE_YOLO env var) overrides the mode so claude never asks for permission.
 # bypassPermissions is a real claude --permission-mode choice; toggle it live in the REPL with :yolo.
 if ($Yolo -or $env:SONELLE_YOLO) { $orchPerm = 'bypassPermissions' }
 # Re-read the orchestrator model/effort + the code-writer (subagent) model from config right BEFORE each
-# claude launch, so a change in the app's settings panel applies to the NEXT prompt with no tab restart
-# (the panel writes sonelle.config.json - that file, or $env:SONELLE_CONFIG, is the channel). Permission
-# mode is NOT re-read here: it has live overrides (-Yolo / SONELLE_YOLO / :yolo) a re-read would clobber.
+# claude launch, so an edit to sonelle.config.json (or $env:SONELLE_CONFIG) applies to the NEXT prompt
+# with no restart. Permission mode is NOT re-read here: it has live overrides (-Yolo / SONELLE_YOLO /
+# :yolo) a re-read would clobber.
 function RefreshOrch {
   try {
     $r = Get-SonelleConfig -Engine $root -HubOverride $hubOverride
@@ -66,15 +66,9 @@ function RefreshOrch {
   elseif ($script:origSubagentModel) { $env:CLAUDE_CODE_SUBAGENT_MODEL = $script:origSubagentModel }
   else { Remove-Item Env:CLAUDE_CODE_SUBAGENT_MODEL -ErrorAction SilentlyContinue }
 }
-# Voice narrator (glass app): when the app set SONELLE_NARRATE_SETTINGS, attach it as claude's
-# --settings so claude's hooks stream progress events to the per-tab file the app narrates from.
-# The app only sets this env after probing that `claude` supports --settings, so we can never feed
-# claude a bad flag here. Empty (no narration) for a plain terminal -> nothing changes.
-$orchSettings = ''
-if ($env:SONELLE_NARRATE_SETTINGS -and (Test-Path $env:SONELLE_NARRATE_SETTINGS)) { $orchSettings = $env:SONELLE_NARRATE_SETTINGS }
 # Probe `claude --help` ONCE (cached per process) for a flag, so a missing flag can never break a working
-# session - the same defensive contract the narrator uses before attaching --settings. Used below to gate
-# --append-system-prompt; a build without it falls back to folding the framing into the prompt.
+# session. Used below to gate --append-system-prompt; a build without it falls back to folding the
+# framing into the prompt.
 $script:claudeHelp = $null
 function ClaudeSupports($flag) {
   if ($null -eq $script:claudeHelp) {
@@ -232,8 +226,6 @@ function ShowHelp {
     @(":status <proj>",       "show each lane's status"),
     @(":cost [short]",        "estimate Claude token use + cost (local transcripts)"),
     @(":map [short]",         "structural repo map (symbols per file) -> REPOMAP.md"),
-    @(":app",                 "open the liquid-glass app (many terminals, one window)"),
-    @(":app-classic",         "open the classic WinForms app (fallback)"),
     @(":dev [prompt]",        ("improve sonelle itself (or  " + $cream + $script:selfShort + ": ..." + $dim + ")")),
     @(":yolo [on|off]",       "toggle claude skipping permission prompts (bypassPermissions)"),
     @(":auto <level>",        "autonomy: plan / safe / edits / full (how much claude does unasked)"),
@@ -248,8 +240,8 @@ function ShowHelp {
     Write-Host ("    " + $cream + $left + $R + (' ' * $pad) + $dim + $row[1] + $R)
   }
 }
-# The glass app opens each tab in -Bare mode; a blank prompt is unfriendly, so show a tiny NO-CLAUDE
-# primer (make a project / bring one in / run a task / connect claude) instead of the full welcome card.
+# -Bare suppresses the full welcome card; a blank prompt is unfriendly, so show a tiny NO-CLAUDE
+# primer (make a project / bring one in / run a task / connect claude) instead.
 function BareIntro {
   Write-Host ""
   Write-Host ("  " + $clay + $bold + "sonelle" + $R + "  " + $dim + "run your projects through one assistant  " + $dot + "  type " + $R + $cream + "help" + $R)
@@ -357,44 +349,6 @@ function Adopt($rest) {
   Write-Host ("  {0}scaffold done - handing claude the conversion (best-effort)...{1}" -f $dim, $R)
   Route $short $conv @()
 }
-function AppLaunch {
-  # the liquid-glass Python app (pywebview); the terminal runs inside it via a hidden PTY
-  $gui = Join-Path $root 'bin\sonelle_gui.ps1'
-  if (-not (Test-Path $gui)) { Write-Host ("  {0}[!] app launcher not found: {1}{2}" -f $clay, $gui, $R); return }
-  Write-Host ("  {0}-> opening the {1}sonelle app{0} (liquid glass)...{2}" -f $dim, $clay, $R)
-  $pyw = Join-Path $root '.venv\Scripts\pythonw.exe'
-  $py  = Join-Path $root '.venv\Scripts\python.exe'
-  $appPy = Join-Path $root 'app\sonelle_gui.py'
-  $depsOk = $false
-  if ((Test-Path $pyw) -and (Test-Path $py) -and (Test-Path $appPy)) {
-    # P1: cache the import probe with a sentinel so we don't spawn python on every launch. Re-probe only
-    # when the sentinel is missing or older than requirements.txt (a deps change invalidates the cache).
-    $sentinel = Join-Path $root '.venv\.deps_ok'
-    $reqFile  = Join-Path $root 'app\requirements.txt'
-    $reqTime  = if (Test-Path $reqFile) { (Get-Item $reqFile).LastWriteTimeUtc } else { [datetime]::MinValue }
-    if ((Test-Path $sentinel) -and ((Get-Item $sentinel).LastWriteTimeUtc -ge $reqTime)) {
-      $depsOk = $true
-    } else {
-      & $py -c 'import webview, winpty' 2>$null   # pythonw has no stderr; probe first so a half-installed venv can't die silently
-      $depsOk = ($LASTEXITCODE -eq 0)
-      if ($depsOk) { try { Set-Content -Path $sentinel -Value ((Get-Date).ToUniversalTime().ToString('o')) -ErrorAction SilentlyContinue } catch {} }
-    }
-  }
-  if ($depsOk) {
-    # deps confirmed - launch the GUI directly, no console flash
-    Start-Process -FilePath $pyw -ArgumentList @($appPy) -WorkingDirectory (Join-Path $root 'app') | Out-Null
-  } else {
-    # missing/partial venv - go through the bootstrap launcher (creates .venv, shows install progress)
-    Start-Process $psExe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $gui) | Out-Null
-  }
-}
-function AppLaunchClassic {
-  # the classic WinForms host (reparents real consoles) - kept as a fallback
-  $app = Join-Path $root 'bin\sonelle_app.ps1'
-  if (-not (Test-Path $app)) { Write-Host ("  {0}[!] app not found: {1}{2}" -f $clay, $app, $R); return }
-  Write-Host ("  {0}-> opening the classic {1}sonelle app{0} (WinForms tabs)...{2}" -f $dim, $clay, $R)
-  Start-Process $psExe -ArgumentList @('-NoProfile', '-Sta', '-ExecutionPolicy', 'Bypass', '-File', $app) | Out-Null
-}
 function DevSelf($prompt, $images) {
   $claude = Get-Command claude -ErrorAction SilentlyContinue
   if (-not $claude) {
@@ -422,8 +376,7 @@ function DevSelf($prompt, $images) {
   # fold them into the prompt (older builds) so behavior degrades gracefully, never breaks.
   if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', ($framing + "`n`n" + $script:operatingPolicy)); $promptArg = $ask }
   else { $promptArg = $framing + "`n`n" + $script:operatingPolicy + "`n`nTask: " + $ask }
-  if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
-  Push-Location $root
+  if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }  Push-Location $root
   try { & claude @cargs $promptArg } finally { Pop-Location }
   # invariant #4 guard: the engine must stay clean of hub state - warn if a session left any behind
   $junk = @(Get-ChildItem $root -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue) + @(Get-ChildItem $root -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue)
@@ -461,8 +414,7 @@ function General($prompt, $images) {
   # a one-off lane: the minimal no-state directive, NOT the full project operating policy
   if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', $script:generalDirective) }
   else { $finalPrompt = $script:generalDirective + "`n`n" + $finalPrompt }
-  if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
-  Push-Location $scratch
+  if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }  Push-Location $scratch
   try { & claude @cargs $finalPrompt } finally { Pop-Location }
   $script:staged = @()   # staged images consumed
 }
@@ -512,8 +464,7 @@ function Route($short, $prompt, $images) {
   if ($watcher) { $sysPrompt = $sysPrompt + "`n`n" + $watcher }
   if (ClaudeSupports '--append-system-prompt') { $cargs += @('--append-system-prompt', $sysPrompt) }
   else { $finalPrompt = $sysPrompt + "`n`n" + $finalPrompt }
-  if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }; if ($orchSettings) { $cargs += @('--settings', $orchSettings) }
-  if ((Test-SonelleCodePath $code) -and (Test-Path -LiteralPath $code)) { Push-Location -LiteralPath $code } else { Push-Location -LiteralPath $root }
+  if ($orchPerm) { $cargs += @('--permission-mode', $orchPerm) }  if ((Test-SonelleCodePath $code) -and (Test-Path -LiteralPath $code)) { Push-Location -LiteralPath $code } else { Push-Location -LiteralPath $root }
   try { & claude @cargs $finalPrompt } finally { Pop-Location }
   $script:staged = @()   # staged images consumed
 }
@@ -554,8 +505,6 @@ while ($true) {
   elseif ($t -match '^:heal\s*(.*)$') { Heal ($Matches[1].Trim()); continue }
   elseif ($t -match '^:team\s+(.+)$') { Team $Matches[1]; continue }
   elseif ($t -match '^:status\s*(.*)$') { StatusLanes ($Matches[1].Trim()); continue }
-  elseif ($t -eq ':app') { AppLaunch; continue }
-  elseif ($t -eq ':app-classic') { AppLaunchClassic; continue }
   elseif ($t -match '^:dev\b\s*(.*)$') { DevSelf ($Matches[1].Trim()) $script:staged; continue }
   elseif ($t -match '^:attach\s+(.+)$') {
     $ip = $Matches[1].Trim().Trim('"')

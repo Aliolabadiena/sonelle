@@ -13,7 +13,7 @@ function Get-SonelleProjects([string]$RegistryPath) {
   $out = @()
   # [ \t]* (not \s*): \s matches newlines, so a malformed row with no closing pipe would "borrow" the
   # next line and be parsed as a bogus project. Keep each match on its own line (matches the line-based
-  # Python parser in app\sonelle_gui.py - selftest section 9a asserts the two agree).
+  # selftest section 9a guards against anyone adding a second parser).
   foreach ($m in [regex]::Matches($txt, '(?m)^\|[ \t]*([a-z0-9_]+)[ \t]*\|(.*)$')) {
     $short = $m.Groups[1].Value
     if ($short -eq 'shortcode') { continue }

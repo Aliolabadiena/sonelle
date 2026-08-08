@@ -62,90 +62,19 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   from the engine FOLDER name, lowercased (`$script:selfShort` in `bin\sonelle.ps1`), and special-cased in
   `Route` BEFORE the registry lookup - so it never pollutes `PROJECTS.md`, and renaming the engine folder
   updates it automatically.
-- **The app (`bin\sonelle_app.ps1`):** a WinForms window that embeds real `sonelle.ps1` consoles as
-  tabs via Win32 `SetParent`. It needs STA (it re-launches itself with `-Sta`). Keep it headlessly
-  testable: `-SelfTest` must build the UI + interop and exit 0 WITHOUT showing a window or spawning a
-  terminal - selftest section 5c relies on that. UI text stays ASCII; build any glyph at runtime via
-  `[char]` (the close mark is `[char]0x00D7`).
-- **The glass app (`app\`, default `:app`):** a Python `pywebview`/WebView2 front-end (`app\sonelle_gui.py`)
-  rendering `app\ui\` with xterm.js tabs over hidden `pywinpty` PTYs running `bin\sonelle.ps1`. The
-  JS<->Python contract is fixed (see `docs\ARCHITECTURE.md`) - if you change a method name on one side,
-  change BOTH sides and the selftest 8e markers. Keep `app\sonelle_gui.py` ASCII-clean too (selftest only
-  ASCII-gates `.ps1`, but stay consistent). Underscore-prefix any data attribute on the `Api` class
-  (pywebview introspects public attrs and will recurse into the WinForms window graph). Glass is in-app
-  CSS only - WebView2 can't be transparent. Vendored xterm under `app\ui\vendor\` (refresh via its NOTICE.md;
-  versions must pair - core 5.5.0 <-> fit 0.10.0 <-> webgl 0.18.0). xterm runs on the **WebGL** renderer
-  (`mountWebgl` in `app.js`), NOT the default DOM renderer: over the transparent glass the DOM renderer
-  ghosts/flickers and mashes glyphs, WebGL clears each cell on the GPU (falls back to DOM if no GL context).
-  Font is Cascadia Mono first (ligatures overlap in the cell grid); resize fits are debounced (`scheduleFit`).
-  The scrollbar gets its own lane via a right gutter on `.pane .xterm` (FitAddon drops the columns it covers)
-  so it rides the box edge, not the text. Tabs are labelled with a plain incrementing number (1, 2, 3, ...)
-  via `nextTabName` (a monotonic `tabSeq`) in `app.js`. The launcher `bin\sonelle_gui.ps1` owns venv+deps; `.venv\` is gitignored.
-  The window brands itself `sonelle.ico` (`icon=` on `webview.start()` sets `Form.Icon`; the TASKBAR
-  also needs `SetCurrentProcessExplicitAppUserModelID` at startup, else the button groups under
-  `pythonw.exe` and shows its Python feather); it drags from the title bar via pywebview's
-  `.pywebview-drag-region` (NOT Electron's
-  `-webkit-app-region`, which WebView2 ignores) with an `app.js` mousedown guard over `.nodrag` controls;
-  Ctrl+V in the composer saves the clipboard image to temp (`save_paste_image`) and inserts an `@"path"`
-  token. A **brand loop** (`#brandloop`, the looping mascot gif `app\ui\brandloop.gif`) is anchored to
-  `#app` and HOMES to the bottom-right corner (`bottom:8px`, `right:30px` off the scrollbar lane). It is
-  a transparent-fill, soft bordered card (`background:transparent` + hairline border + radius) and has
-  **physics**: `wireBrandloopDrag` (`app.js`) makes it `pointer-events:auto`/`cursor:grab`; release it
-  mid-drag and `throwLoop` flings it with inertia/friction, BOUNCING off the window edges, then 30s
-  later `returnLoopHome` drifts it back home on two straight, eased, axis-aligned moves (the CSS
-  `right`/`bottom` is only the HOME corner; once moved it's absolute `left`/`top`). At the home corner
-  the pane reserves an 88px bottom band (`.pane` `padding-bottom`) and `#bar` a right band
-  (`padding-right`) so text + the command bar stop before it. selftest 8e guards these (incl. the physics).
-  **Recolour:** the glass palette is tuned to the gif's blue/indigo/purple - edit the `:root` vars +
-  gradients in `app.css` and the xterm `THEME` in `app.js` together if you reskin it.
-  **Yolo (skip permission prompts):** `SONELLE_YOLO=1` makes the app spawn
-  the terminal with `-Yolo` -> `claude --permission-mode bypassPermissions`; `:yolo`/`-Yolo`/the config key
-  `models.orchestratorPermissionMode` are the other ways in (all funnel through `$orchPerm` in `sonelle.ps1`).
-  **Voice narrator (`app\narrator.py` + `app\tts.py` + `app\narrate_hook.ps1`):** a speaker toggle on
-  EACH tab pill (mute per session). Data source is Claude Code HOOKS, not screen-scraping - the app
-  publishes `SONELLE_NARRATE_SETTINGS` (only after probing that `claude` supports `--settings`, so a bad
-  flag can never break a working app), `sonelle.ps1` attaches `--settings`, and `narrate_hook.ps1` appends
-  each event to the per-tab `SONELLE_NARRATE_FILE`; `TabNarrator` tails it and **dual-renders** each event
-  into `(display, speak, kind, important)`. Lines are **composed** (`_render`), not enumerated, so they have
-  **direction + variety**: `_subject` pulls what she's on (file basename / bash command / grep pattern /
-  task) into a `{s}` slot, the `display` is a short tagged report-box line that NAMES it ("reading
-  narrator.py <3"), and the `speak` is a FIRST-PERSON TTS line with energy - a varied opener (`_OPEN`) +
-  a phrase from a pool + a reaction on a result (`_REACT`), e.g. "all green, 42 passing, nice!". The
-  ambient de-dup is keyed on category+subject (`last_key`), so switching files re-announces but a run of
-  the SAME file collapses; the assistant name (if set) is spoken as a sign-on on the bookends (start/idle)
-  via `_decorate`. `_clean_speech`/`_strip_emoticons` keep emoticons out of speech, and the **reporting
-  style** (`_STYLES`: warm/terse/hacker/bubbly) picks the phrase set + opener/reaction energy. **Do NOT write narration into the terminal** - claude's alt-screen TUI repaints over it (that
-  was the report bug); it goes to the DOM report box (`reportLine`/`renderReport`, pink `.rline.voice` /
-  white `.rline.status`) and audio plays through ONE global serialized queue (`enqueueAudio`/`pumpAudio`).
-  **Voice engine** is **Kokoro** (local neural, `app\tts.py` `_synth_kokoro`). The model is **VENDORED in
-  the repo** at `app\voice\` (the ~88 MB int8 build + voice pack - `_kokoro_files`, NO download) so the
-  voice ships with sonelle; only the `kokoro-onnx` RUNTIME installs best-effort from
-  `app\requirements-voice.txt` (never fatal), with `edge-tts` then SAPI as fallbacks. Default `af_heart`
-  at 0.95 speed. Keep the JS<->Python contract in sync on BOTH sides AND in selftest 8e/8f
-  (`set_narration`, `__narrate(tabId, display, kind, mime, b64)`); keep `app\narrate_hook.ps1` pure ASCII
-  like every `.ps1`, and the `.py` modules ASCII-clean too. edge-tts is pinned `>=7.2.8` (older pins 403).
-- **The reporter + settings panel (`app\`):** `#brandloop` is a WRAPPER - a report box (`#loop-report`)
-  ABOVE a `.gifwrap` (gif + control row: **report-arrow . padlock . mute . session label**). The
-  **report-arrow** (`.lbtn.arrow` -> `toggleReport`) opens/closes the report (so does **V**, when not
-  typing in an input); the **padlock** ONLY pins the gif (no bounce / no drift) and has NOTHING to do with
-  the report - the report shows on `.brandloop.reportopen` only (the old `.brandloop.locked .report` CSS
-  coupling was removed in v1.34). Per-tab gif state lives in `entry.gif` (`applyGifState` on tab switch). Narration goes to the report box (NOT the
-  terminal) and audio plays through one global serialized queue. (A desktop pop-out overlay was tried and
-  dropped on purpose - the reporter stays in-app; don't re-add it.) The **settings gear** (before the
-  `_ O X` controls) opens `#settings`: 20 palettes (`app\ui\palettes.js`, `applyPalette` rewrites the
-  `:root` vars + every xterm theme, and `activeTheme` so NEW tabs adopt it), assistant name (DISPLAY only -
-  never the engine self-short), upload-your-own mascot (`upload_mascot` -> `%LOCALAPPDATA%\sonelle`, never
-  the repo), reporting style, voices instructions (display only), and the **model split**: the
-  **orchestrator** model + effort (`models.orchestrator`/`orchestratorEffort` -> `--model`/`--effort`) and
-  a separate **code-writer** model (`models.codeWriter`, `inherit`/empty = same) that `bin\sonelle.ps1`
-  exports as `CLAUDE_CODE_SUBAGENT_MODEL` so claude's file-editing SUBAGENTS run on their own model.
-  `get_settings`/`save_settings` persist to `sonelle.config.json`. **These are LIVE:** `RefreshOrch` in
-  `bin\sonelle.ps1` re-reads the model block right before each `claude` launch (Route + DevSelf), so a
-  panel change applies to the NEXT prompt with no tab restart - the config file is the channel (and
-  `$env:SONELLE_CONFIG` can repoint that file; the resolver in `tools\_registry.ps1` honors it, which is
-  also how selftest 5d stays hermetic). Permission mode is NOT re-read live (it has `-Yolo`/`:yolo`
-  overrides). Guarded by selftest 5d (behavioral: model/effort/code-writer + SONELLE_CONFIG), 8e
-  (reporter), 8f (narrator), 8i (settings); keep the JS<->Python contract synced on both sides.
+- **Yolo (skip permission prompts):** `SONELLE_YOLO=1` / `-Yolo` / `:yolo` / the config key
+  `models.orchestratorPermissionMode` all funnel through `$orchPerm` in `sonelle.ps1` ->
+  `claude --permission-mode bypassPermissions`.
+- **The model split (config):** the **orchestrator** model + effort (`models.orchestrator`/
+  `orchestratorEffort` -> `--model`/`--effort`) and a separate **code-writer** model
+  (`models.codeWriter`, `inherit`/empty = same) that `bin\sonelle.ps1` exports as
+  `CLAUDE_CODE_SUBAGENT_MODEL` so claude's file-editing SUBAGENTS run on their own model.
+  **These are LIVE:** `RefreshOrch` in `bin\sonelle.ps1` re-reads the model block right before each
+  `claude` launch (Route + DevSelf), so a config edit applies to the NEXT prompt - the config file is
+  the channel (and `$env:SONELLE_CONFIG` can repoint that file; the resolver in `tools\_registry.ps1`
+  honors it, which is also how selftest 5d stays hermetic). Permission mode is NOT re-read live (it
+  has `-Yolo`/`:yolo` overrides). Guarded by selftest 5d (behavioral: model/effort/code-writer +
+  SONELLE_CONFIG).
 - **Guard hook + slash commands + inherent altitude (v1.36):** the engine and every scaffolded project
   ship a **PreToolUse guard** (`.claude\hooks\pretooluse_guard.ps1`, wired in `.claude\settings.json` for
   `Write|Edit|Bash`). It reads claude's UTF-8 payload on stdin (`OpenStandardInput` as UTF-8 - PS 5.1's
@@ -169,7 +98,7 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
   `ClaudeSupports '--append-system-prompt'` probe and fall back to folding the text into the prompt on an
   older `claude`. Guarded by selftest 8h (guard exists + behavioral block/allow incl. the non-ASCII case +
   commands + wiring) and 5d (routing attaches `--append-system-prompt`).
-- **Onboarding + :adopt + general (v1.37):** the glass app runs each tab in `-Bare`, which now prints a
+- **Onboarding + :adopt + general (v1.37):** `-Bare` mode prints a
   tiny no-claude primer (`BareIntro`: `:new` / `:adopt` / `<short>: <prompt>` / connect claude); bare
   `help`/`help:`/`?` shows `ShowHelp` and never routes. **`:adopt <path> [as <short>]`** (`Adopt` in
   `bin\sonelle.ps1`) scaffolds the skeleton over an EXISTING repo then `Route`s an AI conversion prompt

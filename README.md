@@ -21,28 +21,9 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
 6. Work:  type `myproj: do the thing`
 7. Attach an image:  `myproj: what's in @C:\pics\food.jpg?`  (or `:attach <path>` to stage one)
 8. Verify the engine:  `powershell -File tools\selftest.ps1`
-9. Pin to taskbar:  `powershell -File bin\make_launcher.ps1` (the `sonelle` shortcut opens the app by default; `-Terminal` for a single console), then right-click the Desktop `sonelle` shortcut -> Pin to taskbar.
+9. Pin to taskbar:  `powershell -File bin\make_launcher.ps1` (the `sonelle` shortcut opens the terminal - Windows Terminal if installed), then right-click the Desktop `sonelle` shortcut -> Pin to taskbar.
 10. Multi-instance:  `:team myproj bugs=opus,docs=haiku` opens parallel lanes (per-task models); `:status myproj` shows them. The orchestrator (your terminal session) always runs your max model (`opus`/`xhigh`).
-11. The app (liquid glass, many terminals, one window):  type `:app` to open the desktop app - a
-    frameless **Python** (pywebview / WebView2) window with a muted blue/indigo glass UI. Each tab is
-    an `xterm.js` terminal; the real PowerShell (`bin\sonelle.ps1`) runs **behind the scenes** in a
-    pseudo-terminal, so what you type goes to a hidden shell and the `claude` TUI works in-app.
-    First run installs a local `.venv` (pywebview + pywinpty + edge-tts) - run `:app` once to watch it
-    set up. Needs Python 3.10+ and the WebView2 runtime (preinstalled on Win10/11). The classic WinForms
-    host is still there via `:app-classic`. `bin\make_launcher.ps1` makes the `sonelle` shortcut open the
-    glass app by default (`-Classic` = WinForms, `-Terminal` = a single bare console).
-    Each tab has its own **voice toggle** (a speaker on the tab pill - mute the boring research tabs,
-    keep the important ones talking): turn it on and sonelle **reports her progress in a little box under
-    the mascot** - **pink** when she's talking to you ("got it :)", "tests green :)") and **soft white**
-    for the play-by-play - and speaks it aloud. The voice is **Kokoro**, a real local neural voice
-    **bundled in the repo** (`app\voice\`, no download; `edge-tts` then Windows SAPI as fallbacks).
-    Powered by Claude Code hooks; off by default, tune `narrator` in `sonelle.config.json`.
-    The **mascot is her reporter**: drag it (it bounces off the edges, then drifts home), **lock** it in
-    place or press **V** to open the report box, and **mute** it. Each tab keeps its own mascot
-    position/state. A **settings gear** in the titlebar opens a panel for **20 colour palettes**, the
-    **assistant name**, your **own mascot** image, the **reporting style** (warm/terse/hacker/bubbly),
-    and the **claude model + effort**.
-12. Improve sonelle itself:  type `:dev` (or address the engine by its own name: `sonelle: <prompt>`) - opens a dev session in the engine, seeded with `docs\DEVELOPING.md`; keep `selftest` green before committing.
+11. Improve sonelle itself:  type `:dev` (or address the engine by its own name: `sonelle: <prompt>`) - opens a dev session in the engine, seeded with `docs\DEVELOPING.md`; keep `selftest` green before committing.
 
 ## The three capabilities (honest about what's mechanism vs discipline)
 - **Scaffold** (real mechanism) — new projects in one command, consistently structured (`tools\new_project.ps1`).
@@ -68,16 +49,10 @@ The terminal hands prompts to `claude` (Claude Code), which runs on your Pro/Max
 | Path | What |
 |---|---|
 | `bin\sonelle.ps1` | the terminal (Claude-styled launcher; calm welcome card, `:help` on demand; routes to `claude`) |
-| `app\` | the liquid-glass desktop app: Python (pywebview) + xterm.js front-end; PowerShell runs behind it in a PTY (`:app`) |
-| `app\narrator.py` + `app\tts.py` + `app\narrate_hook.ps1` | the per-tab **voice narrator**: claude's hooks -> dual-rendered lines (a short cute **display** for the report box + a natural **speak** line for TTS, pink = she's talking to you, white = play-by-play) + **Kokoro** local-neural speech (`edge-tts`/SAPI fallback) |
-| `app\ui\palettes.js` | the **20 colour palettes** for the settings panel (the gear) |
-| `app\voice\` | the **Kokoro voice model vendored in the repo** (int8 `.onnx` + voice pack) - so the voice ships with sonelle, no download |
 | `knowledge\` | the **shared knowledge base**: generic, reusable lessons (public, ASCII) that ship with the engine; personal/per-project memory stays in the gitignored hub `memory\` |
 | `.claude\skills\` + `templates\skills\` | reusable **Agent Skills** claude auto-loads by task: `systematic-debugging` / `verification-before-completion` / `plan-before-build` (in the engine + every project) and `frontend-design` / `design-review` / `accessibility-audit` (scaffolded into every project) |
 | `.claude-plugin\marketplace.json` + `plugin\` | this repo is also a **Claude Code plugin marketplace**: `plugin\` packages sonelle's portable **skills** so anyone can `claude plugin marketplace add <owner>/<repo>` then `claude plugin install sonelle-skills@sonelle` into their own Claude Code (no engine clone) |
 | `tools\build_plugin.ps1` | regenerate `plugin\` from `templates\skills` (single source of truth; selftest enforces no drift) |
-| `bin\sonelle_gui.ps1` | launcher for the glass app: bootstraps `.venv` (pywebview + pywinpty + edge-tts), best-effort installs the Kokoro runtime, then runs it with `pythonw` |
-| `bin\sonelle_app.ps1` | the classic WinForms app host (`:app-classic`, `make_launcher -Classic`) |
 | `CLAUDE.md` | the dispatcher — how a session orients + routes |
 | `PROJECTS.md` | the registry (single source of truth; starts empty) |
 | `tools\new_project.ps1` | scaffold a new project (full skeleton + registry row) |
