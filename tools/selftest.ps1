@@ -125,37 +125,6 @@ Write-Host "== 5. duplicate guard =="
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') st "Dup" $codePath -Hub $tmp | Out-Null
 Ok "duplicate rejected (exit 1)"   ($LASTEXITCODE -eq 1)
 
-Write-Host "== 5b. multi-instance dry-run =="
-& $ps -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle_team.ps1') st -Lanes a=haiku,b -Hub $tmp -DryRun | Out-Null
-Ok "sonelle_team dry-run exit 0"        ($LASTEXITCODE -eq 0)
-Ok "lane board written"             (Test-Path (Join-Path $codePath '.sonelle\lanes\a.md'))
-Ok "lane start script written"      (Test-Path (Join-Path $codePath '.sonelle\lanes\a.start.ps1'))
-$le=$null;$lt=$null;[void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $codePath '.sonelle\lanes\a.start.ps1'),[ref]$lt,[ref]$le)
-Ok "lane start script parses"       ($le.Count -eq 0)
-Ok "lane per-model in start script" ((Get-Content (Join-Path $codePath '.sonelle\lanes\a.start.ps1') -Raw) -match '--model haiku')
-Ok "lane permission-mode in start script" ((Get-Content (Join-Path $codePath '.sonelle\lanes\a.start.ps1') -Raw) -match '--permission-mode')
-# R3: -Verify catches overlapping ownership before a launch can clobber files.
-$laneA = Join-Path $codePath '.sonelle\lanes\a.md'
-$laneB = Join-Path $codePath '.sonelle\lanes\b.md'
-((Get-Content $laneA -Raw) -replace '(?m)^owns:.*$', 'owns: src/, docs/api.md') | Set-Content $laneA
-((Get-Content $laneB -Raw) -replace '(?m)^owns:.*$', 'owns: src/components/, README.md') | Set-Content $laneB
-$verOut = & $ps -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle_team.ps1') st -Verify -Hub $tmp
-Ok "lane -Verify flags overlapping ownership (R3)" ((($verOut -join "`n")) -match 'CONFLICT')
-Ok "lane -Verify exits 1 on conflict"      ($LASTEXITCODE -eq 1)
-((Get-Content $laneA -Raw) -replace '(?m)^owns:.*$', 'owns: src/, docs/api.md') | Set-Content $laneA
-((Get-Content $laneB -Raw) -replace '(?m)^owns:.*$', 'owns: tests/, README.md') | Set-Content $laneB
-$verOk = & $ps -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle_team.ps1') st -Verify -Hub $tmp
-Ok "lane -Verify passes when ownership is disjoint" (($LASTEXITCODE -eq 0) -and ((($verOk -join "`n")) -match 'no ownership overlap'))
-# fix: an apostrophe in the code path must not break the generated lane start script (it is escaped to '').
-$qPath = Join-Path $tmp "wei'rd_code"
-& $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') q1 "Quote Proj" $qPath -Hub $tmp | Out-Null
-& $ps -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle_team.ps1') q1 -Lanes a -Hub $tmp -DryRun | Out-Null
-$qStart = Join-Path $qPath '.sonelle\lanes\a.start.ps1'
-Ok "lane start script written for an apostrophe code path" (Test-Path $qStart)
-$qe = $null; $qt = $null
-if (Test-Path $qStart) { [void][System.Management.Automation.Language.Parser]::ParseFile($qStart, [ref]$qt, [ref]$qe) }
-Ok "lane start script still parses with an apostrophe in the code path (escaped)" ($qe.Count -eq 0)
-
 Write-Host "== 5e. new_project rolls back a partial scaffold (R1) =="
 # Point the code path at an existing FILE: the dir/index appends succeed, but writing CLAUDE.md INSIDE a
 # file path fails mid-scaffold - so the run must roll back (delete the TODO/ledger it already wrote, no row).
@@ -174,96 +143,8 @@ $rbIdx = Join-Path $rbHub 'memory\MEMORY.md'
 Ok "rollback left no memory index line"  ((-not (Test-Path $rbIdx)) -or (-not ((Get-Content $rbIdx -Raw) -match 'project_rb')))
 if (Test-Path $rbHub) { Remove-Item $rbHub -Recurse -Force }
 
-Write-Host "== 5d. routing invokes claude correctly (behavioral, T1/T4) =="
-# Put a fake `claude` on PATH that records its argv + cwd + the code-writer env var, drive the terminal
-# over stdin, and assert it handed claude the right model/effort, routed the code-writer to its own
-# CLAUDE_CODE_SUBAGENT_MODEL, cd'd into the project, and honored -Yolo. The models come from a HERMETIC
-# config we point $env:SONELLE_CONFIG at (NOT the dev's real engine-root config) so the test is
-# deterministic AND proves the values are read from config, not the hardcoded defaults. Env that would
-# leak (SONELLE_YOLO / a pre-set subagent model) is neutralized too.
-$stub = Join-Path $tmp 'stub'; New-Item -ItemType Directory -Path $stub -Force | Out-Null
-$cap  = Join-Path $stub 'cap.txt'
-# `claude --help` must advertise --append-system-prompt so the terminal's ClaudeSupports probe resolves
-# true and the routing actually attaches the flag (otherwise it would take the older-build fallback path).
-$stubLines = @('@echo off',
-               'if "%~1"=="--help" (',
-               '  echo --model --effort --permission-mode --append-system-prompt',
-               '  exit /b 0',
-               ')',
-               'echo %*> "%SONELLE_STUB_CAP%"', 'cd >> "%SONELLE_STUB_CAP%"',
-               'echo SUBMODEL=[%CLAUDE_CODE_SUBAGENT_MODEL%]>> "%SONELLE_STUB_CAP%"', 'exit 0')
-[System.IO.File]::WriteAllText((Join-Path $stub 'claude.cmd'), ($stubLines -join "`r`n") + "`r`n")
-$cfg5d = Join-Path $tmp 'orch.config.json'
-[System.IO.File]::WriteAllText($cfg5d, '{ "models": { "orchestrator": "opus", "orchestratorEffort": "xhigh", "codeWriter": "sonnet" } }')
-$savedPath = $env:Path; $savedYolo = $env:SONELLE_YOLO
-$savedCfg = $env:SONELLE_CONFIG; $savedSub = $env:CLAUDE_CODE_SUBAGENT_MODEL
-$env:SONELLE_YOLO = ''; $env:CLAUDE_CODE_SUBAGENT_MODEL = ''
-$env:SONELLE_CONFIG = $cfg5d; $env:Path = "$stub;$env:Path"; $env:SONELLE_STUB_CAP = $cap
-try {
-  if (Test-Path $cap) { Remove-Item $cap -Force }
-  "st: hello`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare | Out-Null
-  $capTxt = if (Test-Path $cap) { Get-Content $cap -Raw } else { '' }
-  Ok "routing passes --model opus --effort xhigh (from config, live)" (($capTxt -match '--model') -and ($capTxt -match 'opus') -and ($capTxt -match '--effort') -and ($capTxt -match 'xhigh'))
-  Ok "code-writer routed to CLAUDE_CODE_SUBAGENT_MODEL"               ($capTxt -match 'SUBMODEL=\[sonnet\]')
-  Ok "routing cd's into the project code path"                        ($capTxt -match [regex]::Escape($codePath))
-  Ok "routing appends the altitude directive via --append-system-prompt" ($capTxt -match 'append-system-prompt')
-  Ok "no yolo => no bypassPermissions"                               (-not ($capTxt -match 'bypassPermissions'))
-  if (Test-Path $cap) { Remove-Item $cap -Force }
-  "st: hello`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare -Yolo | Out-Null
-  $capYolo = if (Test-Path $cap) { Get-Content $cap -Raw } else { '' }
-  Ok "yolo => --permission-mode bypassPermissions" (($capYolo -match '--permission-mode') -and ($capYolo -match 'bypassPermissions'))
-  # graded autonomy: :auto <level> maps a named level to claude's --permission-mode (full == the old yolo)
-  if (Test-Path $cap) { Remove-Item $cap -Force }
-  ":auto edits`r`nst: hi`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare | Out-Null
-  $capAuto = if (Test-Path $cap) { Get-Content $cap -Raw } else { '' }
-  Ok ":auto edits => --permission-mode acceptEdits" (($capAuto -match '--permission-mode') -and ($capAuto -match 'acceptEdits'))
-} finally {
-  $env:Path = $savedPath; $env:SONELLE_YOLO = $savedYolo
-  $env:SONELLE_CONFIG = $savedCfg; $env:CLAUDE_CODE_SUBAGENT_MODEL = $savedSub
-  Remove-Item Env:\SONELLE_STUB_CAP -ErrorAction SilentlyContinue
-}
-# the orchestrator re-reads model/effort/code-writer per prompt (live, no tab restart) + the resolver
-# honors $env:SONELLE_CONFIG so the panel's change is picked up from the config file each launch
-$srcTerm = Get-Content (Join-Path $engine 'bin\sonelle.ps1') -Raw
-Ok "orchestrator re-reads model/effort/code-writer per prompt (live)" (($srcTerm -match 'function RefreshOrch') -and ([regex]::Matches($srcTerm, 'RefreshOrch').Count -ge 3) -and ($srcTerm -match 'CLAUDE_CODE_SUBAGENT_MODEL'))
-$srcReg = Get-Content (Join-Path $engine 'tools\_registry.ps1') -Raw
-Ok "config resolver honors `$env:SONELLE_CONFIG override"             ($srcReg -match 'SONELLE_CONFIG')
-
-Write-Host "== 5f. adopt an existing project + the general (no-project) lane (behavioral) =="
-# a capturing stub claude that also answers --help (so ClaudeSupports resolves and the flag attaches)
-$astub = Join-Path $tmp 'astub'; New-Item -ItemType Directory -Path $astub -Force | Out-Null
-$acap  = Join-Path $astub 'cap.txt'
-$aLines = @('@echo off', 'if "%~1"=="--help" (', '  echo --model --effort --permission-mode --append-system-prompt', '  exit /b 0', ')', 'echo %*> "%SONELLE_STUB_CAP%"', 'cd >> "%SONELLE_STUB_CAP%"', 'exit 0')
-[System.IO.File]::WriteAllText((Join-Path $astub 'claude.cmd'), ($aLines -join "`r`n") + "`r`n")
-# an EXISTING, non-sonelle project: its OWN CLAUDE.md (must be preserved) + a package.json
-$adProj = Join-Path $tmp 'existing_app'; New-Item -ItemType Directory -Path $adProj -Force | Out-Null
-[System.IO.File]::WriteAllText((Join-Path $adProj 'CLAUDE.md'), 'my own onboarding doc - keep me')
-[System.IO.File]::WriteAllText((Join-Path $adProj 'package.json'), '{"name":"existing"}')
-$savedPath2 = $env:Path; $savedCap2 = $env:SONELLE_STUB_CAP; $savedYolo2 = $env:SONELLE_YOLO; $savedCfg2 = $env:SONELLE_CONFIG
-$env:SONELLE_YOLO = ''; $env:SONELLE_CONFIG = ''; $env:Path = "$astub;$env:Path"; $env:SONELLE_STUB_CAP = $acap
-try {
-  if (Test-Path $acap) { Remove-Item $acap -Force }
-  ":adopt `"$adProj`" as ad`r`ny`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare | Out-Null
-  $adcap = if (Test-Path $acap) { Get-Content $acap -Raw } else { '' }
-  Ok "adopt registers the project (registry row)"   ((Get-Content (Join-Path $tmp 'PROJECTS.md') -Raw) -match '(?m)^\|\s*ad\s*\|')
-  Ok "adopt scaffolds the project CLAUDE.md"        (Test-Path (Join-Path $adProj 'CLAUDE.md'))
-  Ok "adopt backs up the existing CLAUDE.md"        (Test-Path (Join-Path $adProj 'CLAUDE.md.pre-sonelle.bak'))
-  Ok "adopt preserves the original onboarding"      ((Get-Content (Join-Path $adProj 'CLAUDE.md.pre-sonelle.bak') -Raw) -match 'keep me')
-  Ok "adopt scaffolds the guard + commands too"     ((Test-Path (Join-Path $adProj '.claude\hooks\pretooluse_guard.ps1')) -and (Test-Path (Join-Path $adProj '.claude\commands\ship.md')))
-  Ok "adopt hands claude the conversion (ADOPTED)"  ($adcap -match 'ADOPTED')
-  Ok "adopt routes claude INTO the project dir"     ($adcap -match [regex]::Escape($adProj))
-  # general: one-off lane - neutral scratch dir, NO registry row, NO project state
-  if (Test-Path $acap) { Remove-Item $acap -Force }
-  "general: list three html tags`r`n:q`r`n" | & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Hub $tmp -Bare | Out-Null
-  $gcap = if (Test-Path $acap) { Get-Content $acap -Raw } else { '' }
-  Ok "general routes claude to a neutral scratch dir" ($gcap -match 'sonelle_general')
-  Ok "general adds NO registry row"                   (-not ((Get-Content (Join-Path $tmp 'PROJECTS.md') -Raw) -match '(?m)^\|\s*general\s*\|'))
-  Ok "general writes NO hub state for 'general'"      (-not (Test-Path (Join-Path $tmp 'GENERAL_TODO.txt')))
-} finally {
-  $env:Path = $savedPath2; $env:SONELLE_STUB_CAP = $savedCap2; $env:SONELLE_YOLO = $savedYolo2; $env:SONELLE_CONFIG = $savedCfg2
-  Remove-Item (Join-Path $env:TEMP 'sonelle_general') -Recurse -Force -ErrorAction SilentlyContinue
-}
-# new_project reserves 'general' so a project can never shadow the scratch lane
+Write-Host "== 5f. reserved shortcodes =="
+# 'general' stays a reserved word in the registry: new_project must refuse to scaffold it.
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'new_project.ps1') general "Should Fail" (Join-Path $tmp 'genfail') -Hub $tmp | Out-Null
 Ok "new_project rejects the reserved 'general' shortcode" ($LASTEXITCODE -eq 1)
 
@@ -280,48 +161,19 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
 } else { Write-Host "  [skip] git not on PATH" -ForegroundColor DarkGray }
 
 Write-Host "== 8. self-develop wiring =="
-$srcTerm = Get-Content (Join-Path $engine 'bin\sonelle.ps1') -Raw
-Ok "terminal has a :dev handler"   ($srcTerm -match '\^:dev')
-Ok "terminal has DevSelf function" ($srcTerm -match 'function DevSelf')
 Ok "DEVELOPING.md exists"          (Test-Path (Join-Path $engine 'docs\DEVELOPING.md'))
-Ok "dispatcher points to self-dev" ((Get-Content (Join-Path $engine 'CLAUDE.md') -Raw) -match 'DEVELOPING\.md|:dev')
-Ok "DevSelf seeds + guards engine"  (($srcTerm -match 'IGNORE its dispatcher') -and ($srcTerm -match 'hub-state'))
-Ok "self shortcode from folder name" ($srcTerm -match 'selfShort\s*=\s*\(Split-Path')
-Ok "self-name routes to engine dev"  ($srcTerm -match '\$short -eq \$script:selfShort')
-Ok "the GUI app is fully removed (terminal-first)" ((-not ($srcTerm -match 'AppLaunch')) -and (-not ($srcTerm -match 'sonelle_gui')) -and (-not (Test-Path (Join-Path $engine 'app'))) -and (-not (Test-Path (Join-Path $engine 'bin\sonelle_gui.ps1'))) -and (-not (Test-Path (Join-Path $engine 'bin\sonelle_app.ps1'))))
-Ok "terminal has a -Yolo switch"      ($srcTerm -match '\[switch\]\$Yolo')
-Ok "terminal has a :yolo toggle"      ($srcTerm -match '\^:yolo')
-Ok "-Yolo / SONELLE_YOLO sets bypass" (($srcTerm -match '\$Yolo -or \$env:SONELLE_YOLO') -and ($srcTerm -match 'bypassPermissions'))
-$srcLnk = Get-Content (Join-Path $engine 'bin\make_launcher.ps1') -Raw
-Ok "make_launcher opens the terminal (no GUI targets)" (($srcLnk -match 'sonelle\.ps1') -and (-not ($srcLnk -match 'sonelle_gui')) -and (-not ($srcLnk -match 'sonelle_app')))
+Ok "dispatcher points to self-dev" ((Get-Content (Join-Path $engine 'CLAUDE.md') -Raw) -match 'DEVELOPING\.md')
+# v1.46: the terminal launcher and its lane runner are gone for good - sonelle is a Claude Code
+# workflow (CLAUDE.md + registry + tools + hooks + skills), not a launcher. Guard the removal.
+Ok "terminal + launchers fully removed (v1.46)" ((-not (Test-Path (Join-Path $engine 'bin'))) -and (-not (Test-Path (Join-Path $engine 'app'))))
 
-Write-Host "== 8b. terminal welcome + help (UI) =="
-$demoOut = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo
-$demoExit = $LASTEXITCODE
-$demoStr  = (($demoOut -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
-Ok "terminal -Demo exit 0"             ($demoExit -eq 0)
-Ok "welcome shows brand + tagline"     (($demoStr -match 'sonelle') -and ($demoStr -match 'your projects, one orchestrator'))
-Ok "welcome no longer dumps all commands" (-not ($demoStr -match ':projects'))
-# A4: the welcome carries a build stamp derived from CHANGELOG's top version header.
-$verExp = (((Get-Content (Join-Path $engine 'CHANGELOG.md') | Where-Object { $_ -match '^##\s+v[0-9]' } | Select-Object -First 1) -replace '^##\s+(v\S+).*', '$1')).Trim()
-Ok "welcome shows the build version (A4)" (($verExp.Length -gt 0) -and ($demoStr -match [regex]::Escape($verExp)))
-Ok "terminal derives version from CHANGELOG"  (($srcTerm -match 'function SonelleVersion') -and ($srcTerm -match 'CHANGELOG\.md'))
-$bareOut = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo -Bare
-$bareStr = (($bareOut -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
-Ok "bare mode suppresses the full welcome card" (-not ($bareStr -match 'orchestrator'))
-Ok "bare mode shows a no-claude primer (make/adopt/connect)" (($bareStr -match 'connect claude') -and ($bareStr -match ':adopt') -and ($bareStr -match ':new'))
-Ok "terminal has a BareIntro primer"   ($srcTerm -match 'function BareIntro')
-Ok "terminal answers bare help/? without routing to claude" ($srcTerm -match '\(help\|')
-Ok "terminal has a General no-project lane (scratch dir, reserved word)" (($srcTerm -match 'function General') -and ($srcTerm -match "short -eq 'general'") -and ($srcTerm -match 'sonelle_general'))
-Ok "terminal has a Welcome function"   ($srcTerm -match 'function Welcome')
-Ok "welcome uses runtime box glyphs"   (($srcTerm -match '0x256D') -and ($srcTerm -match '0x2570'))
-Ok ":help lists every command"         (($srcTerm -match 'function ShowHelp') -and (@(':projects',':new',':adopt',':heal',':team',':status',':dev',':yolo',':auto',':cost',':map',':attach',':clear',':help',':q') | Where-Object { $srcTerm -notmatch [regex]::Escape($_) }).Count -eq 0)
+Write-Host "== 8b. engine root stays clean (invariant #4) =="
 # invariant #4: the engine root must stay clean of hub state (no project TODO/ledger/memory)
 $rootTodo = @(Get-ChildItem $engine -Filter '*_TODO.txt' -File -ErrorAction SilentlyContinue).Count
 $rootLedg = @(Get-ChildItem $engine -Filter '_*_run_STATUS.md' -File -ErrorAction SilentlyContinue).Count
 Ok "engine root clean (no hub state)" (($rootTodo -eq 0) -and ($rootLedg -eq 0) -and (-not (Test-Path (Join-Path $engine 'memory'))))
 
-Write-Host "== 8h. PreToolUse guard + slash commands + inherent altitude directive =="
+Write-Host "== 8h. PreToolUse guard + slash commands =="
 $guardEng = Join-Path $engine '.claude\hooks\pretooluse_guard.ps1'
 Ok "engine PreToolUse guard hook exists" (Test-Path $guardEng)
 $srcGuard = if (Test-Path $guardEng) { Get-Content $guardEng -Raw } else { '' }
@@ -356,12 +208,6 @@ $engSet = Get-Content (Join-Path $engine '.claude\settings.json') -Raw
 Ok "engine settings.json wires PreToolUse -> guard" (($engSet -match 'PreToolUse') -and ($engSet -match 'pretooluse_guard\.ps1'))
 foreach ($c in @('selftest', 'heal', 'ship', 'ritual')) { Ok ("engine /$c command exists") (Test-Path (Join-Path $engine ('.claude\commands\' + $c + '.md'))) }
 Ok "/ship gates on selftest before committing" ((Get-Content (Join-Path $engine '.claude\commands\ship.md') -Raw) -match 'selftest')
-Ok "terminal probes claude for --append-system-prompt support" (($srcTerm -match 'function ClaudeSupports') -and ($srcTerm -match 'claude --help'))
-Ok "terminal defines the inherent operating policy (proactive, self-deciding)" (($srcTerm -match 'operatingPolicy') -and ($srcTerm -match 'delegate the breadth-first exploration to subagents') -and ($srcTerm -match 'you decide WHICH of our workflows'))
-Ok "policy makes claude proactively verify + heal + run the ritual unasked" (($srcTerm -match 'VERIFY it yourself') -and ($srcTerm -match 'HEAL it') -and ($srcTerm -match 'end-of-task ritual'))
-Ok "the general lane uses a minimal no-state directive, not the project policy" (($srcTerm -match 'function General') -and ($srcTerm -match 'generalDirective') -and ($srcTerm -match 'nothing here to maintain'))
-Ok "DevSelf framing rides --append-system-prompt, with a fold-in fallback" (($srcTerm -match '\$framing') -and ($srcTerm -match '--append-system-prompt') -and ($srcTerm -match 'ClaudeSupports'))
-Ok "both DevSelf and Route append the operating policy" (([regex]::Matches($srcTerm, 'operatingPolicy')).Count -ge 3)
 
 Write-Host "== 8g. shared knowledge base =="
 $kbIdx = Join-Path $engine 'knowledge\INDEX.md'
@@ -419,18 +265,17 @@ $r2 = Get-SonelleConfig -Engine $engine -HubOverride $fakeHub -MemoryOverride $f
 Ok "explicit -MemoryDir wins"           ($r2.MemoryDir -eq $fakeMem)
 Ok "check_pointers accepts -MemoryDir"  ((Get-Content (Join-Path $PSScriptRoot 'check_pointers.ps1') -Raw) -match '\$MemoryDir')
 Ok "doctor forwards -MemoryDir"         ((Get-Content (Join-Path $PSScriptRoot 'doctor.ps1') -Raw) -match 'check_pointers\.ps1.*-MemoryDir')
-# Q3: one config resolver - the terminal + team must use Get-SonelleConfig, not re-parse the JSON themselves.
+# Q3: ONE config resolver - Get-SonelleConfig in tools\_registry.ps1 is the only place that parses
+# sonelle.config.json; no tool re-parses the JSON itself (9a enforces the same for the registry parser).
 Ok "resolver also returns the Models block" ((Get-Content (Join-Path $PSScriptRoot '_registry.ps1') -Raw) -match 'Models\s*=\s*\$cfgModels')
 $r3 = Get-SonelleConfig -Engine $engine
 Ok "resolver exposes a Models property"  ($null -ne ($r3.PSObject.Properties.Name | Where-Object { $_ -eq 'Models' }))
-Ok "sonelle.ps1 uses the canonical resolver (no inline cfg parse)" (($srcTerm -match 'Get-SonelleConfig') -and (-not ($srcTerm -match "Join-Path \`$root 'sonelle\.config\.json'")))
-$srcTeam = Get-Content (Join-Path $engine 'bin\sonelle_team.ps1') -Raw
-Ok "sonelle_team.ps1 uses the canonical resolver (no inline cfg parse)" (($srcTeam -match 'Get-SonelleConfig') -and (-not ($srcTeam -match "Join-Path \`$engine 'sonelle\.config\.json'")))
-# the NA-path sentinel lives in ONE predicate (Test-SonelleCodePath) so the four call sites can't drift
+# the NA-path sentinel lives in ONE predicate (Test-SonelleCodePath) so the call sites can't drift
 Ok "Test-SonelleCodePath: real path true; empty/NA false" ((Test-SonelleCodePath 'C:\x') -and (-not (Test-SonelleCodePath '')) -and (-not (Test-SonelleCodePath '-')) -and (-not (Test-SonelleCodePath '(set later)')))
-$sentinelHits = @(Select-String -Path (Join-Path $engine 'bin\sonelle.ps1'), (Join-Path $engine 'bin\sonelle_team.ps1'), (Join-Path $engine 'tools\doctor.ps1'), (Join-Path $engine 'tools\check_pointers.ps1') -Pattern '\^\[-\(\]' -ErrorAction SilentlyContinue)
-Ok "NA-path sentinel centralized (no raw regex left in the 4 consumers)" ($sentinelHits.Count -eq 0)
-# a malformed config must WARN (visible) and fall back to defaults - never SILENTLY relocate the hub
+$sentinelHits = @(Select-String -Path (Join-Path $engine 'tools\doctor.ps1'), (Join-Path $engine 'tools\check_pointers.ps1') -Pattern '\^\[-\(\]' -ErrorAction SilentlyContinue)
+Ok "NA-path sentinel centralized (no raw regex left in the consumers)" ($sentinelHits.Count -eq 0)
+# a malformed config must WARN (visible) and fall back to defaults - never SILENTLY relocate the hub.
+# Pointing $env:SONELLE_CONFIG at the bad file also proves the resolver honors that override.
 $badCfg = Join-Path $tmp 'bad.config.json'
 [System.IO.File]::WriteAllText($badCfg, '{ not valid json ')
 $savedCfgB = $env:SONELLE_CONFIG; $env:SONELLE_CONFIG = $badCfg
@@ -452,12 +297,6 @@ Ok "the sanctioned PS registry parser exists" (@($psParserHits | Where-Object { 
 Ok "no unsanctioned PS registry parser (Q2)" ($psUnsanctioned.Count -eq 0)
 $pyParserHits = @(Select-String -Path $scanFiles.FullName -Pattern 'startswith\("\|"\)' -ErrorAction SilentlyContinue)
 Ok "no Python registry parser at all (Q2)" ($pyParserHits.Count -eq 0)
-
-Write-Host "== 9b. terminal honors -Hub (Q4) =="
-Ok "sonelle.ps1 has a -Hub param that wins over config" (($srcTerm -match '\[string\]\$Hub') -and ($srcTerm -match 'hubOverride'))
-$hubDemo = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'bin\sonelle.ps1') -Demo -Hub $tmp
-$hubStr  = (($hubDemo -join "`n") -replace "$([char]27)\[[0-9;]*m", '')
-Ok "terminal -Hub points the welcome at the override hub" ($hubStr -match '(?m)\bst\b')
 
 Write-Host "== 9c. registry parser is robust to junk (T3) =="
 # Feed Get-SonelleProjects malformed rows: it must neither throw nor return junk, and must trim cells.

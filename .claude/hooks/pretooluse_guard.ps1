@@ -1,7 +1,7 @@
 # pretooluse_guard.ps1 - engine-dev safety net. Claude Code runs this BEFORE every Bash/Write/Edit
 # (a PreToolUse hook). Exit 2 BLOCKS the tool call and feeds the message back to claude; exit 0 allows.
-# It turns the engine's invariants - which selftest and the terminal otherwise catch only AFTER the fact -
-# into hard pre-blocks. That matters most in a bypassPermissions ("yolo") session, where claude's own
+# It turns the engine's invariants - which selftest otherwise catches only AFTER the fact -
+# into hard pre-blocks. That matters most in a bypassPermissions session, where claude's own
 # prompts are skipped and this is the last line of defense. Enforced here:
 #   - House rule: *.ps1 sources stay pure ASCII (PS 5.1 misreads non-ASCII in a no-BOM .ps1).
 #   - Invariant #4: never scaffold hub/project state at the engine root - no new_project, no plain

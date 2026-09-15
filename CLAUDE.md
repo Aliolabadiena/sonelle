@@ -8,6 +8,8 @@ the sources first.
 ## Grammar
 `[address,] <shortcode>: <prompt>`  — e.g. `sonelle, myproj: fix the build`
 (You may address the assistant by name; it still replies starting with your canary if you set one.)
+You type this straight into **Claude Code** (desktop app or the `claude` CLI) opened in the hub folder.
+There is no launcher in between: the dispatch below *is* the routing, done by the session itself.
 
 ## Dispatch — do this on every message
 1. Extract `<shortcode>`. Open **`PROJECTS.md`** (the canonical registry) and find its row.
@@ -32,6 +34,16 @@ the sources first.
   surfaces the memory index into context** before you start. Quick capture: `tools\log_lesson.ps1`.
   Full loop: `docs\SELF_IMPROVE.md`.
 
+## Operating policy (altitude — applies to every session)
+You decide WHICH of these workflows to use and WHEN: the goal gets stated, not the tool, so act on your
+own judgment instead of waiting to be told "run this". Match effort to the task — on a large or multi-file
+change, delegate the breadth-first exploration to subagents and keep your own context for the synthesis
+and the edit; on a small focused change just do it. After any code change **verify it yourself** before
+calling it done, by running the right check (the engine `selftest`, or the project's `sonelle.check.ps1`) —
+unasked; if it fails, **heal** it: root cause, fix, re-run until green. Finish a real task with the
+end-of-task ritual below. Scale the ceremony to the task: never over-process a one-liner or a plain
+question. The `/selftest`, `/heal`, `/ship` and `/ritual` slash commands bundle these as single steps.
+
 ## Enforcement (hooks)
 `.claude/settings.json` wires a **SessionStart** hook (recall reminder) and a **Stop** hook (auto-runs
 the project's `sonelle.check.ps1` + a capture reminder) so the heal/self-improve loop runs via the harness,
@@ -45,23 +57,20 @@ not just goodwill. Ships in the engine and is scaffolded into every new project 
 4. If you keep an off-engine brain backup, sync/commit it (that's your data, not sonelle).
 Never leave knowledge only in chat — chat vanishes, files remain.
 
-## The terminal
-`bin\sonelle.ps1` is the sonelle terminal (Claude-styled). It parses the grammar above, routes to
-the right project via `PROJECTS.md`, and hands the prompt to `claude` (your Claude
-subscription). Attach images with `:attach <path>` or inline `@<path>`. `bin\sonelle.ps1 -Demo`
-shows the banner without entering the REPL. Verify the whole engine anytime with
-`tools\selftest.ps1` (or `sonelle.check.ps1`).
+## How you run it
+Open **Claude Code** in the hub (or straight in a project's folder) and type the grammar above. That is
+the whole interface — routing, models, effort, permission modes, parallelism and the statusline are all
+Claude Code's own. Verify the engine anytime with `tools\selftest.ps1` (or `sonelle.check.ps1`).
 
 ## Improving sonelle itself
-To work ON the engine (not on a project), type `:dev` in the terminal - or use the grammar with the
-engine's OWN name as the shortcode: `<engine-name>: <prompt>` (e.g. `sonelle, sonelle: add a :foo command`).
-Either opens a session here seeded with the engine-dev invariants from `docs\DEVELOPING.md` (pure-ASCII
-PowerShell, `tools\selftest.ps1` green before every commit, no personal data in this public repo),
-overriding the dispatcher framing above for that session. The engine's own name routes to self-development,
-never to a project. Everything is git-versioned, so changes are rewindable.
+To work ON the engine (not on a project), open Claude Code **in the engine folder**; `docs\DEVELOPING.md`
+seeds that session with the engine-dev invariants (pure-ASCII PowerShell, `tools\selftest.ps1` green
+before every commit, no personal data in this public repo) and overrides the dispatcher framing above.
+Addressing the engine by its OWN name (`<engine-name>: <prompt>`) means self-development too — never a
+project, and never a registry lookup. Everything is git-versioned, so changes are rewindable.
 
 ## Engine vs hub
-Engine assets (`bin/ tools/ templates/ docs/`) are read relative to the scripts. The hub
+Engine assets (`tools/ templates/ docs/`) are read relative to the scripts. The hub
 (`CLAUDE.md` + `PROJECTS.md` + `memory/` + per-project state) is where work lands — default
 the engine folder, or any `-Hub <path>` / `sonelle.config.json`. `new_project.ps1` reads
 templates from the engine and writes state to the hub, so one engine can drive many hubs.

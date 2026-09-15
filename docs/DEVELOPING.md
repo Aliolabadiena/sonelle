@@ -1,25 +1,34 @@
 # DEVELOPING sonelle (improving the engine itself)
 
 This guide is for working ON the engine (this repo), not for using it to run projects.
-Open it via the terminal command `:dev` (which seeds a Claude session here with this context),
-or read it before you `cd` into the sonelle folder and run `claude`.
+Read it whenever you open Claude Code in the sonelle folder.
 
 > The root `CLAUDE.md` is the **dispatcher** (how a session routes PROJECTS). When you are
 > developing the engine, THIS file governs the session - not the dispatcher framing.
 
-## Session framing (how `:dev` works)
-Trigger it with `:dev [prompt]` OR with the grammar using the engine's own name as the shortcode
-(`<engine-name>: <prompt>`, e.g. `sonelle, sonelle: add a :foo command`) - both land here. sonelle
-launches a Claude session in the engine root, seeded with these instructions. Claude Code ALSO auto-loads the root `CLAUDE.md` (the dispatcher template the engine
-ships) into context - but **this file is your sole authority for the session**. If anything in
-`CLAUDE.md` talks about routing a shortcode, scaffolding a project, reading hub state, or an
-end-of-task ritual, **disregard it**: you are improving the ENGINE, not running a project through it.
-The invariants below are absolute and override any dispatcher guidance.
+## Session framing (engine-dev sessions)
+Open Claude Code **in the engine folder** - or address the engine by its own name
+(`<engine-name>: <prompt>`, e.g. `sonelle, sonelle: add a doctor check`), which means
+self-development and never a registry lookup. Claude Code auto-loads the root `CLAUDE.md`
+(the dispatcher template the engine ships) into context - but **this file is your sole authority for
+the session**. If anything in `CLAUDE.md` talks about routing a shortcode, scaffolding a project,
+reading hub state, or an end-of-task ritual, **disregard it**: you are improving the ENGINE, not
+running a project through it. The invariants below are absolute and override any dispatcher guidance.
+
+## Operating policy (engine-dev)
+Decide the workflow yourself from the task; the goal gets stated, not the tool. Delegate breadth-first
+exploration to subagents on a multi-file change and keep your own context for the synthesis and the edit;
+do a small focused change directly. VERIFY every change by running `tools\selftest.ps1` before calling it
+done, unasked; on red, HEAL to green rather than reporting red. Capture the lesson (below) when you learn
+something reusable. Scale the ceremony to the task - a one-line fix gets no process. For a project session
+the same policy lives in the dispatcher `CLAUDE.md`; the `/selftest /heal /ship /ritual` slash commands
+bundle the routines either way.
 
 ## What you are touching
 sonelle is the reusable ENGINE: the dispatcher, the registry format, the templates, the
-scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public** repo with
-**zero personal data**.
+scaffold/heal/self-improve tools, the hooks, and the skills. It is a **public** repo with
+**zero personal data**. It is a Claude Code **workflow**, not a launcher - there is no
+terminal/REPL to maintain (removed in v1.46).
 
 ## Invariants (do NOT break these)
 1. **Pure ASCII PowerShell.** PS 5.1 misreads non-ASCII in a no-BOM `.ps1`. Build any glyphs at
@@ -47,68 +56,37 @@ scaffold/heal/self-improve tools, the terminal, and the lanes. It is a **public*
    does not violate invariant 4; just keep it personal-data-free. The SessionStart hook recalls both.
 
 ## Common changes
-- **New terminal command:** add a handler in the REPL loop of `bin\sonelle.ps1`, a line in
-  `ShowHelp`, and a selftest assertion that the handler exists.
-- **Terminal UI:** the launch screen is `Welcome` (a minimal rounded card - brand, live project list,
-  one example, footer); the full command list lives in `ShowHelp` (`:help`, on demand) - keep the two
-  split (don't move the command dump back into the welcome). Box glyphs are built at runtime via
-  `[char]` codepoints (e.g. `0x256D`); never paste a non-ASCII glyph into the source. selftest 8b
-  guards the welcome (brand shown, no command dump) and that `:help` still lists every command.
 - **New tool:** add `tools\<name>.ps1` (ASCII, `$ErrorActionPreference='Stop'`, `-Hub`-aware if it
   touches hub state), wire it where it is used, and cover it in selftest.
 - **New template:** add it to `templates\`, have `new_project.ps1` write it, and assert it
-  scaffolds in selftest.
-- **Self-develop routing:** the shortcode that makes `<engine-name>: <prompt>` reach `:dev` is derived
-  from the engine FOLDER name, lowercased (`$script:selfShort` in `bin\sonelle.ps1`), and special-cased in
-  `Route` BEFORE the registry lookup - so it never pollutes `PROJECTS.md`, and renaming the engine folder
-  updates it automatically.
-- **Yolo (skip permission prompts):** `SONELLE_YOLO=1` / `-Yolo` / `:yolo` / the config key
-  `models.orchestratorPermissionMode` all funnel through `$orchPerm` in `sonelle.ps1` ->
-  `claude --permission-mode bypassPermissions`.
-- **The model split (config):** the **orchestrator** model + effort (`models.orchestrator`/
-  `orchestratorEffort` -> `--model`/`--effort`) and a separate **code-writer** model
-  (`models.codeWriter`, `inherit`/empty = same) that `bin\sonelle.ps1` exports as
-  `CLAUDE_CODE_SUBAGENT_MODEL` so claude's file-editing SUBAGENTS run on their own model.
-  **These are LIVE:** `RefreshOrch` in `bin\sonelle.ps1` re-reads the model block right before each
-  `claude` launch (Route + DevSelf), so a config edit applies to the NEXT prompt - the config file is
-  the channel (and `$env:SONELLE_CONFIG` can repoint that file; the resolver in `tools\_registry.ps1`
-  honors it, which is also how selftest 5d stays hermetic). Permission mode is NOT re-read live (it
-  has `-Yolo`/`:yolo` overrides). Guarded by selftest 5d (behavioral: model/effort/code-writer +
-  SONELLE_CONFIG). NOTE (2026-08): `CLAUDE_CODE_SUBAGENT_MODEL` still works but is no longer
-  prominent in the docs - the modern per-subagent mechanism is a `model:` field in
-  `.claude/agents/<name>.md` frontmatter. If the env var ever stops routing, migrate there.
-- **Guard hook + slash commands + inherent altitude (v1.36):** the engine and every scaffolded project
+  scaffolds in selftest (the golden template set in T2 must be updated deliberately).
+- **Dispatcher / policy change:** the routing grammar, the three superpowers, the operating policy and
+  the end-of-task ritual all live in the root `CLAUDE.md`; the per-project equivalent is
+  `templates\CLAUDE.template.md`. Keep those two roles split (invariant 6).
+- **Config:** `Get-SonelleConfig` in `tools\_registry.ps1` is the ONLY parser of `sonelle.config.json`
+  (`hub`, `memoryDir`, and a pass-through `Models` block); `$env:SONELLE_CONFIG` repoints the file,
+  which is how selftest stays hermetic. A malformed config must warn and fall back, never silently
+  relocate the hub. NOTE (v1.46): nothing in the engine applies the `models` block any more - model,
+  effort and permission mode are chosen in Claude Code itself.
+- **Guard hook + slash commands (v1.36):** the engine and every scaffolded project
   ship a **PreToolUse guard** (`.claude\hooks\pretooluse_guard.ps1`, wired in `.claude\settings.json` for
   `Write|Edit|Bash`). It reads claude's UTF-8 payload on stdin (`OpenStandardInput` as UTF-8 - PS 5.1's
   `[Console]::In` uses the console code page and would corrupt non-ASCII), and on a violation EXITS 2 to
   BLOCK the call (stderr goes back to claude); any parse/read problem EXITS 0 (a guard must never break a
-  session). This is the only guardrail left in a `bypassPermissions` session. The ENGINE guard enforces
+  session). It is the only guardrail left in a `bypassPermissions` session. The ENGINE guard enforces
   the house rule (no non-ASCII written to a `.ps1`) and invariant #4 (no `new_project`, no plain
   `log_lesson` - only `-Shared` -> `knowledge\`; no `*_TODO.txt`/`*_run_STATUS.md`/`memory\` at the engine
   root) plus blocks force-push; the PROJECT template guard blocks force-push and is a stub to add your own
   rules. **Slash commands** (`.claude\commands\`: `/selftest /heal /ship /ritual`) codify the rituals -
   engine versions drive `selftest`/`doctor`/the commit gate, scaffolded versions drive `sonelle.check.ps1`
-  + the project's TODO/ledger. **Inherent operating policy (v1.36, broadened v1.38):** `bin\sonelle.ps1`
-  appends a one-line policy (`$operatingPolicy`) to EVERY project/engine session via `--append-system-prompt`
-  so claude PROACTIVELY picks the workflow from the task alone (the user states the goal, not the tool):
-  delegate breadth-first exploration to subagents on a hard / multi-file task and do small ones directly;
-  VERIFY after a change by running the right check (selftest or `sonelle.check.ps1`); HEAL on failure; run the
-  end-of-task ritual when done - while scaling down so a one-liner gets no ceremony. The `general:` lane gets
-  a minimal `$generalDirective` instead (no project state to maintain). DevSelf also moves its engine framing
-  into `--append-system-prompt` (the
-  system prompt survives compaction better than a user-turn seed). Both gate on a cached
-  `ClaudeSupports '--append-system-prompt'` probe and fall back to folding the text into the prompt on an
-  older `claude`. Guarded by selftest 8h (guard exists + behavioral block/allow incl. the non-ASCII case +
-  commands + wiring) and 5d (routing attaches `--append-system-prompt`).
-- **Onboarding + :adopt + general (v1.37):** `-Bare` mode prints a
-  tiny no-claude primer (`BareIntro`: `:new` / `:adopt` / `<short>: <prompt>` / connect claude); bare
-  `help`/`help:`/`?` shows `ShowHelp` and never routes. **`:adopt <path> [as <short>]`** (`Adopt` in
-  `bin\sonelle.ps1`) scaffolds the skeleton over an EXISTING repo then `Route`s an AI conversion prompt
-  into it - non-destructive (existing `CLAUDE.md`/`sonelle.check.ps1`/`.claude\` are copied to
-  `*.pre-sonelle.bak` first). **`general: <prompt>`** is intercepted in `Route` -> `General`, which runs
-  claude in `%TEMP%\sonelle_general` (neutral - no `CLAUDE.md` up the tree) with NO hub state / registry
-  row / memory; `general` is a reserved shortcode (new_project refuses it). Guarded by selftest 5f
-  (behavioral) + 8b.
+  + the project's TODO/ledger. Guarded by selftest 8h (guard exists + behavioral block/allow incl. the
+  non-ASCII case + commands + wiring).
+- **Skills:** `templates\skills\` is the single source of truth; the engine's three discipline skills
+  (`.claude\skills\`) must stay byte-identical to their templates, and `plugin\` is regenerated from them
+  via `tools\build_plugin.ps1`. selftest 8j + 12 enforce both (no drift).
+- **Bringing in an existing codebase:** point `new_project.ps1` at it, then have the session adapt the
+  generic scaffold to the real code. Back up any existing `CLAUDE.md` / `sonelle.check.ps1` / `.claude\`
+  to `*.pre-sonelle.bak` first - the scaffold must never destroy a project's own onboarding.
 - **Docs:** keep `README.md` + `docs\ARCHITECTURE.md` honest (mechanism vs discipline), and add a
   `CHANGELOG.md` entry.
 

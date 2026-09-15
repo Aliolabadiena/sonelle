@@ -30,7 +30,7 @@ function Get-SonelleProjects([string]$RegistryPath) {
 
 # A registry CodePath cell is either a real filesystem path or an "NA" sentinel the scaffolder writes
 # when a project has no code dir yet (a leading '(' e.g. "(set later)" or '-'). ONE predicate answers
-# "is this a real, usable path?" so the call sites (terminal, doctor, check_pointers, team) can't drift.
+# "is this a real, usable path?" so the call sites (doctor, check_pointers) can't drift.
 # A leading '-' would also make Test-Path treat it as a parameter, so this guard doubles as a safety net.
 function Test-SonelleCodePath([string]$CodePath) {
   return ([bool]$CodePath) -and ($CodePath -notmatch '^[-(]')

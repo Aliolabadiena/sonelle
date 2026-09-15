@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.46 - 2026-09-16 (the terminal is gone - sonelle is a Claude Code workflow, not a launcher)
+v1.43 dropped the watcher dashboard, v1.44 the GUI app; this removes the last wrapper. The owner works in
+Claude Code directly (desktop app / `claude` CLI), and Claude Code now natively covers everything the
+terminal existed to provide: routing a prompt into a directory, subagents and parallel work, permission
+modes, model + effort selection, git worktrees, and a statusline. A launcher in front of that was one more
+layer to keep current for no capability. What sonelle IS, unchanged: the dispatcher (`CLAUDE.md`), the
+registry (`PROJECTS.md`), the scaffold/heal/self-improve tools, the hooks, the skills, and the plugin.
+- **REMOVED** `bin\sonelle.ps1` (the REPL: grammar routing, `:dev` / `:team` / `:status` / `:yolo` /
+  `:adopt` / `:attach` / `:cost`, the `general:` lane, the welcome card, `-Demo` / `-Bare` / `-Hub`,
+  and the `--append-system-prompt` operating-policy injection), `bin\sonelle_team.ps1` (parallel lanes),
+  `bin\make_launcher.ps1` (the `sonelle.lnk` taskbar shortcut) - and with them the whole `bin\` dir.
+- **The operating policy now lives in the dispatcher**, not in a launcher's system-prompt flag: `CLAUDE.md`
+  gained a short "Operating policy (altitude)" section with the same substance (you pick the workflow;
+  delegate breadth-first exploration to subagents on multi-file work; verify with the right check unasked;
+  heal to green; run the end-of-task ritual; no ceremony on a one-liner). Read from a file every session,
+  which also survives compaction better than a flag.
+- **Parallelism** is Claude Code's own now (Agent / Workflow tools, or several sessions on git worktrees
+  with disjoint file ownership). The `.sonelle\lanes\` board and its `-Verify` overlap check are gone;
+  disjoint ownership stays the rule, it just is not something sonelle launches.
+- **selftest**: dropped the sections that only exercised the removed code (5b lane dry-run + `-Verify`,
+  5d stub-`claude` routing, 5f `:adopt` + general lane, 8b's welcome/help UI half, 9b `-Hub`, the
+  operating-policy and `make_launcher` greps). Kept everything covering the tools, hooks, skills, plugin,
+  config resolver, registry parser, cost and repomap - plus a new assertion that `bin\` and `app\` stay
+  gone. 170 checks, ALL PASS. `check_pointers` no longer checks for `bin\sonelle.ps1`.
+- **Docs** (README / `CLAUDE.md` / ARCHITECTURE / DEVELOPING) rewritten around "open Claude Code in the hub
+  and type `<short>: <prompt>`"; engine-dev = open Claude Code in the engine folder. The config example
+  drops its `models` block (nothing applies it any more; `Get-SonelleConfig` still hands a `models`
+  object through for compatibility).
+
 ## v1.45 - 2026-08-08 (currency pass: August-2026 Claude Code alignment)
 An audit against the current Claude Code docs (August 2026) after two idle months. The engine's core
 integration points all still hold (CLI flags, hooks exit-code-2 contract, SKILL.md frontmatter, the

@@ -25,7 +25,6 @@ Check 'CLAUDE.md'           (Join-Path $hub 'CLAUDE.md')
 Check 'PROJECTS.md'         (Join-Path $hub 'PROJECTS.md')
 
 Write-Host "[check] engine files:"
-Check 'bin\sonelle.ps1'          (Join-Path $engine 'bin\sonelle.ps1')
 Check 'tools\new_project.ps1' (Join-Path $engine 'tools\new_project.ps1')
 Check 'tools\doctor.ps1'      (Join-Path $engine 'tools\doctor.ps1')
 Check 'tools\log_lesson.ps1'  (Join-Path $engine 'tools\log_lesson.ps1')

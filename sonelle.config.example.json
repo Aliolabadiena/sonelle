@@ -1,12 +1,5 @@
 {
-  "_comment": "Copy to sonelle.config.json (gitignored). 'hub' = your workspace path (default '.' = the sonelle folder; point it at your real registry to route those projects). 'memoryDir' = where your project memory files live, used by check_pointers/doctor to validate memory pointers (empty string \"\" or omitted = the default <hub>/memory; set an absolute path if your memory lives elsewhere, e.g. a Claude Code memory dir). 'models': the ORCHESTRATOR (the session you talk to) is ALWAYS your max model+effort. LANES (workers) default to laneDefault/laneEffort and a permission mode; per-lane override via :team proj bugs=opus,triage=haiku:medium. 'codeWriter' (optional) routes claude's file-editing subagents to their own model via CLAUDE_CODE_SUBAGENT_MODEL. Models (aliases resolve to the newest): haiku | sonnet | opus | fable | best (fable if available, else newest opus) | or a full id like claude-fable-5. Effort: low | medium | high | xhigh | max. Permission mode: default | acceptEdits | plan | auto | dontAsk | bypassPermissions (lanePermissionMode for workers; optional orchestratorPermissionMode for the boss - unset = inherit your global default).",
+  "_comment": "Copy to sonelle.config.json (gitignored). 'hub' = your workspace path (default '.' = the sonelle folder; point it at your real registry so the tools validate those projects). 'memoryDir' = where your project memory files live, used by check_pointers/doctor to validate memory pointers (empty string \"\" or omitted = the default <hub>/memory; set an absolute path if your memory lives elsewhere, e.g. a Claude Code memory dir). Read only by Get-SonelleConfig in tools\\_registry.ps1. NOTE (v1.46): the engine no longer chooses models, effort or permission modes - that is Claude Code's own session config now, so there is no 'models' block here any more. A 'models' object in an existing config is still parsed and handed through, but nothing in the engine applies it.",
   "hub": ".",
-  "memoryDir": "",
-  "models": {
-    "orchestrator": "opus",
-    "orchestratorEffort": "xhigh",
-    "laneDefault": "opus",
-    "laneEffort": "high",
-    "lanePermissionMode": "acceptEdits"
-  }
+  "memoryDir": ""
 }

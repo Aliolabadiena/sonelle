@@ -31,7 +31,7 @@ function Result($label, $ok, $detail) {
 Section "environment"
 Write-Host ("  [info] PowerShell {0}" -f $PSVersionTable.PSVersion)
 if (Get-Command claude -ErrorAction SilentlyContinue) { Write-Host "  [PASS] claude on PATH" -ForegroundColor Green }
-else { Write-Host "  [warn] claude NOT on PATH - the terminal cannot hand off until Claude Code is installed + on PATH" -ForegroundColor Yellow }
+else { Write-Host "  [warn] claude NOT on PATH - install Claude Code (the CLI, or the desktop app's CLI) to work in a project" -ForegroundColor Yellow }
 
 Section "pointers"
 & $ps -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check_pointers.ps1') -Hub $hub -MemoryDir $memDir | Out-Null

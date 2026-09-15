@@ -1,8 +1,8 @@
 name: selftest
 
 # Run the engine self-test on every push / PR. selftest.ps1 is the gate (it must exit 0):
-# it parses + ASCII-checks every .ps1, scaffolds into a throwaway hub, drives the terminal with a
-# stub `claude`, fuzzes the registry parser, and more.
+# it parses + ASCII-checks every .ps1, scaffolds into a throwaway hub, exercises the PreToolUse guard,
+# fuzzes the registry parser, and more.
 
 on:
   push:

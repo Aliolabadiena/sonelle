@@ -2,8 +2,8 @@
   build_plugin.ps1 - (re)generate the Claude Code PLUGIN under plugin\ from the canonical skills in
   templates\skills. The plugin packages sonelle's reusable SKILLS so anyone can install them into
   their own Claude Code via the marketplace (.claude-plugin\marketplace.json at the repo root)
-  WITHOUT cloning the engine. The terminal / dispatcher / GUI are NOT plugin-able (they run outside
-  claude); skills are the portable layer - which is exactly what a plugin is for.
+  WITHOUT cloning the engine. The dispatcher + the PowerShell tools are NOT plugin-able (they need the
+  hub and the registry on disk); skills are the portable layer - which is exactly what a plugin is for.
 
   templates\skills is the SINGLE SOURCE OF TRUTH; this just mirrors it into the plugin layout, and
   selftest section 12 rebuilds into a temp dir and diffs, so the committed plugin can never drift.

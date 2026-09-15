@@ -2,7 +2,7 @@
 
 ## Engine vs your data
 - **sonelle (this repo) = the ENGINE.** Reusable mechanism: dispatcher, registry format,
-  templates, scaffold/heal/improve tools, the terminal. **No personal data.**
+  templates, scaffold/heal/improve tools, hooks, skills. **No personal data.**
 - **Your projects = separate.** Created *using* sonelle, but they are not sonelle. Their code,
   state (TODO/ledger), and memory live in your own hub, never in this repo.
 
@@ -11,11 +11,13 @@ create new projects in.
 
 ## The flow
 ```
-you ── "myproj: do X" ──> sonelle.ps1 (terminal)
-                             │  reads PROJECTS.md (registry, single source of truth)
-                             ├─ found ──> cd <code path> ──> claude  (your subscription)
-                             └─ not found ──> offer :new ──> new_project.ps1 ──> registry row
+you ── "myproj: do X" ──> your Claude Code session (opened in the hub)
+                             │  reads CLAUDE.md (dispatcher) + PROJECTS.md (registry, single source of truth)
+                             ├─ found ──> read that row's state ──> work in <code path>
+                             └─ not found ──> ask, then new_project.ps1 ──> registry row
 ```
+There is no launcher process: the dispatch is a convention the session follows, and every step of it is
+a file it can read or a tool it can run.
 - `CLAUDE.md` = the dispatcher a Claude session reads to orient (read state first, never guess).
 - `PROJECTS.md` = the only roster. Rows added via `new_project.ps1`, not by hand.
 - Per project: `<SHORT>_TODO.txt` (tasks), `_<short>_run_STATUS.md` (ledger),
@@ -33,56 +35,51 @@ you ── "myproj: do X" ──> sonelle.ps1 (terminal)
 
 ## CLAUDE.md load behavior (important)
 Claude Code auto-loads `CLAUDE.md` from the working directory up to the project/git root - NOT from an
-arbitrary engine path. The terminal `Push-Location`s into the PROJECT's code dir before calling `claude`,
-so the working session loads the PROJECT's `CLAUDE.md` (the per-project pointer that carries the
-read-state-first + end-of-task ritual), not this engine's dispatcher. That is intended: the terminal
-already did the routing. The engine root `CLAUDE.md` is the dispatcher for a human who opens `claude`
-directly inside the sonelle folder. If `-Hub` points at a workspace that has its OWN `CLAUDE.md`, that file
-governs its sessions - sonelle's routing only reads `PROJECTS.md` and does not merge hub-level dispatchers.
-For *developing the engine itself*, the terminal's `:dev` command (or the grammar with the engine's own
-name as the shortcode - `<engine-name>: <prompt>`, derived from the engine folder name and special-cased
-in `Route`, never the registry) opens a session in the engine root seeded with `docs\DEVELOPING.md` (the
-engine-dev invariants), which overrides the dispatcher framing of the root `CLAUDE.md` for that one session.
+arbitrary engine path. That is what decides which dispatcher governs a session:
+- Open Claude Code in the **hub** -> it loads the hub's `CLAUDE.md` (this engine's dispatcher template),
+  so the grammar + registry routing above apply, and the session works in a project's code path from there.
+- Open it directly in a **project's** folder -> it loads that project's `CLAUDE.md` (the per-project
+  pointer carrying read-state-first + the end-of-task ritual) and no routing is needed.
+- Open it in the **engine** folder -> you are developing the engine: `docs\DEVELOPING.md` is the authority
+  for that session and overrides the dispatcher framing of the root `CLAUDE.md`. Addressing the engine by
+  its own name (`<engine-name>: <prompt>`) means the same thing - never a registry lookup.
 
-## Multi-instance (lanes)
-`bin\sonelle_team.ps1 <proj> -Lanes a,b,c` runs up to 5 parallel `claude` sessions on one project, each a
-LANE scoped to a disjoint workstream (e.g. bugs / concepts / website). They do NOT share live memory -
-they coordinate via a shared board at `<code>\.sonelle\lanes\` (one status file per lane) + DISJOINT file
-ownership (critical when the project has no git merge safety). Windows Terminal tabs if `wt` is
-installed, else separate PowerShell windows. `:team` / `:status` in the terminal wrap it. Hard cap 5;
->3 warns about rate limits (N lanes ~= Nx subscription usage).
+A hub with its OWN `CLAUDE.md` governs its own sessions; sonelle's tools only read `PROJECTS.md` and never
+merge hub-level dispatchers.
 
-## Autonomy, guard hooks + onboarding (terminal features)
-- **Skip permission prompts (yolo):** by default `claude` asks before risky actions. Set `SONELLE_YOLO=1`
-  (or launch with `-Yolo`), which runs `claude --permission-mode bypassPermissions`
-  so it never asks. In any terminal you can also toggle it live with `:yolo` (or `:yolo on|off`), or set it
-  permanently via `sonelle.config.json` -> `models.orchestratorPermissionMode: "bypassPermissions"`.
-- **PreToolUse guard + slash commands + inherent altitude (v1.36):** because yolo removes claude's own
-  permission prompts, the engine and every scaffolded project ship a **PreToolUse guard hook**
+## Parallelism
+sonelle ships no lane launcher. Run several workstreams with Claude Code's own subagent / workflow tools
+inside one session, or open multiple sessions on **git worktrees** with DISJOINT file ownership (that
+disjointness is the load-bearing part, especially on a project without git merge safety). Note the cost:
+N concurrent sessions burn roughly Nx the subscription usage.
+
+## Autonomy + guard hooks
+- **Permission modes** are Claude Code's own (`default` / `acceptEdits` / `plan` / `bypassPermissions`,
+  etc.) - set them in the session rather than through sonelle.
+- **The operating policy** (proactively pick the workflow, delegate breadth-first exploration to subagents
+  on multi-file work, verify with the right check unasked, heal on failure, run the end-of-task ritual,
+  and scale the ceremony down on a one-liner) lives in the dispatcher `CLAUDE.md` plus the hooks and the
+  skills below - it is read from files every session, not injected by a launcher.
+- **PreToolUse guard + slash commands:** because an autonomous permission mode removes claude's own
+  prompts, the engine and every scaffolded project ship a **PreToolUse guard hook**
   (`.claude\hooks\pretooluse_guard.ps1`, wired in `.claude\settings.json`) - claude runs it BEFORE every
   `Write`/`Edit`/`Bash` and it EXITS 2 to block the call (feeding the reason back to claude) or 0 to allow,
   failing open on any error so it can never break a session. The engine guard enforces the house rule
   (pure-ASCII `.ps1`) and invariant #4 (no hub state / `new_project` / plain `log_lesson` at the engine
   root) and blocks force-push; the project guard blocks force-push and is yours to extend. **Slash
   commands** (`.claude\commands\`: `/selftest /heal /ship /ritual`) turn the rituals into one keystroke.
-  And `bin\sonelle.ps1` appends a one-line **operating policy** to every project/engine session via
-  `--append-system-prompt`, so claude decides the workflow from the task itself: delegate hard / multi-file
-  work to subagents, verify a change against the right check, heal a failure, and run the end-of-task ritual
-  when done - scaling down to nothing on a one-liner. The `general:` lane gets a minimal no-state variant.
-  selftest 8h (+ 5d) cover all of it.
-- **Onboarding primer, :adopt, and the general lane (v1.37):** `-Bare` mode
-  greets you with a short no-claude primer (how to make a project, adopt an existing one, run a task,
-  connect claude) instead of a blank prompt; `help`/`?` shows the commands without ever calling claude.
-  **`:adopt <path>`** brings an existing, non-sonelle codebase into the workflow: it scaffolds the skeleton
-  over it (backing up any `CLAUDE.md`/`.claude\` to `*.pre-sonelle.bak` first), then asks claude to adapt
-  the generic scaffold to the real code - best-effort, and honest that a very different structure may need
-  a manual fix. **`general: <prompt>`** is a one-off lane for a quick question or throwaway task: it runs in
-  a neutral scratch dir (`%TEMP%\sonelle_general`) with no project, no registry row, and no saved state, so
-  it never clutters your real projects' memory or docs.
+  selftest 8h covers the guard behaviorally (block/allow) plus the wiring and the commands.
+- **Skills** (`.claude\skills\` + `templates\skills\`) are the other half of the policy: claude auto-loads
+  `systematic-debugging` / `verification-before-completion` / `plan-before-build` (engine + every project)
+  and the web trio (`frontend-design` / `design-review` / `accessibility-audit`) by task, so the discipline
+  arrives with the work instead of being remembered.
+- **Bringing an existing codebase in:** point `new_project.ps1` at it, or ask the session to adapt the
+  generic scaffold to the real code. Back up any existing `CLAUDE.md` / `.claude\` first.
+
 ## Billing
-The terminal hands prompts to `claude` (Claude Code), which runs on your Claude Pro/Max
-subscription — no API key for personal use. (Shipping this as a product to *other* users
-would require API-key auth; personal use does not.)
+You work in Claude Code, which runs on your Claude Pro/Max subscription — no API key for personal
+use. sonelle itself adds no billing path. (Shipping this as a product to *other* users would require
+API-key auth; personal use does not.)
 
 ## House rules
 - PowerShell scripts are **pure ASCII** (PS 5.1 misreads non-ASCII in a no-BOM `.ps1`).

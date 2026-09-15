@@ -2,7 +2,7 @@
 # mechanism, not just a reminder). Output is added to the session context.
 # This hook runs from <code>\.claude\hooks\. The memory index may live in the hub
 # (<hub>\memory\MEMORY.md) or alongside the project; we probe a few known spots and the
-# SONELLE_MEMORY env var (set by the terminal when it can), then fall back to a reminder.
+# SONELLE_MEMORY env var (set it yourself if your index lives elsewhere), then fall back to a reminder.
 $ErrorActionPreference = 'SilentlyContinue'
 $candidates = @(
   $env:SONELLE_MEMORY,
