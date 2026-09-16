@@ -34,7 +34,9 @@ $slOut = ($slj | & $ps -NoProfile -File (Join-Path $engine 'tools\statusline.ps1
 Ok "statusline renders usage" ($slOut -match 'sonelle.*5h 50%')
 
 Write-Host "== 2. scaffold into a temp hub =="
-$tmp = Join-Path $env:TEMP 'sonelle_selftest'
+# PID-scoped: two selftest runs at once must not delete each other's temp tree (the wave pattern runs
+# two reviewers in parallel and both run the suite). Same for every other fixed temp path below.
+$tmp = Join-Path $env:TEMP ('sonelle_selftest_' + $PID)
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 Copy-Item (Join-Path $engine 'CLAUDE.md')   (Join-Path $tmp 'CLAUDE.md')   -Force
@@ -66,7 +68,10 @@ foreach ($c in @('selftest', 'heal', 'ship', 'ritual')) { Ok ("project /$c comma
 # T2: golden snapshot - the template SET and the scaffold MANIFEST must stay stable, so an accidental
 # template/scaffold change that would alter every new project trips this test (a conscious change updates it).
 $tplDir  = Join-Path $engine 'templates'
-$tplGot  = @(Get-ChildItem $tplDir -Recurse -File | ForEach-Object { $_.FullName.Substring($tplDir.Length + 1).Replace('\', '/') } | Sort-Object)
+# v1.47: templates\hub\** (what install_hub.ps1 puts into a HUB's .claude) and templates\agents\**
+# (the review-only subagents) are NOT part of the per-project scaffold set - they are covered by their own
+# selftest.d sections. Excluded here so this golden keeps meaning "what new_project.ps1 scaffolds".
+$tplGot  = @(Get-ChildItem $tplDir -Recurse -File | ForEach-Object { $_.FullName.Substring($tplDir.Length + 1).Replace('\', '/') } | Where-Object { $_ -notmatch '^(hub|agents)/' } | Sort-Object)
 $tplWant = @('CLAUDE.template.md', 'TODO.template.txt', 'commands/heal.md', 'commands/ritual.md', 'commands/selftest.md', 'commands/ship.md', 'hooks/pretooluse_guard.ps1', 'hooks/session_start.ps1', 'hooks/stop.ps1', 'lesson.template.md', 'mcp.template.json', 'project_memory.template.md', 'run_STATUS.template.md', 'settings.template.json', 'skills/accessibility-audit/SKILL.md', 'skills/design-review/SKILL.md', 'skills/frontend-design/SKILL.md', 'skills/plan-before-build/SKILL.md', 'skills/systematic-debugging/SKILL.md', 'skills/verification-before-completion/SKILL.md') | Sort-Object
 Ok "template set is exactly the known golden (T2)" (($tplGot -join '|') -eq ($tplWant -join '|'))
 $manifestOk = $true
@@ -128,7 +133,7 @@ Ok "duplicate rejected (exit 1)"   ($LASTEXITCODE -eq 1)
 Write-Host "== 5e. new_project rolls back a partial scaffold (R1) =="
 # Point the code path at an existing FILE: the dir/index appends succeed, but writing CLAUDE.md INSIDE a
 # file path fails mid-scaffold - so the run must roll back (delete the TODO/ledger it already wrote, no row).
-$rbHub = Join-Path $env:TEMP 'sonelle_selftest_rb'
+$rbHub = Join-Path $env:TEMP ('sonelle_selftest_rb_' + $PID)
 if (Test-Path $rbHub) { Remove-Item $rbHub -Recurse -Force }
 New-Item -ItemType Directory -Path $rbHub -Force | Out-Null
 Copy-Item (Join-Path $engine 'PROJECTS.md') (Join-Path $rbHub 'PROJECTS.md') -Force
@@ -155,7 +160,9 @@ Ok "check_pointers exit 1 on a missing code path" ($LASTEXITCODE -eq 1)
 
 Write-Host "== 7. .gitignore ignores the private paths =="
 if (Get-Command git -ErrorAction SilentlyContinue) {
-  foreach ($f in @('sonelle.config.json', 'memory/x.md', 'FOO_TODO.txt', 'REPOMAP.md')) {
+  # .claude/settings.local.json carries machine-local paths + command history: invariant #3 must not
+  # depend on a machine-level git ignore for it, so the REPO's own .gitignore has to cover it.
+  foreach ($f in @('sonelle.config.json', 'memory/x.md', 'FOO_TODO.txt', 'REPOMAP.md', '.claude/settings.local.json')) {
     Ok "gitignored: $f" ([bool](git -C $engine check-ignore $f))
   }
 } else { Write-Host "  [skip] git not on PATH" -ForegroundColor DarkGray }
@@ -256,8 +263,8 @@ Ok "new_project scaffolds the skills tree into a project" ((Get-Content (Join-Pa
 
 Write-Host "== 9. config resolver (hub + memoryDir) =="
 . (Join-Path $PSScriptRoot '_registry.ps1')
-$fakeHub = Join-Path $env:TEMP 'sonelle_cfgtest_hub'   # real drive (Join-Path validates the drive); path need not exist
-$fakeMem = Join-Path $env:TEMP 'sonelle_cfgtest_mem'
+$fakeHub = Join-Path $env:TEMP ('sonelle_cfgtest_hub_' + $PID)   # real drive (Join-Path validates the drive); path need not exist
+$fakeMem = Join-Path $env:TEMP ('sonelle_cfgtest_mem_' + $PID)
 $r1 = Get-SonelleConfig -Engine $engine -HubOverride $fakeHub
 Ok "hub override wins"                  ($r1.Hub -eq $fakeHub)
 Ok "memory defaults to <override-hub>\memory" ($r1.MemoryDir -eq (Join-Path $fakeHub 'memory'))
@@ -300,7 +307,7 @@ Ok "no Python registry parser at all (Q2)" ($pyParserHits.Count -eq 0)
 
 Write-Host "== 9c. registry parser is robust to junk (T3) =="
 # Feed Get-SonelleProjects malformed rows: it must neither throw nor return junk, and must trim cells.
-$fuzzReg = Join-Path $env:TEMP 'sonelle_fuzz_PROJECTS.md'
+$fuzzReg = Join-Path $env:TEMP ('sonelle_fuzz_PROJECTS_' + $PID + '.md')
 $fuzzLines = @(
   '# Projects', '',
   '| Shortcode | Project | Code path |',          # capital header -> skipped
@@ -380,6 +387,24 @@ foreach ($sk in (Get-ChildItem (Join-Path $engine 'templates\skills') -Directory
   if ((Get-Content $a -Raw) -ne (Get-Content $b -Raw)) { $pdrift += $sk.Name }
 }
 Ok "committed plugin matches a fresh build (run build_plugin to resync)" ($pdrift.Count -eq 0)
+
+Write-Host "== 13. selftest.d sections (hooks / agents / prune) =="
+# Extension point: every tools\selftest.d\*.ps1 is dot-sourced HERE, so it inherits this script's scope -
+# $engine, $tmp, $ps and the Ok helper are all live. A section must not call exit (it would kill the run);
+# it reports through Ok like everything else. A section that throws is one FAIL, not a dead selftest.
+$sdDir = Join-Path $PSScriptRoot 'selftest.d'
+if (Test-Path $sdDir) {
+  $sdFiles = @(Get-ChildItem $sdDir -Filter *.ps1 -File -ErrorAction SilentlyContinue | Sort-Object Name)
+  if ($sdFiles.Count -eq 0) { Write-Host "  [skip] tools\selftest.d is empty" -ForegroundColor DarkGray }
+  foreach ($sd in $sdFiles) {
+    Write-Host ("-- section: " + $sd.Name)
+    try { . $sd.FullName }
+    catch {
+      Ok ("section " + $sd.Name + " ran without throwing") $false
+      Write-Host ("     " + $_.Exception.Message) -ForegroundColor DarkYellow
+    }
+  }
+} else { Write-Host "  [skip] tools\selftest.d not present" -ForegroundColor DarkGray }
 
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
 

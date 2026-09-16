@@ -123,6 +123,15 @@ if (Test-Path $skillsSrc) {
   $created.Add((Join-Path $Path '.claude\skills'))
   Write-Host "[+] $Path\.claude\skills (debug / verify / plan / frontend-design / design-review / a11y)"
 }
+# named subagents: claude resolves Agent subagent_type / Workflow agentType from .claude\agents.
+# reviewer + verifier are REVIEW-ONLY (no Edit/Write in their tools allowlist), implementer builds,
+# scout does cheap recon - the wave pattern is enforced by the role file, not by a prompt.
+$agentsSrc = Join-Path $tpl 'agents'
+if (Test-Path $agentsSrc) {
+  Copy-Item $agentsSrc (Join-Path $Path '.claude\agents') -Recurse -Force
+  $created.Add((Join-Path $Path '.claude\agents'))
+  Write-Host "[+] $Path\.claude\agents (reviewer / verifier / implementer / scout)"
+}
 # opt-in MCP servers (-Mcp): a project .mcp.json claude reads for extra tools. Default set is
 # sequential-thinking (planning) + git - both no-API-key. Needs Node (npx) and uv (uvx) present;
 # left out by default so a new project takes on no extra dependency unless it is asked for.

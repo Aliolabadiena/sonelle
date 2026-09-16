@@ -69,6 +69,23 @@ N concurrent sessions burn roughly Nx the subscription usage.
   root) and blocks force-push; the project guard blocks force-push and is yours to extend. **Slash
   commands** (`.claude\commands\`: `/selftest /heal /ship /ritual`) turn the rituals into one keystroke.
   selftest 8h covers the guard behaviorally (block/allow) plus the wiring and the commands.
+- **The hub enforcement layer (v1.47):** a HUB (not a project) gets five more hooks via
+  `tools\install_hub.ps1 -Hub <hub>`, which copies `templates\hub\hooks\*.ps1` into `<hub>\.claude\hooks\`
+  and MERGES `templates\hub\settings.json` into the hub's `settings.json` (permissions and foreign hooks
+  untouched; `-Uninstall` reverses exactly that). `prompt_router` (UserPromptSubmit) records a per-session
+  mode - DELEGATE / MINI / QUESTION - plus HOLD and the project dispatch, and injects one line of context;
+  `hold_guard` (matcher `.*`) turns "palauk" into a full stop for every tool; `main_agent_guard` keeps the
+  main agent out of code edits in DELEGATE/QUESTION (state files and docs exempt) and enforces model
+  tiering; `reviewer_guard` keeps the `reviewer`/`verifier` subagents read-only through a shell;
+  `stop_guard` requires a turn to end with text (and an optional canary) and nudges `/prune` on a cadence.
+  Fail-open everywhere, `docs\ENFORCEMENT.md` for the detail, `tools\selftest.d\hooks.ps1` for the proof.
+- **Named subagents + the wave pattern (v1.47):** `templates\agents\` (mirrored in `.claude\agents\`,
+  copied into every hub by `install_hub.ps1` and into every project by `new_project.ps1`) defines
+  `reviewer` / `verifier` (read-only by `tools:` allowlist), `implementer` and `scout`. The wave is
+  brief -> implement (disjoint file ownership) -> review -> fix -> verify -> selftest (`docs\AGENTS.md`).
+- **Memory hygiene (v1.47):** `tools\prune.ps1` + `tools\memory_lint.ps1`, surfaced as the `/prune` slash
+  command in a hub; they MOVE stale memory and old ledger sections into `_archive\` and repair dangling
+  `[[links]]`, never deleting (`docs\PRUNE.md`).
 - **Skills** (`.claude\skills\` + `templates\skills\`) are the other half of the policy: claude auto-loads
   `systematic-debugging` / `verification-before-completion` / `plan-before-build` (engine + every project)
   and the web trio (`frontend-design` / `design-review` / `accessibility-audit`) by task, so the discipline

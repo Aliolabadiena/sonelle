@@ -21,13 +21,20 @@ zero-hallucination onboarding, project **healing**, and **self-improvement from 
    (or just use a shortcode that isn't in the registry yet: the dispatcher offers to scaffold it).
 5. Work:  type `myproj: do the thing` — the session reads that project's state first, then works.
 6. Attach an image:  drop it into the Claude Code prompt, or name the path in the message.
-7. Verify the engine:  `powershell -File tools\selftest.ps1`
-8. Improve sonelle itself:  open Claude Code **in the engine folder** - `docs\DEVELOPING.md` carries the
+7. *(recommended)* Install the **enforcement layer** into your hub:
+   `powershell -File tools\install_hub.ps1 -Hub <your hub> -Canary "Name," -Owner "Name"`
+   - five guard hooks + the `/prune` command + the review-only subagents land in `<hub>\.claude\`
+   (idempotent; `-Uninstall` removes exactly what it added). What each guard blocks and how to turn one
+   off: `docs\ENFORCEMENT.md`.
+8. Verify the engine:  `powershell -File tools\selftest.ps1`
+9. Improve sonelle itself:  open Claude Code **in the engine folder** - `docs\DEVELOPING.md` carries the
    engine-dev invariants. Keep `selftest` green before committing.
 
 **Parallelism is native now.** Run several workstreams with Claude Code's own Agent / Workflow tools,
 or open more than one session on git worktrees with disjoint file ownership. sonelle no longer ships a
-lane launcher of its own.
+lane launcher of its own - what it does ship is the **wave pattern** and the named subagents that make it
+safe: `implementer` (writes, disjoint files), `reviewer` / `verifier` (**read-only**, enforced by their
+`tools:` allowlist and by a hook) and `scout` (cheap recon). See `docs\AGENTS.md`.
 
 ## The three capabilities (honest about what's mechanism vs discipline)
 - **Scaffold** (real mechanism) — new projects in one command, consistently structured (`tools\new_project.ps1`).
@@ -37,13 +44,21 @@ lane launcher of its own.
   fresh project no longer reports HEALTHY while checking nothing. The diagnose->fix->verify loop is
   Claude-driven; a **Stop hook** (`.claude/settings.json`) auto-runs each project's check after every
   task (`docs\HEAL.md`).
+- **Enforce** (v1.47, real mechanism) - the rules that kept being re-stated in prose are hooks now:
+  `tools\install_hub.ps1 -Hub <hub>` installs five PreToolUse/UserPromptSubmit/Stop guards into a hub -
+  a **HOLD** ("palauk" = full stop for every tool), **delegate-by-default** (in DELEGATE mode the main
+  agent briefs a subagent instead of editing code, by hand or through a shell), **model tiering**,
+  **review-only** reviewer/verifier subagents, and a Stop check that a turn ends with text (plus an
+  optional canary). All fail-open; all covered behaviorally by selftest (`docs\ENFORCEMENT.md`).
 - **Self-improve** (capture + recall as mechanism) — `tools\log_lesson.ps1` writes lessons; the
   **SessionStart hook surfaces the memory index INTO context** (not just a reminder to read it), and a
   **Stop hook** prompts capture after — so the loop runs via the harness, not just discipline
   (`docs\SELF_IMPROVE.md`). Two stores: personal /
   per-project lessons -> gitignored hub `memory/`; **generic, reusable** lessons (`-Shared`) ship IN
   the engine at `knowledge/` (public, ASCII), so a fresh clone already knows them. Hooks ship in
-  `.claude/` and are scaffolded into every new project.
+  `.claude/` and are scaffolded into every new project. Memory only grows, so `tools\prune.ps1` +
+  `tools\memory_lint.ps1` (the `/prune` command) archive stale project memory and ledger sections and fix
+  dangling `[[links]]` - never deleting, only moving (`docs\PRUNE.md`).
 
 ## Runs on your Claude subscription
 You work in Claude Code, which runs on your Pro/Max plan — **no API key needed for personal use.**
@@ -62,7 +77,10 @@ sonelle adds no billing path of its own; it is files and PowerShell tools that t
 | `tools\check_pointers.ps1` | validate every registry pointer resolves |
 | `tools\doctor.ps1` | health check / heal detector for a project |
 | `tools\log_lesson.ps1` | capture a lesson into memory (self-improve) |
-| `tools\selftest.ps1` | end-to-end self-test (dogfoods scaffold/heal into a temp hub) |
+| `tools\selftest.ps1` | end-to-end self-test (dogfoods scaffold/heal into a temp hub; `tools\selftest.d\*.ps1` are its sections) |
+| `tools\install_hub.ps1` + `templates\hub\` | install the enforcement layer (five hooks + `settings.json` merge + `/prune` + agents) into a hub; `-Uninstall` reverses it |
+| `templates\agents\` + `.claude\agents\` | the named subagents: `reviewer` / `verifier` (read-only), `implementer`, `scout` - copied into every hub and every new project |
+| `tools\prune.ps1` + `tools\memory_lint.ps1` | archive stale memory / ledger sections (never delete) + lint dangling `[[links]]` and the memory index |
 | `tools\statusline.ps1` | usage status line: 5h/7d rate-limit %, context % |
 | `tools\cost.ps1` | estimate Claude token use + cost from local transcripts, per project |
 | `tools\repomap.ps1` | structural repo map - top-level symbols per file, a primer for large repos |
@@ -70,7 +88,7 @@ sonelle adds no billing path of its own; it is files and PowerShell tools that t
 | `.claude\hooks\` + `.claude\commands\` | the PreToolUse guard + `/selftest /heal /ship /ritual`, scaffolded into every project |
 | `assets\icon\` | project icon: `sonelle.svg` (vector) + `make_icon.py` -> `sonelle.ico` / `sonelle.png` |
 | `templates\` | project skeletons used by `new_project` |
-| `docs\` | `HEAL.md`, `SELF_IMPROVE.md`, `ARCHITECTURE.md`, `DEVELOPING.md` (how to improve the engine) |
+| `docs\` | `HEAL.md`, `SELF_IMPROVE.md`, `ARCHITECTURE.md`, `DEVELOPING.md` (how to improve the engine), `ENFORCEMENT.md` (the hooks), `AGENTS.md` (the subagents + the wave pattern), `PRUNE.md` (memory hygiene), `HOOK_PAYLOADS.md` (what a hook actually receives) |
 
 ## Engine vs hub (where things live)
 The **engine** assets (this repo: `tools/`, `templates/`, `docs/`, `.claude/`) are always read

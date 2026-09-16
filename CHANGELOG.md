@@ -1,5 +1,52 @@
 # Changelog
 
+## v1.47 - 2026-09-16 (enforcement: the house rules are hooks now, not prose)
+A rule in `CLAUDE.md` is a wish; a PreToolUse hook is a wall. v1.47 turns the rules that had to be
+re-stated after a session broke them into hooks a HUB installs, adds the review-only subagents that make
+adversarial review real, and gives memory a prune cadence so the brain stops growing forever.
+- **NEW `tools\install_hub.ps1`** + `templates\hub\`: installs five guards into `<hub>\.claude\hooks\`
+  and MERGES `templates\hub\settings.json` into the hub's `settings.json` - `permissions` and any hook of
+  your own are kept (ours are recognised by the full `.claude\hooks\<name>` path, so a hook of yours
+  whose name merely contains one of ours survives). Idempotent; `-Uninstall` removes exactly what it
+  added; `-Canary` / `-Owner` write `<hub>\.claude\sonelle.hub.json`. It also copies the `/prune`
+  command (filling in `<engine>` / `<hub>`) and `templates\agents\`.
+- **Main-vs-subagent detection uses two signals**: `agent_id`/`agent_type` AND the payload's `transcript_path`
+  (`\subagents\` dir or `agent-<hex>.jsonl` leaf) - so DELEGATE never denies a subagent even if the id fields are
+  missing on a given Claude Code build (`docs\HOOK_PAYLOADS.md`).
+- **The five hooks** (all fail-OPEN, all ASCII, all covered behaviorally by selftest):
+  `prompt_router` (UserPromptSubmit) records DELEGATE / MINI / QUESTION per session, sets and releases a
+  HOLD, notes a `fable ok` allowance and resolves `<short>:` against `PROJECTS.md`; `hold_guard`
+  (matcher `.*`, allowlist inside the hook) makes "palauk" a full stop for EVERY tool - chained shell
+  commands are judged segment by segment, and an unlisted MCP write is denied; `main_agent_guard` keeps
+  the main agent out of code in DELEGATE/QUESTION (by hand or through a shell) and enforces model tiering;
+  `reviewer_guard` keeps `reviewer`/`verifier` read-only through a shell (chains, newlines and nested
+  shells included); `stop_guard` requires a turn to end with TEXT (+ optional canary) and nudges `/prune`
+  as hook JSON. Full reference: `docs\ENFORCEMENT.md`, payload shapes in `docs\HOOK_PAYLOADS.md`.
+- **NEW `templates\agents\`** (mirrored in `.claude\agents\`, scaffolded into hubs and projects):
+  `reviewer` / `verifier` are read-only by `tools:` allowlist AND by hook, `implementer` writes,
+  `scout` is cheap recon - plus the wave pattern in `docs\AGENTS.md`.
+- **NEW `tools\prune.ps1` + `tools\memory_lint.ps1`** (the `/prune` command, `docs\PRUNE.md`): archive
+  stale project memory and old ledger sections into `_archive\` (MOVE, never delete; feedback/user memory
+  is never auto-archived), repair dangling `[[links]]` and stale index lines, and stamp
+  `.claude\sonelle_prune_stamp` so the Stop nudge resets.
+- **selftest**: new `tools\selftest.d\` sections (`hooks`, `agents`, `prune`) dot-sourced by
+  `selftest.ps1`. The hooks section feeds every guard synthetic stdin, including the bypasses found in
+  review (a test-runner word laundering a chain, a newline-separated command, `sh -c "..."`, a first-token
+  read-only chain under HOLD, `find -delete`, a `scratchpad` substring, `*_HOLD` filenames) and a
+  behavioral fail-open pass (empty / junk / partial stdin -> exit 0). Every temp path and session id now
+  carries the PID, so two suites can run at once - which the wave pattern does.
+- **Shell-guard hardening (second review pass)**: the deny/allow patterns are anchored to a command
+  boundary, and three disguises that hid a verb from that anchor are now normalized away in
+  `reviewer_guard`, `main_agent_guard` and `hold_guard` alike - a launcher prefix (`sudo rm -rf x`,
+  `find . | xargs rm`, `time rm x`), a command substitution (`echo "$(rm -rf x)"`, backticks, `<<<`) and a
+  nested shell's `-c` flag. Conversely, quote flattening now happens ONLY when a shell/interpreter really
+  is invoked, so the evidence commands a review lives on (`grep -rn "Remove-Item" .`) are no longer denied
+  for quoting a verb - in either the reviewer guard or the HOLD allowlist.
+- **Docs**: README quick start gained the install step and the new rows; `docs\ARCHITECTURE.md` and the
+  engine `CLAUDE.md` describe the hub layer; `templates\CLAUDE.template.md` carries the wave pattern.
+  `.gitignore` now also ignores `.claude/settings.local.json` (it holds local paths - invariant #3 was
+  relying on a machine-level ignore for it).
+
 ## v1.46 - 2026-09-16 (the terminal is gone - sonelle is a Claude Code workflow, not a launcher)
 v1.43 dropped the watcher dashboard, v1.44 the GUI app; this removes the last wrapper. The owner works in
 Claude Code directly (desktop app / `claude` CLI), and Claude Code now natively covers everything the

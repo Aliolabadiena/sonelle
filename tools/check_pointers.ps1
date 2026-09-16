@@ -50,6 +50,9 @@ if (-not (Test-Path $pf)) {
   }
 }
 
+# memory lint, report-only: it prints its own findings and ONLY dangling [[links]] flip this script to MISS/exit 1.
+try { Write-Host "[check] memory lint (report-only; only DANGLING links fail this check):"; $lintOut = @(& (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'memory_lint.ps1') -MemoryDir $memDir); $lintOut | ForEach-Object { Write-Host ("  " + $_) }; if (($lintOut -join "`n") -match 'dangling links: [1-9]') { Write-Host "  [MISS] memory lint: dangling [[links]] - run tools\memory_lint.ps1 -MemoryDir <dir> -Fix" -ForegroundColor Red; $script:miss++ } } catch { Write-Host ("  (memory lint skipped: {0})" -f $_.Exception.Message) }
+
 Write-Host ""
 $col = 'Green'; if ($script:miss -gt 0) { $col = 'Red' }
 Write-Host ("[check] DONE: {0} OK, {1} MISS." -f $script:ok, $script:miss) -ForegroundColor $col

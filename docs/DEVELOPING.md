@@ -93,3 +93,30 @@ terminal/REPL to maintain (removed in v1.46).
 ## Releasing
 Bump `CHANGELOG.md` (new top entry), keep README's "What's inside" table current, run selftest,
 commit, push. There are no version tags yet - the CHANGELOG is the source of truth.
+
+## Agents (v1.47) - the wave pattern, enforced
+Four named subagents live in `templates\agents\` (source of truth), byte-identical in the engine's
+`.claude\agents\`, copied into a hub by `install_hub.ps1` and into every project by `new_project.ps1`:
+`reviewer` and `verifier` (opus, effort high, **read-only**: the `tools:` allowlist carries no
+`Edit`/`Write`/`MultiEdit`/`NotebookEdit`, and `disallowedTools:` repeats the ban), `implementer`
+(opus, full tools, `permissionMode: acceptEdits`) and `scout` (haiku, Read/Grep/Glob, cheap recon).
+Full reference: `docs\AGENTS.md`.
+
+Wave pattern for an engine change that is too big for one context: **brief** (add `scout` first if you
+do not know the file map) -> **implement** in parallel with DISJOINT file ownership (`agentType:
+'implementer'`) -> **review** with fresh context against the spec (`agentType: 'reviewer'`) -> **fix**
+(`implementer`, ownership still disjoint) -> **verify** the headline claim (`agentType: 'verifier'`),
+then `tools\selftest.ps1` ALL PASS. Two agents must never own the same file in one wave; anything an
+agent needs outside its set comes back as a blocker, not as an edit.
+
+Rules that matter here: pass `agentType` and let the agent file decide model/effort/tools - do not
+re-specify `model:` per call, and never `model: 'fable'` for agent work (Fable orchestrates and writes
+specs; the hub's `main_agent_guard` hook blocks it anyway). Review-only means read-only: a reviewer may
+run the test suite for evidence but nothing that mutates the tree, and the hub's `reviewer_guard` hook
+denies the mutating commands its shell could otherwise reach. A reviewer that fixes what it found has
+destroyed its own independence - findings go back through an `implementer`.
+
+When you change an agent: edit the template, mirror it into `.claude\agents\`, and extend
+`tools\selftest.d\agents.ps1` (frontmatter present, read-only allowlists intact, scaffold reaches a new
+project) - invariant #2 applies to agents like everything else. Keep the bodies generic: a role
+definition in a public repo carries no project names, paths or personal data (invariant #3).

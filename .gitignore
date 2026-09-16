@@ -6,6 +6,9 @@
 # your local hub path - machine-specific
 sonelle.config.json
 
+# per-machine Claude Code settings (local paths + command history)
+.claude/settings.local.json
+
 # any brain/memory created in a workspace
 memory/
 

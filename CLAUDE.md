@@ -45,15 +45,26 @@ end-of-task ritual below. Scale the ceremony to the task: never over-process a o
 question. The `/selftest`, `/heal`, `/ship` and `/ritual` slash commands bundle these as single steps.
 
 ## Enforcement (hooks)
-`.claude/settings.json` wires a **SessionStart** hook (recall reminder) and a **Stop** hook (auto-runs
-the project's `sonelle.check.ps1` + a capture reminder) so the heal/self-improve loop runs via the harness,
-not just goodwill. Ships in the engine and is scaffolded into every new project by `new_project.ps1`.
+Per project: `.claude/settings.json` wires a **SessionStart** hook (recall reminder), a **Stop** hook
+(auto-runs the project's `sonelle.check.ps1` + a capture reminder) and a **PreToolUse guard**, so the
+heal/self-improve loop runs via the harness, not just goodwill. Ships in the engine and is scaffolded into
+every new project by `new_project.ps1`.
+
+Per hub (v1.47, opt in with `tools\install_hub.ps1 -Hub <hub>`): five more hooks that make the house rules
+unbypassable - **HOLD** ("palauk/sustok/stop" opening a message = a full stop for every tool until a
+release word), **DELEGATE / MINI / QUESTION** mode (in DELEGATE the main agent briefs a subagent instead of
+editing code itself - by hand or through a shell; state files, briefs and docs stay exempt), **model
+tiering** (subagents run opus; a Fable subagent needs "fable ok"), **review-only** `reviewer`/`verifier`
+subagents, and a Stop check that the turn ends with text for you (+ an optional canary) and that memory
+gets pruned on a cadence. Every guard fails OPEN. Detail: `docs\ENFORCEMENT.md`, `docs\AGENTS.md`,
+`docs\PRUNE.md`.
 
 ## End-of-task ritual (mandatory, every task)
 1. Update the project's **TODO** ([x] + short note) and **ledger** (what was done, new gotchas,
    and exact RESUME instructions if unfinished).
 2. **SELF-IMPROVE**: capture any lesson / gotcha / feedback into `memory/` (`log_lesson.ps1`).
 3. **Validate**: `tools\check_pointers.ps1` — every registry pointer must still resolve.
+   Monthly (the Stop hook nudges): `/prune` — archive stale memory + ledger sections.
 4. If you keep an off-engine brain backup, sync/commit it (that's your data, not sonelle).
 Never leave knowledge only in chat — chat vanishes, files remain.
 
