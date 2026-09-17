@@ -62,9 +62,28 @@ unaccented spellings behave the same.
   and an accidental HOLD freezes every session on that hub. A release word (`ok`, `gerai`, `tesk`,
   `daryk`, `start`, `go`, `pirmyn`, `continue`, `tvarkyk`) opening a later prompt - a lead-in clause like
   `ne, tesk toliau` counts - deletes it, and the HOLD message says so.
-- **Mode**: `mini` anywhere -> MINI. A question (ends in `?`, or opens with `ar/kiek/kas/kodel/kaip/kur/
-  kada/koks/kokia/kuris/why/what/how/is/are/does/do/can`) -> QUESTION. A short remark with no `<short>:`
-  grammar and no task verb -> MINI. Everything else -> DELEGATE.
+- **Mode (STICKY since v1.47.1)**: the mode is a *standing* decision for the session, not a guess re-made
+  on every prompt. In order:
+  - `mini` -> the standing mode becomes **MINI**;
+  - `deleguok` / `deleguoti` / `delegate` / `agentams` / `agentui` / `subagent...` / `banga(-os/-as)` /
+    `workflow` -> the standing mode becomes **DELEGATE**. If both words appear, the one said **first**
+    wins - the other is commentary (`mini, nereikia deleguoti sito`);
+  - neither word -> the standing mode is whatever the session already had, and for a brand-new session
+    the **hub default**: `<hub>\.claude\sonelle.hub.json` `"defaultMode": "MINI" | "DELEGATE"`, written by
+    `install_hub.ps1 -DefaultMode`. Missing or unrecognised -> `MINI`, because that is the direction in
+    which `main_agent_guard` never blocks: a wrong MINI default costs an un-spawned subagent, a wrong
+    DELEGATE default costs a denied one-liner all session long;
+  - a question (ends in `?`, or opens with `ar/kiek/kas/kodel/kaip/kur/kada/koks/kokia/kuris/why/what/
+    how/is/are/does/do/can`) -> **QUESTION** for *that prompt only*; the standing mode is untouched, and
+    the next non-question prompt returns to it.
+
+  The state file carries both: `mode` (effective for this prompt, what the guard reads) and `sticky` (the
+  standing one). The injected line names the effective mode, and the standing one too when they differ:
+  `sonelle mode: QUESTION (standing: MINI) - ...`. Why: until v1.47.1 the mode was recomputed from
+  scratch every prompt, so a `mini` said in the first message was gone by the second and the guard denied
+  trivial one-line edits for the rest of the session (2026-09-17). The old "short prompt with no task
+  verb -> MINI" heuristic is gone with it - guessing the mode from prompt shape is what made a stated
+  decision evaporate.
 - **Fable allowance**: `fable ok` in a prompt sets `fable_ok` for the session.
 - **Dispatch**: `[address,] <short>: ...` looks the shortcode up in `<hub>\PROJECTS.md` and injects the
   row's "state sources" column - or, when the shortcode is unknown and is not one of the non-project words
@@ -126,7 +145,12 @@ call, subagent or not.
   anything under `memory\`, `CLAUDE.md`, `PROJECTS.md`, `_*_SPEC|PLAN|BRIEF|HANDOFF*.md`, `_*_waves\`,
   `.claude\`, a `scratchpad\` **directory** (not a filename that merely contains the word), `%TEMP%`,
   `/dev/null`, and any `.md` under the hub root. MINI mode - or no recorded mode at all - allows
-  everything.
+  everything, and the DELEGATE deny message says so (`Say "mini" to switch this session to inline mode.`).
+  Two things that look like a redirect but are not, excluded before the `>` test (v1.47.1): an address in
+  angle brackets anywhere (`<[^<>\s]+@[^<>\s]+>`), so a `Co-Authored-By: X <name@host>` trailer in
+  `git commit -F - <<'EOF' ...` is not a write; and quoted text in a command whose first token is `git`
+  (`git commit -m "perf: a > b"`), but **only** when the line does not also invoke a shell - so
+  `git status && sh -c "echo x > src\a.ts"` stays denied.
 - **Model tiering.** An `Agent` call with `model: fable`, or a `Workflow` script (inline `script` or a
   `scriptPath` read from disk) that sets `model: 'fable'`, is denied unless the session heard `fable ok`.
 
@@ -181,7 +205,9 @@ loop) and looks at the last assistant message:
 
 ## When a guard is wrong
 
-- **One call**: rephrase or say `mini` - MINI mode turns the delegate rule off for the session.
+- **One call**: rephrase or say `mini` - MINI is the standing mode from then on, so the delegate rule is
+  off for the rest of the session (say `deleguok` to put it back). To start every session that way,
+  `install_hub.ps1 -Hub <hub> -DefaultMode MINI`.
 - **One session**: `$env:SONELLE_HUB` is only for tests; to disable a hook for real, remove its entry from
   `<hub>\.claude\settings.json` (or run `-Uninstall`) and restart the session - hooks are read at startup.
 - **Permanently**: change the hook in `templates\hub\hooks\`, extend `tools\selftest.d\hooks.ps1` with the
@@ -195,6 +221,9 @@ synthetic payloads on stdin as raw UTF-8 - HOLD set/release including the prompt
 chained and nested-shell commands under a HOLD, the tool-coverage allowlist, delegate deny vs state-file
 allow, shell writes, the scratchpad path rule, caller detection (`agent_id` / `agentId` / a role in
 `agent_type` / a subagent-shaped `transcript_path`, including the malformed ones that must fall back),
+sticky MINI/DELEGATE across prompts, the hub `defaultMode` (including a bogus value falling back to MINI),
+QUESTION as a one-prompt state that leaves the standing mode alone, the `git commit` trailer that is not a
+redirect (and the nested-shell redirect that still is),
 MINI/QUESTION, fable deny + allowance, Workflow script and scriptPath, the reviewer's
 chained / multi-line / nested-shell / `find -delete` denials and its read-only evidence commands,
 stop-guard block on a tool-only turn and on a missing canary, pass on a good turn and on a garbage

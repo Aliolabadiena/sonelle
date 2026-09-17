@@ -145,7 +145,8 @@ $r = Invoke-SonelleHook 'hold_guard.ps1' (New-Pre 's1' 'Edit' @{ file_path = $co
 Ok "hold: after release, Edit allowed" ($r.Code -eq 0)
 
 Write-Host "-- H1 modes + dispatch"
-$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 's2' 'demo: pataisyk weapon config bug ir paleisk testus')
+# the mode is STICKY and the hub default is MINI, so DELEGATE has to be ASKED for by name (see H1b)
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 's2' 'demo: deleguok agentams - pataisyk weapon config bug ir paleisk testus')
 Ok "router: DELEGATE mode line"        ($r.Out -match 'mode: DELEGATE')
 Ok "router: dispatch resolves a known shortcode to its state sources" ($r.Out -match 'dispatch: project demo .*DEMO_TODO\.txt')
 $r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 's9' 'nesamone: pataisyk visa pasauli ir paleisk testus')
@@ -181,10 +182,82 @@ foreach ($t in @('palauk', 'sustok, nieko nedaryk', 'sonelle, palauk su bangomis
   Ok "router: a lead-in clause before the release word still releases" (-not (Test-Path $holdFile))
 }
 # tolerant payload shapes (the prompt field name is not contractually fixed)
-$r = Invoke-SonelleHook 'prompt_router.ps1' @{ session_id = ('s8a_' + $PID); hook_event_name = 'UserPromptSubmit'; cwd = $hubT; user_prompt = 'demo: pataisyk bug ir paleisk testus' }
+$r = Invoke-SonelleHook 'prompt_router.ps1' @{ session_id = ('s8a_' + $PID); hook_event_name = 'UserPromptSubmit'; cwd = $hubT; user_prompt = 'demo: deleguok - pataisyk bug ir paleisk testus' }
 Ok "router: user_prompt field works"   ($r.Out -match 'mode: DELEGATE')
-$r = Invoke-SonelleHook 'prompt_router.ps1' @{ session_id = ('s8b_' + $PID); hook_event_name = 'UserPromptSubmit'; cwd = $hubT; message = 'demo: pataisyk bug ir paleisk testus' }
+$r = Invoke-SonelleHook 'prompt_router.ps1' @{ session_id = ('s8b_' + $PID); hook_event_name = 'UserPromptSubmit'; cwd = $hubT; message = 'demo: deleguok - pataisyk bug ir paleisk testus' }
 Ok "router: message field works"       ($r.Out -match 'mode: DELEGATE')
+
+Write-Host "-- H1b sticky mode + hub defaultMode"
+# The 2026-09-17 incident: the mode was recomputed from scratch on EVERY prompt, so "mini" said once was
+# gone by the next sentence and the guard denied one-line edits for the rest of the session. The mode is
+# a STANDING decision now; only an explicit word moves it, and QUESTION is the one per-prompt exception.
+$hubCfgT = Join-Path $hubT '.claude\sonelle.hub.json'
+function Get-ModeState([string]$sid) {
+  $p = Join-Path (Join-Path $env:TEMP 'sonelle') ('mode_' + $sid + '_' + $PID + '.json')
+  if (-not (Test-Path $p)) { return $null }
+  try { return (Get-Content $p -Raw | ConvertFrom-Json) } catch { return $null }
+}
+# (a) no hub config at all -> the standing mode is MINI, the direction in which the guard never blocks
+Ok "sticky: the test hub has no sonelle.hub.json yet" (-not (Test-Path $hubCfgT))
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm1' 'pataisyk header spalva')
+Ok "sticky: (a) no trigger word + default MINI -> MINI" ($r.Out -match 'mode: MINI')
+$stM = Get-ModeState 'sm1'
+Ok "sticky: (a) state records mode AND sticky" ($stM -and ($stM.mode -eq 'MINI') -and ($stM.sticky -eq 'MINI'))
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 'sm1' 'Edit' @{ file_path = $codeFile; old_string = 'a'; new_string = 'b' } $null)
+Ok "sticky: (a) the guard allows the inline code Edit" ($r.Code -eq 0)
+# (b) a hub can flip the default the other way
+[System.IO.File]::WriteAllText($hubCfgT, '{ "defaultMode": "DELEGATE" }', $u8h)
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm2' 'pataisyk header spalva')
+Ok "sticky: (b) hub defaultMode DELEGATE -> DELEGATE" ($r.Out -match 'mode: DELEGATE')
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 'sm2' 'Edit' @{ file_path = $codeFile } $null)
+Ok "sticky: (b) the guard denies the same Edit" (($r.Code -eq 2) -and ($r.Err -match 'DELEGATE mode'))
+Ok "sticky: (b) the deny says how to switch" ($r.Err -match 'Say "mini" to switch this session to inline mode')
+# an unknown value is not a licence to block: bad config falls back to MINI, never to DELEGATE
+[System.IO.File]::WriteAllText($hubCfgT, '{ "defaultMode": "NONSENSE" }', $u8h)
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm2b' 'pataisyk header spalva')
+Ok "sticky: invalid defaultMode falls back to MINI" ($r.Out -match 'mode: MINI')
+[System.IO.File]::WriteAllText($hubCfgT, '{ "owner": "Skipper" }', $u8h)
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm2c' 'pataisyk header spalva')
+Ok "sticky: a hub.json without defaultMode still means MINI" ($r.Out -match 'mode: MINI')
+Remove-Item $hubCfgT -Force
+# (c) "mini" once, and the NEXT prompt inherits it with no word at all
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm3' 'mini, tiesiai i main')
+Ok "sticky: (c) 'mini' sets the standing mode" ($r.Out -match 'mode: MINI')
+Ok "sticky: (c) the MINI line says it is standing" ($r.Out -match 'standing for this session')
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm3' 'pataisyk footer')
+Ok "sticky: (c) the SECOND prompt is still MINI" ($r.Out -match 'mode: MINI')
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 'sm3' 'Edit' @{ file_path = $codeFile } $null)
+Ok "sticky: (c) and the guard still allows the edit" ($r.Code -eq 0)
+# (d) ... until a delegate word moves it
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm3' 'deleguok sita banga')
+Ok "sticky: (d) 'deleguok' switches to DELEGATE" ($r.Out -match 'mode: DELEGATE')
+Ok "sticky: (d) the DELEGATE line says how to switch back" ($r.Out -match 'standing; say .{1,2}mini.{1,2} to switch')
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 'sm3' 'Edit' @{ file_path = $codeFile } $null)
+Ok "sticky: (d) the guard denies again" ($r.Code -eq 2)
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm3' 'pataisyk dar viena eilute')
+Ok "sticky: (d) DELEGATE is standing too (next prompt inherits it)" ($r.Out -match 'mode: DELEGATE')
+# (e) a question is answered first - but it is a ONE-PROMPT state, not a new standing mode
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm4' 'mini, dirbam tiesiai')
+Ok "sticky: (e) setup - standing MINI" ($r.Out -match 'mode: MINI')
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm4' 'ar liko klaidu?')
+Ok "sticky: (e) a question is QUESTION for this prompt" ($r.Out -match 'mode: QUESTION')
+Ok "sticky: (e) the line names the standing mode it did not touch" ($r.Out -match 'QUESTION \(standing: MINI\)')
+$stQ = Get-ModeState 'sm4'
+Ok "sticky: (e) state keeps sticky MINI under mode QUESTION" ($stQ -and ($stQ.mode -eq 'QUESTION') -and ($stQ.sticky -eq 'MINI'))
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 'sm4' 'Edit' @{ file_path = $codeFile } $null)
+Ok "sticky: (e) QUESTION still denies for this prompt" (($r.Code -eq 2) -and ($r.Err -match 'QUESTION mode'))
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm4' 'pataisyk footer')
+Ok "sticky: (e) the next non-question prompt is MINI again" ($r.Out -match 'mode: MINI')
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 'sm4' 'Edit' @{ file_path = $codeFile } $null)
+Ok "sticky: (e) and the edit is allowed again" ($r.Code -eq 0)
+# both words in one prompt: the one said FIRST is the instruction
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm5' 'mini, nereikia deleguoti sito')
+Ok "sticky: 'mini' before 'deleguoti' -> MINI" ($r.Out -match 'mode: MINI')
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm6' 'deleguok agentams, ne mini')
+Ok "sticky: 'deleguok' before 'mini' -> DELEGATE" ($r.Out -match 'mode: DELEGATE')
+# the removed heuristic: a long prompt with a task verb must NOT become DELEGATE on shape alone
+$r = Invoke-SonelleHook 'prompt_router.ps1' (New-Prompt 'sm7' 'demo: pataisyk weapon config bug, paleisk testus ir atnaujink ledgeri su rezultatais')
+Ok "sticky: a long task prompt with no trigger stays MINI (old length/verb heuristic is gone)" ($r.Out -match 'mode: MINI')
 
 Write-Host "-- H3 main_agent_guard"
 $r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 's2' 'Edit' @{ file_path = $codeFile; old_string = 'a'; new_string = 'b' } $null)
@@ -250,6 +323,25 @@ foreach ($c in @('git status', 'powershell -NoProfile -File tools\selftest.ps1',
 }
 $r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 's3' 'Bash' @{ command = 'echo x > C:\code\demo\src\a.gd' } $null)
 Ok "mini: shell write allowed"          ($r.Code -eq 0)
+# (f) a commit TRAILER is not a redirect. `Co-Authored-By: X <noreply@anthropic.com>` used to be denied
+# because the closing `>` of the address matched the redirect regex - which blocked the one shell command
+# the end-of-work ritual actually needs (2026-09-17).
+$heredocCommit = "git commit -F - <<'EOF'`nv1.47.1: sticky mode`n`nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`nEOF"
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 's2' 'Bash' @{ command = $heredocCommit } $null)
+Ok "delegate: (f) git commit heredoc with an <e-mail> trailer allowed" ($r.Code -eq 0)
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 's2' 'Bash' @{ command = 'git commit -m "perf: a > b in the hot loop"' } $null)
+Ok "delegate: '>' inside a quoted git commit message is not a redirect" ($r.Code -eq 0)
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 's2' 'Bash' @{ command = 'git log --format="%an <%ae>" -5' } $null)
+Ok "delegate: angle brackets in a quoted git format string are not a redirect" ($r.Code -eq 0)
+# ... and the exclusion must not become a loophole: an unquoted redirect, or one inside a NESTED SHELL,
+# is still a write even when the line starts with `git`.
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 's2' 'Bash' @{ command = 'git show HEAD:src/a.ts > C:\code\demo\src\a.ts' } $null)
+Ok "delegate: an unquoted redirect after git is still denied" ($r.Code -eq 2)
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 's2' 'Bash' @{ command = 'git status && sh -c "echo x > src\a.ts"' } $null)
+Ok "delegate: a redirect quoted into a nested shell is still denied" ($r.Code -eq 2)
+# (g) the plain case the exclusion must never touch
+$r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 's2' 'Bash' @{ command = 'cat > src\a.ts' } $null)
+Ok "delegate: (g) 'cat > src\a.ts' still denied" (($r.Code -eq 2) -and ($r.Err -match 'DELEGATE mode'))
 # the scratchpad exemption is a PATH COMPONENT, not a substring of a filename
 $r = Invoke-SonelleHook 'main_agent_guard.ps1' (New-Pre 's2' 'Edit' @{ file_path = 'C:\code\demo\scratchpad_evil.gd' } $null)
 Ok "delegate: 'scratchpad' inside a FILENAME is not an exemption" ($r.Code -eq 2)
@@ -463,6 +555,16 @@ Ok "install_hub did not duplicate entries" ((([regex]::Matches($ihRaw2, '\.claud
 & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'tools\install_hub.ps1') -Hub $ihHub -Canary 'Skipper,' -Owner 'Skipper' -Quiet | Out-Null
 $ihCan = $null; try { $ihCan = Get-Content (Join-Path $ihHub '.claude\sonelle.hub.json') -Raw | ConvertFrom-Json } catch { }
 Ok "install_hub -Canary/-Owner write sonelle.hub.json" ($ihCan -and ($ihCan.canary -eq 'Skipper,') -and ($ihCan.owner -eq 'Skipper'))
+& $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'tools\install_hub.ps1') -Hub $ihHub -DefaultMode 'delegate' -Quiet | Out-Null
+$ihCfg = $null; try { $ihCfg = Get-Content (Join-Path $ihHub '.claude\sonelle.hub.json') -Raw | ConvertFrom-Json } catch { }
+Ok "install_hub -DefaultMode writes it normalised" ($ihCfg -and ($ihCfg.defaultMode -eq 'DELEGATE'))
+Ok "install_hub -DefaultMode keeps the other hub.json keys" ($ihCfg -and ($ihCfg.canary -eq 'Skipper,') -and ($ihCfg.owner -eq 'Skipper'))
+& $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'tools\install_hub.ps1') -Hub $ihHub -DefaultMode 'ARBITRARY' -Quiet | Out-Null
+Ok "install_hub refuses a bogus -DefaultMode (exit 1)" ($LASTEXITCODE -eq 1)
+$ihCfg2 = $null; try { $ihCfg2 = Get-Content (Join-Path $ihHub '.claude\sonelle.hub.json') -Raw | ConvertFrom-Json } catch { }
+Ok "a refused -DefaultMode leaves the previous value alone" ($ihCfg2 -and ($ihCfg2.defaultMode -eq 'DELEGATE'))
+& $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'tools\install_hub.ps1') -Hub $ihHub -Quiet | Out-Null
+Ok "install_hub without -DefaultMode does not touch it" (((Get-Content (Join-Path $ihHub '.claude\sonelle.hub.json') -Raw | ConvertFrom-Json).defaultMode) -eq 'DELEGATE')
 & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $engine 'tools\install_hub.ps1') -Hub $ihHub -Uninstall -Quiet | Out-Null
 Ok "uninstall exit 0"                  ($LASTEXITCODE -eq 0)
 $ihSet3 = $null; try { $ihSet3 = Get-Content $ihSetPath -Raw | ConvertFrom-Json } catch { }

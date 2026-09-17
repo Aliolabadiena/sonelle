@@ -31,6 +31,10 @@ Facts the hooks rely on:
 - the prompt field is **`prompt`** (not `user_prompt` / `message`) - `prompt_router.ps1` still tries the
   other two names, because one field name is a thin thing to bet a router on.
 - `session_id` is present -> the per-session state file `%TEMP%\sonelle\mode_<session_id>.json` is keyed on it.
+  Shape: `{ mode, sticky, hold, fable_ok, short, ts }`. `mode` is the mode effective for THIS prompt (the
+  only field `main_agent_guard.ps1` reads); `sticky` is the STANDING mode the next prompt inherits when it
+  carries no mode word. They differ exactly when the prompt was a question (`mode: QUESTION`,
+  `sticky` unchanged). A hook that cannot read or parse the file has no opinion and exits 0.
 - there is **no `agent_id` / `agent_type`** on a main-agent event. That is the signal the guards use to tell
   the main agent from a subagent, and it is the one assumption that would silently weaken H3/H4 if it changed
   (see "risk" below).

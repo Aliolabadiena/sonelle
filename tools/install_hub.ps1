@@ -9,10 +9,16 @@
 
   Usage:
     .\install_hub.ps1 -Hub <path>                  install / refresh (idempotent)
-    .\install_hub.ps1 -Hub <path> -Canary "Name," -Owner "Name"
+    .\install_hub.ps1 -Hub <path> -Canary "Name," -Owner "Name" -DefaultMode MINI
                                                    also write <hub>\.claude\sonelle.hub.json:
                                                    canary = the word every reply must start with (Stop hook;
-                                                   empty/absent = off), owner = how a block message names you
+                                                   empty/absent = off), owner = how a block message names you,
+                                                   defaultMode = the standing mode a session starts in,
+                                                   MINI (default) or DELEGATE. MINI is the safe direction:
+                                                   main_agent_guard never blocks in MINI, so a wrong default
+                                                   costs an un-spawned subagent, not a denied one-liner.
+                                                   Each of the three is written only when you pass it - the
+                                                   other keys in the file are kept.
     .\install_hub.ps1 -Hub <path> -Uninstall       remove exactly what was installed
   Exit: 0 ok, 1 error.
 
@@ -27,6 +33,7 @@ param(
   [switch]$Uninstall,
   [string]$Canary,
   [string]$Owner,
+  [string]$DefaultMode,
   [switch]$Quiet
 )
 $ErrorActionPreference = 'Stop'
@@ -44,6 +51,9 @@ $u8 = New-Object System.Text.UTF8Encoding($false)
 function Say([string]$msg, [string]$color = 'Gray') { if (-not $Quiet) { Write-Host $msg -ForegroundColor $color } }
 function Fail([string]$msg) { Write-Host ('[install_hub] ' + $msg) -ForegroundColor Red; exit 1 }
 
+if ($PSBoundParameters.ContainsKey('DefaultMode') -and ($DefaultMode -notmatch '(?i)^\s*(MINI|DELEGATE)\s*$')) {
+  Fail ('-DefaultMode must be MINI or DELEGATE (got: "' + $DefaultMode + '")')
+}
 if (-not (Test-Path $Hub)) { Fail ('hub not found: ' + $Hub) }
 $hubFull = (Resolve-Path $Hub).Path
 if ($hubFull.TrimEnd('\') -eq $engine.TrimEnd('\')) { Fail 'the engine is not a hub - point -Hub at your workspace folder (invariant #4).' }
@@ -194,11 +204,15 @@ foreach ($evt in $tpl['hooks'].Keys) {
 }
 Write-JsonTree $tree $settings
 
-if ($PSBoundParameters.ContainsKey('Canary') -or $PSBoundParameters.ContainsKey('Owner')) {
+if ($PSBoundParameters.ContainsKey('Canary') -or $PSBoundParameters.ContainsKey('Owner') -or $PSBoundParameters.ContainsKey('DefaultMode')) {
   $hubCfgPath = Join-Path $claudeDir 'sonelle.hub.json'
   $hubCfg = Read-JsonTree $hubCfgPath
   if ($PSBoundParameters.ContainsKey('Canary')) { $hubCfg['canary'] = $Canary; Say ('  canary set: "' + $Canary + '" -> .claude\sonelle.hub.json') }
   if ($PSBoundParameters.ContainsKey('Owner'))  { $hubCfg['owner']  = $Owner;  Say ('  owner set:  "' + $Owner + '" (how the guards address you in a block message)') }
+  if ($PSBoundParameters.ContainsKey('DefaultMode')) {
+    $hubCfg['defaultMode'] = $DefaultMode.Trim().ToUpper()
+    Say ('  defaultMode set: ' + $hubCfg['defaultMode'] + ' (the standing mode a session starts in; a prompt saying "mini"/"deleguok" overrides it)')
+  }
   Write-JsonTree $hubCfg $hubCfgPath
 }
 

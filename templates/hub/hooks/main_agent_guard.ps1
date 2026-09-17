@@ -116,7 +116,7 @@ function Deny-Delegate([string]$what) {
   if ($mode -eq 'QUESTION') {
     Deny ('QUESTION mode: answer first, do not act. ' + $owner + ' asked something - reply, and ' + $what + ' only after "daryk/ok". (State files and docs are exempt.)')
   }
-  Deny ('DELEGATE mode: the main agent does not edit code. Hand it to a subagent (Agent, model opus). Exempt: state files. If this is truly a one-liner, ' + $owner + ' says "mini".')
+  Deny ('DELEGATE mode: the main agent does not edit code. Hand it to a subagent (Agent, model opus). Exempt: state files. If this is truly a one-liner, ' + $owner + ' says "mini". Say "mini" to switch this session to inline mode.')
 }
 
 # writing code through a SHELL is the same rule: denying Edit/Write while `cat > src\a.gd <<EOF` walks
@@ -136,6 +136,17 @@ if ($tool -match '^(Bash|PowerShell)$') {
   if ($isShellCall -or ($cmd -match '\x24\(|[\x60]|<<<')) { $norm = $norm -replace '[\x22\x27\x60()\x24]', ';' }
   $norm = $norm -replace '(?i)\b(sudo|doas|env|nohup|nice|ionice|stdbuf|setsid|timeout|time|command|builtin|exec|xargs|wsl)\b', ';'
   if ($isShellCall) { $norm = $norm -replace '(?i)(^|[\s;])(-{1,2}[a-z]*c|/c|/k)([\s;]|$)', '; ' }
+  # A commit trailer is not a redirect. `git commit -F - <<'EOF' ... Co-Authored-By: X <a@b.com> ... EOF`
+  # used to be denied because the closing `>` of the e-mail matched $redirect (2026-09-17 incident), which
+  # blocked the one shell command the ritual actually requires. Two narrow exclusions, in order:
+  #   1. <token@token> anywhere - an address in angle brackets, never a shell redirect;
+  #   2. quoted text in a `git ...` command (a commit message legitimately contains `a > b`) - but NOT
+  #      when the line also invokes a shell, so `git status && sh -c "echo x > src\a.ts"` stays denied.
+  $noNull = $noNull -replace '<[^<>\s]+@[^<>\s]+>', ' '
+  if (($cmd -match '^\s*git\b') -and (-not $isShellCall)) {
+    $noNull = $noNull -replace "'[^']*'", ' '
+    $noNull = $noNull -replace '"[^"]*"', ' '
+  }
   if (($cmd -notmatch $writeVerb) -and ($norm -notmatch $writeVerb) -and ($noNull -notmatch $redirect)) { exit 0 }
   # orchestration output + throwaway paths are exempt, exactly as they are for Edit/Write
   $exemptCmd = @(

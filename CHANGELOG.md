@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.47.1 - 2026-09-17 (the mode is a standing decision, not a per-prompt guess)
+The mode was recomputed from scratch on EVERY prompt: any prompt without the word "mini" became DELEGATE,
+so `main_agent_guard` denied the main agent's edits for one-string changes and the model either nagged for
+"mini" or spawned a subagent to change a string. "mini for the whole session" was forgotten by the second
+prompt.
+- **Sticky mode** (`templates\hub\hooks\prompt_router.ps1`): the state file gains `sticky` (the standing
+  mode) next to `mode` (effective for this prompt). `mini` -> standing MINI; `deleguok`/`deleguoti`/
+  `delegate`/`agentams`/`agentui`/`subagent*`/`banga(-os/-as)`/`workflow` -> standing DELEGATE; both words
+  in one prompt, the FIRST one wins; no word -> the standing mode is kept. QUESTION is per-prompt only and
+  leaves the standing mode alone. The injected line names the standing mode when it differs
+  (`sonelle mode: QUESTION (standing: MINI) - ...`). The old "short prompt with no task verb -> MINI"
+  heuristic is gone - guessing the mode from prompt shape is what let a stated decision evaporate.
+- **Hub default** `<hub>\.claude\sonelle.hub.json` `"defaultMode": "MINI"|"DELEGATE"`, written by
+  `tools\install_hub.ps1 -DefaultMode` (the file's other keys are kept). Missing or unrecognised -> MINI,
+  the direction in which the guard never blocks.
+- **`main_agent_guard.ps1`**: the DELEGATE deny now says how to switch (`Say "mini" to switch this session
+  to inline mode.`), and two false redirects are excluded before the `>` test - an `<name@host>` address
+  anywhere (a `Co-Authored-By:` trailer in `git commit -F - <<'EOF'` used to be denied as a shell write)
+  and quoted text in a `git ...` command, the latter only when the line does not also invoke a shell, so
+  `git status && sh -c "echo x > src\a.ts"` is still denied.
+- Covered by `tools\selftest.d\hooks.ps1` (sticky across prompts, hub default both ways + a bogus value,
+  QUESTION round-trip, the commit trailer, `cat > src\a.ts` still denied); docs: `ENFORCEMENT.md`,
+  `HOOK_PAYLOADS.md`.
+
 ## v1.47 - 2026-09-16 (enforcement: the house rules are hooks now, not prose)
 A rule in `CLAUDE.md` is a wish; a PreToolUse hook is a wall. v1.47 turns the rules that had to be
 re-stated after a session broke them into hooks a HUB installs, adds the review-only subagents that make
