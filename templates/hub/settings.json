@@ -18,7 +18,7 @@
     ],
     "Stop": [
       { "matcher": "*", "hooks": [
-        { "type": "command", "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/stop_guard.ps1" }
+        { "type": "command", "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/stop_guard.ps1", "timeout": 20 }
       ] }
     ]
   }

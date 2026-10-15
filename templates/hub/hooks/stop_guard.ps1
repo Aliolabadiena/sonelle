@@ -73,14 +73,29 @@ $script:nudgeText = $nudge
 $tp = [string]$j.transcript_path
 if ((-not $tp) -or (-not (Test-Path $tp))) { Write-Nudge $nudge; exit 0 }
 
+# Read only the last 1 MB, raw. Get-Content -Tail + ConvertFrom-Json on lines carrying base64 screenshots
+# took 200+ s on PS 5.1 (2026-10-15: app showed "still thinking" and queued Lukas' messages). Lines over
+# 256 KB (images, big tool output) are never the final text message, so they are skipped unparsed.
 $lines = $null
-try { $lines = @(Get-Content $tp -Tail 400 -ErrorAction Stop) } catch { $lines = $null }
+try {
+  $fs = [System.IO.File]::Open($tp, 'Open', 'Read', 'ReadWrite,Delete')
+  try {
+    $len = $fs.Length; $take = [Math]::Min($len, 1048576)
+    [void]$fs.Seek($len - $take, 'Begin')
+    $buf = New-Object byte[] $take
+    $n = 0; while ($n -lt $take) { $r = $fs.Read($buf, $n, $take - $n); if ($r -le 0) { break }; $n += $r }
+  } finally { $fs.Dispose() }
+  $lines = [System.Text.Encoding]::UTF8.GetString($buf, 0, $n) -split "`n"
+  if ($take -lt $len -and $lines.Count -gt 0) { $lines = $lines[1..($lines.Count - 1)] }  # first line is partial
+} catch { $lines = $null }
 if (-not $lines) { Write-Nudge $nudge; exit 0 }
 
 $msg = $null
 for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+  $ln = $lines[$i]
+  if ((-not $ln) -or ($ln.Length -gt 262144) -or ($ln.IndexOf('"assistant"') -lt 0)) { continue }
   $o = $null
-  try { $o = $lines[$i] | ConvertFrom-Json } catch { continue }
+  try { $o = $ln | ConvertFrom-Json } catch { continue }
   if ($null -eq $o) { continue }
   if (($o.message) -and ([string]$o.message.role -eq 'assistant')) { $msg = $o.message; break }
 }
